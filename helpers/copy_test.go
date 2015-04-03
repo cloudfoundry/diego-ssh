@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers/fake_io"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 

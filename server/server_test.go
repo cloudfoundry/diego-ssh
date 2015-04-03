@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
-	"github.com/cloudfoundry-incubator/diego-ssh/server/fake_net"
 	"github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
