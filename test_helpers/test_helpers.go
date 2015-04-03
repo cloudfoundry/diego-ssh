@@ -30,6 +30,17 @@ func GenerateDsaHostKey() ssh.Signer {
 	return privateKey
 }
 
+func WaitFor(f func() error) error {
+	ch := make(chan error)
+	go func() {
+		err := f()
+		ch <- err
+	}()
+	var err error
+	Eventually(ch, 3).Should(Receive(&err))
+	return err
+}
+
 func Pipe() (net.Conn, net.Conn) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	Ω(err).ShouldNot(HaveOccurred())

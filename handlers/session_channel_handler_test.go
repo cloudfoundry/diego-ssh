@@ -2,8 +2,10 @@ package handlers_test
 
 import (
 	"errors"
+	"io"
 	"io/ioutil"
 	"os/exec"
+	"strings"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
@@ -84,6 +86,18 @@ var _ = Describe("SessionChannelHandler", func() {
 			Ω(stderrBytes).Should(Equal([]byte("Goodbye")))
 		})
 
+		Context("when stdin is provided by the client", func() {
+			BeforeEach(func() {
+				session.Stdin = strings.NewReader("Hello")
+			})
+
+			It("can use the session to execute a command that reads it", func() {
+				result, err := session.Output("cat")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(string(result)).Should(Equal("Hello"))
+			})
+		})
+
 		It("can use the session to execute a command and preserve its exit code", func() {
 			err := session.Run("false")
 			Ω(err).Should(HaveOccurred())
@@ -93,21 +107,81 @@ var _ = Describe("SessionChannelHandler", func() {
 			Ω(exitErr.ExitStatus()).Should(Equal(1))
 		})
 
-		Context("and environment variables are requested", func() {
-			BeforeEach(func() {
-				err := session.Setenv("ENV1", "value1")
-				Ω(err).ShouldNot(HaveOccurred())
+		Context("when a signal is sent across the session", func() {
+			Context("before a command has been run", func() {
+				BeforeEach(func() {
+					err := session.Signal(ssh.SIGTERM)
+					Ω(err).ShouldNot(HaveOccurred())
+				})
 
-				err = session.Setenv("ENV2", "value2")
-				Ω(err).ShouldNot(HaveOccurred())
+				It("does not prevent the command from running", func() {
+					result, err := session.Output("echo -n 'still kicking'")
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(string(result)).Should(Equal("still kicking"))
+				})
 			})
 
-			It("runs the command in the specified environment", func() {
-				result, err := session.Output("/usr/bin/env")
-				Ω(err).ShouldNot(HaveOccurred())
+			Context("while a command is running", func() {
+				var stdin io.WriteCloser
 
-				Ω(result).Should(ContainSubstring("ENV1=value1"))
-				Ω(result).Should(ContainSubstring("ENV2=value2"))
+				BeforeEach(func() {
+					var err error
+					stdin, err = session.StdinPipe()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Start("cat")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				AfterEach(func() {
+					stdin.Close()
+				})
+
+				It("delivers the signal to the process", func() {
+					err := session.Signal(ssh.SIGTERM)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = test_helpers.WaitFor(func() error {
+						return session.Wait()
+					})
+					Ω(err).Should(HaveOccurred())
+
+					exitErr, ok := err.(*ssh.ExitError)
+					Ω(ok).Should(BeTrue())
+					Ω(exitErr.Signal()).Should(Equal(string(ssh.SIGTERM)))
+				})
+			})
+		})
+
+		Context("when environment variables are requested", func() {
+			Context("before starting the command", func() {
+				BeforeEach(func() {
+					err := session.Setenv("ENV1", "value1")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Setenv("ENV2", "value2")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("runs the command in the specified environment", func() {
+					result, err := session.Output("/usr/bin/env")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(result).Should(ContainSubstring("ENV1=value1"))
+					Ω(result).Should(ContainSubstring("ENV2=value2"))
+				})
+			})
+
+			Context("after starting the command", func() {
+				BeforeEach(func() {
+					_, err := session.Output("/usr/bin/env")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("rejects the request", func() {
+					err := session.Setenv("ENV3", "value3")
+					Ω(err).Should(HaveOccurred())
+				})
 			})
 
 			Context("and the request fails to unmarshal", func() {
@@ -161,7 +235,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					}
 				})
 
-				It("returns an exit status message with a 255 status", func() {
+				It("returns an exit status message with a non-zero status", func() {
 					err := session.Run("true")
 					Ω(err).Should(HaveOccurred())
 
@@ -205,6 +279,8 @@ var _ = Describe("SessionChannelHandler", func() {
 			var err error
 			channel, requests, err = client.OpenChannel("session", nil)
 			Ω(err).ShouldNot(HaveOccurred())
+
+			go ssh.DiscardRequests(requests)
 		})
 
 		AfterEach(func() {
@@ -214,28 +290,11 @@ var _ = Describe("SessionChannelHandler", func() {
 		})
 
 		Context("and an exec request is sent with a malformed payload", func() {
-			BeforeEach(func() {
-				accepted, requestErr := channel.SendRequest("exec", true, ssh.Marshal(struct{ Bogus uint32 }{Bogus: 1138}))
-				Ω(requestErr).ShouldNot(HaveOccurred())
-				Ω(accepted).Should(BeTrue())
-			})
-
-			It("returns an exit status message with a 255 status", func() {
-				var req *ssh.Request
-				Eventually(requests).Should(Receive(&req))
-
-				type exitStatusMsg struct {
-					Status uint32
-				}
-				var exitMessage exitStatusMsg
-				err := ssh.Unmarshal(req.Payload, &exitMessage)
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("exec", true, ssh.Marshal(struct{ Bogus uint32 }{Bogus: 1138}))
 				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(exitMessage.Status).Should(Equal(uint32(255)))
+				Ω(accepted).Should(BeFalse())
 			})
-		})
-
-		Context("and an env request is sent with a malformed payload", func() {
 		})
 	})
 })

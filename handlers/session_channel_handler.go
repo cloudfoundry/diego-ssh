@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"syscall"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -17,6 +18,7 @@ type SessionChannelHandler struct {
 
 type session struct {
 	environment map[string]string
+	command     *exec.Cmd
 }
 
 func newSession() *session {
@@ -38,14 +40,17 @@ func (h *SessionChannelHandler) handleSessionChannel(logger lager.Logger, channe
 
 	defer channel.Close()
 
-	var session = newSession()
+	session := newSession()
 
 	for req := range requests {
+		logger.Info("received-request", lager.Data{"type": req.Type})
 		switch req.Type {
 		case "exec":
-			h.handleExecRequest(logger, channel, session, req)
+			go h.handleExecRequest(logger, channel, session, req)
 		case "env":
 			h.handleEnvironmentRequest(logger, session, req)
+		case "signal":
+			h.handleSignalRequest(logger, session, req)
 		default:
 			if req.WantReply {
 				req.Reply(false, nil)
@@ -75,51 +80,118 @@ func (h *SessionChannelHandler) handleEnvironmentRequest(logger lager.Logger, se
 	}
 }
 
+func (h *SessionChannelHandler) handleSignalRequest(logger lager.Logger, session *session, request *ssh.Request) {
+	type signalMsg struct {
+		Signal string
+	}
+	var signalMessage signalMsg
+
+	err := ssh.Unmarshal(request.Payload, &signalMessage)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	signal := SyscallSignals[ssh.Signal(signalMessage.Signal)]
+	if session.command != nil {
+		err := session.command.Process.Signal(signal)
+		if err != nil {
+			logger.Error("process-signal-failed", err)
+		}
+	}
+
+	if request.WantReply {
+		request.Reply(true, nil)
+	}
+}
+
 func (h *SessionChannelHandler) handleExecRequest(logger lager.Logger, channel ssh.Channel, session *session, request *ssh.Request) {
+	defer channel.Close()
+
 	type execMsg struct {
 		Command string
 	}
 	var execMessage execMsg
 
-	type exitStatusMsg struct {
-		Status uint32
+	err := ssh.Unmarshal(request.Payload, &execMessage)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
 	}
-	var exitMessage exitStatusMsg
 
-	defer func() {
-		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
-		channel.Close()
-	}()
+	session.command = exec.Command("/bin/bash", "-c", execMessage.Command)
+	session.command.Stdout = channel
+	session.command.Stderr = channel.Stderr()
+
+	stdin, err := session.command.StdinPipe()
+	if err != nil {
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	go helpers.CopyAndClose(logger, stdin, channel)
+
+	for k, v := range session.environment {
+		session.command.Env = append(session.command.Env, fmt.Sprintf("%s=%s", k, v))
+	}
 
 	if request.WantReply {
 		request.Reply(true, nil)
 	}
 
-	err := ssh.Unmarshal(request.Payload, &execMessage)
-	if err != nil {
-		logger.Error("unmarshal-failed", err)
-		exitMessage.Status = 255
-		return
+	err = h.Run(session.command)
+
+	sendExecReply(channel, err)
+}
+
+func sendExecReply(channel ssh.Channel, err error) {
+	type exitStatusMsg struct {
+		Status uint32
 	}
 
-	cmd := exec.Command("/bin/bash", "-c", execMessage.Command)
-	cmd.Stdout = channel
-	cmd.Stderr = channel.Stderr()
-
-	for k, v := range session.environment {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	type exitSignalMsg struct {
+		Signal     string
+		CoreDumped bool
+		Error      string
+		Lang       string
 	}
 
-	err = h.Run(cmd)
 	if err == nil {
+		channel.SendRequest("exit-status", false, ssh.Marshal(exitStatusMsg{}))
 		return
 	}
 
-	if exitError, ok := err.(*exec.ExitError); ok {
-		waitStatus := exitError.Sys().(syscall.WaitStatus)
-		exitMessage.Status = uint32(waitStatus.ExitStatus())
+	exitError, ok := err.(*exec.ExitError)
+	if !ok {
+		exitMessage := exitStatusMsg{Status: 255}
+		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		return
+	}
+
+	waitStatus, ok := exitError.Sys().(syscall.WaitStatus)
+	if !ok {
+		exitMessage := exitStatusMsg{Status: 255}
+		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		return
+	}
+
+	if waitStatus.Signaled() {
+		exitMessage := exitSignalMsg{
+			Signal:     string(SSHSignals[waitStatus.Signal()]),
+			CoreDumped: waitStatus.CoreDump(),
+		}
+		channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
 	} else {
-		exitMessage.Status = 255
+		exitMessage := exitStatusMsg{Status: uint32(waitStatus.ExitStatus())}
+		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
 	}
 }
 

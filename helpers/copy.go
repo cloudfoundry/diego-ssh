@@ -9,16 +9,18 @@ import (
 func Copy(logger lager.Logger, dest io.Writer, src io.Reader) {
 	logger = logger.Session("copy")
 	logger.Info("started")
-	defer logger.Info("completed")
 
 	io.Copy(dest, src)
+
+	logger.Info("completed")
 }
 
 func CopyAndClose(logger lager.Logger, dest io.WriteCloser, src io.Reader) {
 	logger = logger.Session("copy")
 	logger.Info("started")
-	defer logger.Info("completed")
 
-	defer dest.Close()
 	io.Copy(dest, src)
+	dest.Close()
+
+	logger.Info("completed")
 }
