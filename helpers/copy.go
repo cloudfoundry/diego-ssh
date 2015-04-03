@@ -11,8 +11,7 @@ func Copy(logger lager.Logger, dest io.Writer, src io.Reader) {
 	logger.Info("started")
 	defer logger.Info("completed")
 
-	bytes, err := io.Copy(dest, src)
-	logger.Info("copy-return", lager.Data{"bytes": bytes, "err": err})
+	io.Copy(dest, src)
 }
 
 func CopyAndClose(logger lager.Logger, dest io.WriteCloser, src io.Reader) {

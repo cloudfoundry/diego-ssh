@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fake_handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/server/fake_net"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
@@ -67,7 +68,7 @@ var _ = Describe("Daemon", func() {
 					return nil, nil
 				}
 
-				serverNetConn, clientNetConn = Pipe()
+				serverNetConn, clientNetConn = test_helpers.Pipe()
 
 				clientConfig := &ssh.ClientConfig{
 					User: "username",
@@ -111,12 +112,12 @@ var _ = Describe("Daemon", func() {
 				"known-handler": fakeHandler,
 			}
 
-			serverNetConn, clientNetConn := Pipe()
+			serverNetConn, clientNetConn := test_helpers.Pipe()
 
 			sshd = daemon.New(logger, serverSSHConfig, globalRequestHandlers, nil)
 			go sshd.HandleConnection(serverNetConn)
 
-			client = NewClient(clientNetConn, nil)
+			client = test_helpers.NewClient(clientNetConn, nil)
 		})
 
 		AfterEach(func() {
@@ -183,12 +184,12 @@ var _ = Describe("Daemon", func() {
 				"known-channel-type": fakeHandler,
 			}
 
-			serverNetConn, clientNetConn := Pipe()
+			serverNetConn, clientNetConn := test_helpers.Pipe()
 
 			sshd = daemon.New(logger, serverSSHConfig, nil, newChannelHandlers)
 			go sshd.HandleConnection(serverNetConn)
 
-			client = NewClient(clientNetConn, nil)
+			client = test_helpers.NewClient(clientNetConn, nil)
 		})
 
 		AfterEach(func() {
