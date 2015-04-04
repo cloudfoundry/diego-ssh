@@ -98,13 +98,15 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		It("can use the session to execute a command and preserve its exit code", func() {
-			err := session.Run("false")
-			Ω(err).Should(HaveOccurred())
+		Context("when the command exits with a non-zero value", func() {
+			It("it preserve the exit code", func() {
+				err := session.Run("exit 3")
+				Ω(err).Should(HaveOccurred())
 
-			exitErr, ok := err.(*ssh.ExitError)
-			Ω(ok).Should(BeTrue())
-			Ω(exitErr.ExitStatus()).Should(Equal(1))
+				exitErr, ok := err.(*ssh.ExitError)
+				Ω(ok).Should(BeTrue())
+				Ω(exitErr.ExitStatus()).Should(Equal(3))
+			})
 		})
 
 		Context("when a signal is sent across the session", func() {
@@ -193,26 +195,44 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and a RunnerFunc is provided", func() {
-			var runCallCount int
+		Context("after executing a command", func() {
+			BeforeEach(func() {
+				err := session.Run("true")
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("the session is no longer usable", func() {
+				_, err := session.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{Command: "true"}))
+				Ω(err).Should(HaveOccurred())
+
+				_, err = session.SendRequest("bogus", true, nil)
+				Ω(err).Should(HaveOccurred())
+
+				err = session.Setenv("foo", "bar")
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("and a StarterFunc is provided", func() {
+			var startCallCount int
 			var runCommand *exec.Cmd
 
 			BeforeEach(func() {
-				sessionChannelHandler.Runner = func(command *exec.Cmd) error {
-					runCallCount++
+				sessionChannelHandler.Starter = func(command *exec.Cmd) error {
+					startCallCount++
 					runCommand = command
-					return command.Run()
+					return command.Start()
 				}
 
 				err := session.Run("true")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("uses the provided runner to run the command", func() {
-				Ω(runCallCount).Should(Equal(1))
+			It("uses the provided starter to start the command", func() {
+				Ω(startCallCount).Should(Equal(1))
 			})
 
-			It("passes the correct command to the runner", func() {
+			It("passes the correct command to the starter", func() {
 				Ω(runCommand.Path).Should(Equal("/bin/bash"))
 				Ω(runCommand.Args).Should(ConsistOf("/bin/bash", "-c", "true"))
 			})
@@ -228,9 +248,9 @@ var _ = Describe("SessionChannelHandler", func() {
 				Ω(exitErr.ExitStatus()).ShouldNot(Equal(0))
 			})
 
-			Context("when executing the command fails", func() {
+			Context("when starting the command fails", func() {
 				BeforeEach(func() {
-					sessionChannelHandler.Runner = func(command *exec.Cmd) error {
+					sessionChannelHandler.Starter = func(command *exec.Cmd) error {
 						return errors.New("oops")
 					}
 				})
@@ -246,18 +266,16 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and an unknown request type is sent", func() {
-			var (
-				accepted   bool
-				requestErr error
-			)
+		Context("when an unknown request type is sent", func() {
+			var accepted bool
 
 			BeforeEach(func() {
-				accepted, requestErr = session.SendRequest("unknown-request-type", true, []byte("payload"))
+				var err error
+				accepted, err = session.SendRequest("unknown-request-type", true, []byte("payload"))
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			It("rejects the request", func() {
-				Ω(requestErr).ShouldNot(HaveOccurred())
 				Ω(accepted).Should(BeFalse())
 			})
 
