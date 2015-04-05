@@ -2,8 +2,10 @@ package handlers_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -74,7 +76,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			stderr, err := session.StderrPipe()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = session.Run("echo -n Hello; echo -n Goodbye >&2")
+			err = session.Run("/bin/echo -n Hello; /bin/echo -n Goodbye >&2")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			stdoutBytes, err := ioutil.ReadAll(stdout)
@@ -117,7 +119,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				})
 
 				It("does not prevent the command from running", func() {
-					result, err := session.Output("echo -n 'still kicking'")
+					result, err := session.Output("/bin/echo -n 'still kicking'")
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(string(result)).Should(Equal("still kicking"))
 				})
@@ -155,34 +157,101 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
+		Context("when running a command without an explitict environemnt", func() {
+			It("does not inherit daemon's environment", func() {
+				os.Setenv("DAEMON_ENV", "daemon_env_value")
+
+				result, err := session.Output("/usr/bin/env")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(result).ShouldNot(ContainSubstring("DAEMON_ENV=daemon_env_value"))
+			})
+
+			It("includes a default environment", func() {
+				result, err := session.Output("/usr/bin/env")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(result).Should(ContainSubstring(fmt.Sprintf("PATH=/bin:/usr/bin")))
+				Ω(result).Should(ContainSubstring(fmt.Sprintf("LANG=en_US.UTF8")))
+				Ω(result).Should(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
+				Ω(result).Should(ContainSubstring(fmt.Sprintf("USER=%s", os.Getenv("USER"))))
+			})
+		})
+
 		Context("when environment variables are requested", func() {
 			Context("before starting the command", func() {
-				BeforeEach(func() {
+				It("runs the command with the specified environment", func() {
 					err := session.Setenv("ENV1", "value1")
 					Ω(err).ShouldNot(HaveOccurred())
 
 					err = session.Setenv("ENV2", "value2")
 					Ω(err).ShouldNot(HaveOccurred())
-				})
 
-				It("runs the command in the specified environment", func() {
 					result, err := session.Output("/usr/bin/env")
 					Ω(err).ShouldNot(HaveOccurred())
 
 					Ω(result).Should(ContainSubstring("ENV1=value1"))
 					Ω(result).Should(ContainSubstring("ENV2=value2"))
 				})
+
+				It("can override PATH and LANG", func() {
+					err := session.Setenv("PATH", "/bin:/usr/local/bin:/sbin")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Setenv("LANG", "en_UK.UTF8")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					result, err := session.Output("/usr/bin/env")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(result).Should(ContainSubstring("PATH=/bin:/usr/local/bin:/sbin"))
+					Ω(result).Should(ContainSubstring("LANG=en_UK.UTF8"))
+				})
+
+				It("cannot override HOME and USER", func() {
+					err := session.Setenv("HOME", "/some/other/home")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Setenv("USER", "not-a-user")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					result, err := session.Output("/usr/bin/env")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(result).Should(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
+					Ω(result).Should(ContainSubstring(fmt.Sprintf("USER=%s", os.Getenv("USER"))))
+				})
 			})
 
 			Context("after starting the command", func() {
+				var stdin io.WriteCloser
+				var stdout io.Reader
+
 				BeforeEach(func() {
-					_, err := session.Output("/usr/bin/env")
+					var err error
+					stdin, err = session.StdinPipe()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					stdout, err = session.StdoutPipe()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Start("cat && /usr/bin/env")
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				It("rejects the request", func() {
+				It("ignores the request", func() {
 					err := session.Setenv("ENV3", "value3")
-					Ω(err).Should(HaveOccurred())
+					Ω(err).ShouldNot(HaveOccurred())
+
+					stdin.Close()
+
+					err = session.Wait()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					stdoutBytes, err := ioutil.ReadAll(stdout)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(stdoutBytes).ShouldNot(ContainSubstring("ENV3"))
 				})
 			})
 
@@ -233,8 +302,8 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("passes the correct command to the starter", func() {
-				Ω(runCommand.Path).Should(Equal("/bin/bash"))
-				Ω(runCommand.Args).Should(ConsistOf("/bin/bash", "-c", "true"))
+				Ω(runCommand.Path).Should(Equal("/bin/sh"))
+				Ω(runCommand.Args).Should(ConsistOf("/bin/sh", "-c", "true"))
 			})
 		})
 
@@ -280,7 +349,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("does not terminate the session", func() {
-				response, err := session.Output("echo -n Hello")
+				response, err := session.Output("/bin/echo -n Hello")
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(response).Should(Equal([]byte("Hello")))
 			})
@@ -288,10 +357,8 @@ var _ = Describe("SessionChannelHandler", func() {
 	})
 
 	Context("when a session channel is opened", func() {
-		var (
-			channel  ssh.Channel
-			requests <-chan *ssh.Request
-		)
+		var channel ssh.Channel
+		var requests <-chan *ssh.Request
 
 		BeforeEach(func() {
 			var err error

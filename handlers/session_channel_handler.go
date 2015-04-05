@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -37,15 +38,15 @@ type session struct {
 	handler *SessionChannelHandler
 
 	sync.Mutex
-	environment map[string]string
-	command     *exec.Cmd
+	env     map[string]string
+	command *exec.Cmd
 }
 
 func newSession(logger lager.Logger, handler *SessionChannelHandler) *session {
 	return &session{
-		logger:      logger.Session("session-channel"),
-		handler:     handler,
-		environment: map[string]string{},
+		logger:  logger.Session("session-channel"),
+		handler: handler,
+		env:     map[string]string{},
 	}
 }
 
@@ -86,9 +87,7 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 		return
 	}
 
-	sess.Lock()
-	sess.environment[envMessage.Name] = envMessage.Value
-	sess.Unlock()
+	sess.setenv(envMessage.Name, envMessage.Value)
 
 	if request.WantReply {
 		request.Reply(true, nil)
@@ -171,7 +170,7 @@ func (sess *session) createCommand(channel ssh.Channel, args ...string) (*exec.C
 		return nil, errors.New("command already started")
 	}
 
-	cmd := exec.Command("/bin/bash", args...)
+	cmd := exec.Command("/bin/sh", args...)
 	cmd.Stdout = channel
 	cmd.Stderr = channel.Stderr()
 
@@ -180,15 +179,36 @@ func (sess *session) createCommand(channel ssh.Channel, args ...string) (*exec.C
 		return nil, err
 	}
 
-	for k, v := range sess.environment {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-	}
-
+	cmd.Env = sess.environment()
 	sess.command = cmd
 
 	go helpers.CopyAndClose(sess.logger, stdin, channel)
 
 	return cmd, nil
+}
+
+func (sess *session) setenv(name, value string) {
+	sess.Lock()
+	sess.env[name] = value
+	sess.Unlock()
+}
+
+func (sess *session) environment() []string {
+	env := []string{}
+
+	env = append(env, "PATH=/bin:/usr/bin")
+	env = append(env, "LANG=en_US.UTF8")
+
+	for k, v := range sess.env {
+		if k != "HOME" && k != "USER" {
+			env = append(env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
+	env = append(env, fmt.Sprintf("HOME=%s", os.Getenv("HOME")))
+	env = append(env, fmt.Sprintf("USER=%s", os.Getenv("USER")))
+
+	return env
 }
 
 func (sess *session) sendExitMessage(channel ssh.Channel, err error) {

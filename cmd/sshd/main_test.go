@@ -78,7 +78,7 @@ var _ = Describe("SSH daemon", func() {
 			session, err := client.NewSession()
 			Ω(err).ShouldNot(HaveOccurred())
 
-			result, err := session.Output("echo -n 'Hello there!'")
+			result, err := session.Output("/bin/echo -n 'Hello there!'")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(string(result)).Should(Equal("Hello there!"))
