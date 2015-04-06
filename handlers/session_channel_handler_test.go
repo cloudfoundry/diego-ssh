@@ -6,11 +6,11 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,6 +26,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		logger          *lagertest.TestLogger
 		serverSSHConfig *ssh.ServerConfig
 
+		runner                *fakes.FakeRunner
 		sessionChannelHandler *handlers.SessionChannelHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
@@ -38,7 +39,13 @@ var _ = Describe("SessionChannelHandler", func() {
 		}
 		serverSSHConfig.AddHostKey(TestHostKey)
 
-		sessionChannelHandler = &handlers.SessionChannelHandler{}
+		runner = &fakes.FakeRunner{}
+		realRunner := handlers.NewCommandRunner()
+		runner.StartStub = realRunner.Start
+		runner.WaitStub = realRunner.Wait
+
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner)
+
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
 		}
@@ -281,29 +288,25 @@ var _ = Describe("SessionChannelHandler", func() {
 		})
 
 		Context("and a StarterFunc is provided", func() {
-			var startCallCount int
-			var runCommand *exec.Cmd
-
 			BeforeEach(func() {
-				startCallCount = 0
-
-				sessionChannelHandler.Starter = func(command *exec.Cmd) error {
-					startCallCount++
-					runCommand = command
-					return command.Start()
-				}
-
 				err := session.Run("true")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			It("uses the provided starter to start the command", func() {
-				Ω(startCallCount).Should(Equal(1))
+			It("uses the provided runner to start the command", func() {
+				Ω(runner.StartCallCount()).Should(Equal(1))
+				Ω(runner.WaitCallCount()).Should(Equal(1))
 			})
 
-			It("passes the correct command to the starter", func() {
-				Ω(runCommand.Path).Should(Equal("/bin/sh"))
-				Ω(runCommand.Args).Should(ConsistOf("/bin/sh", "-c", "true"))
+			It("passes the correct command to the runner", func() {
+				command := runner.StartArgsForCall(0)
+				Ω(command.Path).Should(Equal("/bin/sh"))
+				Ω(command.Args).Should(ConsistOf("/bin/sh", "-c", "true"))
+			})
+
+			It("passes the same command to Start and Wait", func() {
+				command := runner.StartArgsForCall(0)
+				Ω(runner.WaitArgsForCall(0)).Should(Equal(command))
 			})
 		})
 
@@ -319,9 +322,22 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			Context("when starting the command fails", func() {
 				BeforeEach(func() {
-					sessionChannelHandler.Starter = func(command *exec.Cmd) error {
-						return errors.New("oops")
-					}
+					runner.StartReturns(errors.New("oops"))
+				})
+
+				It("returns an exit status message with a non-zero status", func() {
+					err := session.Run("true")
+					Ω(err).Should(HaveOccurred())
+
+					exitErr, ok := err.(*ssh.ExitError)
+					Ω(ok).Should(BeTrue())
+					Ω(exitErr.ExitStatus()).ShouldNot(Equal(0))
+				})
+			})
+
+			Context("when waiting on the command fails", func() {
+				BeforeEach(func() {
+					runner.WaitReturns(errors.New("oops"))
 				})
 
 				It("returns an exit status message with a non-zero status", func() {

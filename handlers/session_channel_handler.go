@@ -13,14 +13,34 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type StarterFunc func(*exec.Cmd) error
+//go:generate counterfeiter -o fakes/fake_runner.go . Runner
+type Runner interface {
+	Start(cmd *exec.Cmd) error
+	Wait(cmd *exec.Cmd) error
+}
 
-func (f StarterFunc) Start(command *exec.Cmd) error {
-	return f(command)
+type commandRunner struct{}
+
+func NewCommandRunner() Runner {
+	return &commandRunner{}
+}
+
+func (commandRunner) Start(cmd *exec.Cmd) error {
+	return cmd.Start()
+}
+
+func (commandRunner) Wait(cmd *exec.Cmd) error {
+	return cmd.Wait()
 }
 
 type SessionChannelHandler struct {
-	Starter StarterFunc
+	runner Runner
+}
+
+func NewSessionChannelHandler(runner Runner) *SessionChannelHandler {
+	return &SessionChannelHandler{
+		runner: runner,
+	}
 }
 
 func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
@@ -34,8 +54,9 @@ func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newC
 }
 
 type session struct {
-	logger  lager.Logger
-	handler *SessionChannelHandler
+	logger lager.Logger
+
+	runner Runner
 
 	sync.Mutex
 	env     map[string]string
@@ -44,9 +65,9 @@ type session struct {
 
 func newSession(logger lager.Logger, handler *SessionChannelHandler) *session {
 	return &session{
-		logger:  logger.Session("session-channel"),
-		handler: handler,
-		env:     map[string]string{},
+		logger: logger.Session("session-channel"),
+		runner: handler.runner,
+		env:    map[string]string{},
 	}
 }
 
@@ -153,9 +174,9 @@ func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request
 		request.Reply(true, nil)
 	}
 
-	err = sess.Start(cmd)
+	err = sess.run(cmd)
 	if err == nil {
-		err = cmd.Wait()
+		err = sess.wait(cmd)
 	}
 	sess.sendExitMessage(channel, err)
 
@@ -254,12 +275,13 @@ func (sess *session) sendExitMessage(channel ssh.Channel, err error) {
 	}
 }
 
-func (sess *session) Start(command *exec.Cmd) error {
+func (sess *session) run(command *exec.Cmd) error {
 	sess.Lock()
 	defer sess.Unlock()
 
-	if sess.handler.Starter != nil {
-		return sess.handler.Starter.Start(command)
-	}
-	return command.Start()
+	return sess.runner.Start(command)
+}
+
+func (sess *session) wait(command *exec.Cmd) error {
+	return sess.runner.Wait(command)
 }
