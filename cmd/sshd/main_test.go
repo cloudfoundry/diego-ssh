@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"time"
@@ -65,17 +66,6 @@ var _ = Describe("SSH daemon", func() {
 			ginkgomon.Kill(process, exitDuration)
 		})
 
-		Context("when a host key is not specified", func() {
-			BeforeEach(func() {
-				hostKey = []byte{}
-			})
-
-			It("reports and dies", func() {
-				Ω(runner).Should(gbytes.Say("host-key-required"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
-			})
-		})
-
 		Context("when an ill-formed host key is provided", func() {
 			BeforeEach(func() {
 				hostKey = []byte("host-key")
@@ -123,21 +113,6 @@ var _ = Describe("SSH daemon", func() {
 					Ω(process).ShouldNot(BeNil())
 				})
 			})
-
-			Context("and a host key is not specified", func() {
-				BeforeEach(func() {
-					hostKey = []byte{}
-				})
-
-				It("reports both errors", func() {
-					Ω(runner).Should(gbytes.Say("host-key-required"))
-					Ω(runner).Should(gbytes.Say("public-user-key-required"))
-				})
-
-				It("fails to start", func() {
-					Ω(runner).ShouldNot(gexec.Exit(0))
-				})
-			})
 		})
 	})
 
@@ -158,6 +133,48 @@ var _ = Describe("SSH daemon", func() {
 
 		AfterEach(func() {
 			ginkgomon.Interrupt(process, exitDuration)
+
+			if client != nil {
+				client.Close()
+			}
+		})
+
+		Context("when a host key is not specified", func() {
+			BeforeEach(func() {
+				hostKey = []byte{}
+
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("generates one internally", func() {
+				Ω(process).ShouldNot(BeNil())
+
+				Ω(client).ShouldNot(BeNil())
+				Ω(dialErr).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("when a host key is specified", func() {
+			var handshakeHostKey ssh.PublicKey
+
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+						handshakeHostKey = key
+						return nil
+					},
+				}
+			})
+
+			It("uses the host key provided on the command line", func() {
+				sshHostKey, err := ssh.ParsePrivateKey(hostKeyPem)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				sshPublicHostKey := sshHostKey.PublicKey()
+				Ω(sshPublicHostKey.Marshal()).Should(Equal(handshakeHostKey.Marshal()))
+			})
 		})
 
 		Context("when unauthenticated clients are not allowed", func() {

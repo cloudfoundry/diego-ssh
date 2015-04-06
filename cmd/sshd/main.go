@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -99,16 +100,12 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	errorStrings := []string{}
 	sshConfig := &ssh.ServerConfig{}
 
-	if *hostKey == "" {
-		logger.Error("host-key-required", nil)
-		errorStrings = append(errorStrings, "Host key is required")
+	key, err := acquireHostKey(logger)
+	if err != nil {
+		logger.Error("failed-to-acquire-host-key", err)
+		errorStrings = append(errorStrings, err.Error())
 	}
 
-	key, err := ssh.ParsePrivateKey([]byte(*hostKey))
-	if err != nil {
-		logger.Error("failed-to-parse-host-key", err)
-		errorStrings = append(errorStrings, "Failed to parse host key")
-	}
 	sshConfig.AddHostKey(key)
 	sshConfig.NoClientAuth = *allowUnauthenticatedClients
 
@@ -156,4 +153,25 @@ func decodePublicKey(logger lager.Logger) (ssh.PublicKey, error) {
 	}
 
 	return serverPublicKey, nil
+}
+
+func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
+	var encoded []byte
+	if *hostKey == "" {
+		var err error
+		encoded, err = helpers.GeneratePemEncodedRsaKey()
+		if err != nil {
+			logger.Error("failed-to-generate-host-key", err)
+			return nil, err
+		}
+	} else {
+		encoded = []byte(*hostKey)
+	}
+
+	key, err := ssh.ParsePrivateKey(encoded)
+	if err != nil {
+		logger.Error("failed-to-parse-host-key", err)
+		return nil, err
+	}
+	return key, nil
 }
