@@ -90,7 +90,7 @@ func WaitFor(f func() error) error {
 		ch <- err
 	}()
 	var err error
-	Eventually(ch, 3).Should(Receive(&err))
+	Eventually(ch, 10).Should(Receive(&err))
 	return err
 }
 

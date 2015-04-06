@@ -152,7 +152,9 @@ var _ = Describe("SessionChannelHandler", func() {
 					err := session.Signal(ssh.SIGTERM)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = session.Wait()
+					err = test_helpers.WaitFor(func() error {
+						return session.Wait()
+					})
 					Ω(err).Should(HaveOccurred())
 
 					exitErr, ok := err.(*ssh.ExitError)
