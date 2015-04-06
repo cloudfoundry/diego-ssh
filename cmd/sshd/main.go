@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
+	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
@@ -116,15 +116,11 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	if *publicUserKey != "" {
-		marshaledUserPublicKey, err := marshalPublicUserKey(logger)
+		decodedPublicKey, err := decodePublicKey(logger)
 		if err == nil {
-			sshConfig.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-				if bytes.Equal(key.Marshal(), marshaledUserPublicKey) {
-					return &ssh.Permissions{}, nil
-				}
-
-				return nil, errors.New("authentication failed")
-			}
+			user := os.Getenv("USER")
+			authenticator := authenticators.NewPublicKeyAuthenticator(user, decodedPublicKey)
+			sshConfig.PublicKeyCallback = authenticator.Authenticate
 		} else {
 			errorStrings = append(errorStrings, err.Error())
 		}
@@ -138,7 +134,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	return sshConfig, err
 }
 
-func marshalPublicUserKey(logger lager.Logger) ([]byte, error) {
+func decodePublicKey(logger lager.Logger) (ssh.PublicKey, error) {
 	block, _ := pem.Decode([]byte(*publicUserKey))
 	if block == nil {
 		logger.Error("invalid-public-user-key", nil)
@@ -157,5 +153,5 @@ func marshalPublicUserKey(logger lager.Logger) ([]byte, error) {
 		return nil, errors.New("Failed to construct public user key")
 	}
 
-	return serverPublicKey.Marshal(), nil
+	return serverPublicKey, nil
 }
