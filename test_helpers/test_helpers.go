@@ -1,6 +1,10 @@
 package test_helpers
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"net"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
@@ -28,6 +32,55 @@ func GenerateDsaHostKey() ssh.Signer {
 	Ω(err).ShouldNot(HaveOccurred())
 
 	return privateKey
+}
+
+func GenerateRsaKeyPair() ([]byte, []byte) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	err = privateKey.Validate()
+	Ω(err).ShouldNot(HaveOccurred())
+
+	privateBlock := pem.Block{
+		Type:    "RSA PRIVATE KEY",
+		Headers: nil,
+		Bytes:   x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	privatePem := pem.EncodeToMemory(&privateBlock)
+
+	publicEncoded, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	pub_blk := pem.Block{
+		Type:    "PUBLIC RSA KEY",
+		Headers: nil,
+		Bytes:   publicEncoded,
+	}
+	publicPem := pem.EncodeToMemory(&pub_blk)
+
+	return privatePem, publicPem
+}
+
+func DecodePem(data []byte) []byte {
+	block, _ := pem.Decode([]byte(data))
+	Ω(block).ShouldNot(BeNil())
+
+	return block.Bytes
+}
+
+func GenerateSshKeyPair() (ssh.Signer, ssh.PublicKey) {
+	privatePem, publicPem := GenerateRsaKeyPair()
+
+	privateKey, err := ssh.ParsePrivateKey(privatePem)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	x509PublicKey, err := x509.ParsePKIXPublicKey(DecodePem(publicPem))
+	Ω(err).ShouldNot(HaveOccurred())
+
+	publicKey, err := ssh.NewPublicKey(x509PublicKey)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	return privateKey, publicKey
 }
 
 func WaitFor(f func() error) error {

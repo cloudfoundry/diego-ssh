@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"os"
+	"strings"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
@@ -28,6 +33,12 @@ var hostKey = flag.String(
 	"PEM encoded RSA host key",
 )
 
+var publicUserKey = flag.String(
+	"publicUserKey",
+	"",
+	"PEM encoded RSA public key to use for user authentication",
+)
+
 var allowUnauthenticatedClients = flag.Bool(
 	"allowUnauthenticatedClients",
 	false,
@@ -41,9 +52,15 @@ func main() {
 
 	logger, reconfigurableSink := cf_lager.New("sshd")
 
+	serverConfig, err := configure(logger)
+	if err != nil {
+		logger.Error("configure-failed", err)
+		os.Exit(1)
+	}
+
 	sshDaemon := daemon.New(
 		logger,
-		getServerConfig(logger),
+		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
 			"session": &handlers.SessionChannelHandler{},
@@ -66,7 +83,7 @@ func main() {
 
 	logger.Info("started")
 
-	err := <-monitor.Wait()
+	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -76,21 +93,69 @@ func main() {
 	os.Exit(0)
 }
 
-func getServerConfig(logger lager.Logger) *ssh.ServerConfig {
-	sshConfig := &ssh.ServerConfig{
-		NoClientAuth: *allowUnauthenticatedClients,
-	}
+func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
+	errorStrings := []string{}
+	sshConfig := &ssh.ServerConfig{}
 
 	if *hostKey == "" {
-		logger.Fatal("host key is required", nil)
+		logger.Error("host-key-required", nil)
+		errorStrings = append(errorStrings, "Host key is required")
 	}
 
 	key, err := ssh.ParsePrivateKey([]byte(*hostKey))
 	if err != nil {
-		logger.Fatal("host key is required", err)
+		logger.Error("failed-to-parse-host-key", err)
+		errorStrings = append(errorStrings, "Failed to parse host key")
+	}
+	sshConfig.AddHostKey(key)
+	sshConfig.NoClientAuth = *allowUnauthenticatedClients
+
+	if *publicUserKey == "" && !*allowUnauthenticatedClients {
+		logger.Error("public-user-key-required", nil)
+		errorStrings = append(errorStrings, "Public user key is required")
 	}
 
-	sshConfig.AddHostKey(key)
+	if *publicUserKey != "" {
+		marshaledUserPublicKey, err := marshalPublicUserKey(logger)
+		if err == nil {
+			sshConfig.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+				if bytes.Equal(key.Marshal(), marshaledUserPublicKey) {
+					return &ssh.Permissions{}, nil
+				}
 
-	return sshConfig
+				return nil, errors.New("authentication failed")
+			}
+		} else {
+			errorStrings = append(errorStrings, err.Error())
+		}
+	}
+
+	err = nil
+	if len(errorStrings) > 0 {
+		err = errors.New(strings.Join(errorStrings, ", "))
+	}
+
+	return sshConfig, err
+}
+
+func marshalPublicUserKey(logger lager.Logger) ([]byte, error) {
+	block, _ := pem.Decode([]byte(*publicUserKey))
+	if block == nil {
+		logger.Error("invalid-public-user-key", nil)
+		return nil, errors.New("Failed to decode public user key")
+	}
+
+	serverPublicKeyRaw, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		logger.Error("failed-to-parse-public-user-key", err)
+		return nil, errors.New("Failed to parse public user key")
+	}
+
+	serverPublicKey, err := ssh.NewPublicKey(serverPublicKeyRaw)
+	if err != nil {
+		logger.Error("failed-to-construct-public-user-key", err)
+		return nil, errors.New("Failed to construct public user key")
+	}
+
+	return serverPublicKey.Marshal(), nil
 }
