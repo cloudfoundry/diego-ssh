@@ -145,9 +145,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err := session.Signal(ssh.SIGTERM)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = test_helpers.WaitFor(func() error {
-						return session.Wait()
-					})
+					err = session.Wait()
 					Ω(err).Should(HaveOccurred())
 
 					exitErr, ok := err.(*ssh.ExitError)
@@ -287,6 +285,8 @@ var _ = Describe("SessionChannelHandler", func() {
 			var runCommand *exec.Cmd
 
 			BeforeEach(func() {
+				startCallCount = 0
+
 				sessionChannelHandler.Starter = func(command *exec.Cmd) error {
 					startCallCount++
 					runCommand = command
