@@ -131,9 +131,9 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	}
 
 	sess.Lock()
-	cmd := sess.command
-	sess.Unlock()
+	defer sess.Unlock()
 
+	cmd := sess.command
 	if cmd != nil {
 		signal := SyscallSignals[ssh.Signal(signalMessage.Signal)]
 		err := cmd.Process.Signal(signal)
@@ -191,7 +191,7 @@ func (sess *session) createCommand(channel ssh.Channel, command string) (*exec.C
 		return nil, errors.New("command already started")
 	}
 
-	cmd := exec.Command("/bin/bash", "-c", command)
+	cmd := exec.Command("/bin/sh", "-c", command)
 	cmd.Stdout = channel
 	cmd.Stderr = channel.Stderr()
 

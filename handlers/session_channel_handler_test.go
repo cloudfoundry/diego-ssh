@@ -134,32 +134,33 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			Context("while a command is running", func() {
 				var stdin io.WriteCloser
+				var stdout io.Reader
 
 				BeforeEach(func() {
 					var err error
 					stdin, err = session.StdinPipe()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = session.Start("cat")
+					stdout, err = session.StdoutPipe()
 					Ω(err).ShouldNot(HaveOccurred())
-				})
 
-				AfterEach(func() {
-					stdin.Close()
+					err = session.Start("trap 'echo Caught SIGUSR1' USR1; cat")
+					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("delivers the signal to the process", func() {
-					err := session.Signal(ssh.SIGTERM)
+					err := session.Signal(ssh.SIGUSR1)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = test_helpers.WaitFor(func() error {
-						return session.Wait()
-					})
-					Ω(err).Should(HaveOccurred())
+					err = stdin.Close()
+					Ω(err).ShouldNot(HaveOccurred())
 
-					exitErr, ok := err.(*ssh.ExitError)
-					Ω(ok).Should(BeTrue())
-					Ω(exitErr.Signal()).Should(Equal(string(ssh.SIGTERM)))
+					err = session.Wait()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					stdoutBytes, err := ioutil.ReadAll(stdout)
+					Ω(err).ShouldNot(HaveOccurred())
+					Ω(stdoutBytes).Should(ContainSubstring("Caught SIGUSR1"))
 				})
 			})
 		})
@@ -302,8 +303,8 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("passes the correct command to the runner", func() {
 				command := runner.StartArgsForCall(0)
-				Ω(command.Path).Should(Equal("/bin/bash"))
-				Ω(command.Args).Should(ConsistOf("/bin/bash", "-c", "true"))
+				Ω(command.Path).Should(Equal("/bin/sh"))
+				Ω(command.Args).Should(ConsistOf("/bin/sh", "-c", "true"))
 			})
 
 			It("passes the same command to Start and Wait", func() {
