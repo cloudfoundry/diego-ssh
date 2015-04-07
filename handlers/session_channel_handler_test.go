@@ -302,8 +302,8 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("passes the correct command to the runner", func() {
 				command := runner.StartArgsForCall(0)
-				Ω(command.Path).Should(Equal("/bin/sh"))
-				Ω(command.Args).Should(ConsistOf("/bin/sh", "-c", "true"))
+				Ω(command.Path).Should(Equal("/bin/bash"))
+				Ω(command.Args).Should(ConsistOf("/bin/bash", "-c", "true"))
 			})
 
 			It("passes the same command to Start and Wait", func() {

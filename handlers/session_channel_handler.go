@@ -162,7 +162,7 @@ func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request
 		return
 	}
 
-	cmd, err := sess.createCommand(channel, "-c", execMessage.Command)
+	cmd, err := sess.createCommand(channel, execMessage.Command)
 	if err != nil {
 		if request.WantReply {
 			request.Reply(false, nil)
@@ -183,7 +183,7 @@ func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request
 	channel.Close()
 }
 
-func (sess *session) createCommand(channel ssh.Channel, args ...string) (*exec.Cmd, error) {
+func (sess *session) createCommand(channel ssh.Channel, command string) (*exec.Cmd, error) {
 	sess.Lock()
 	defer sess.Unlock()
 
@@ -191,7 +191,7 @@ func (sess *session) createCommand(channel ssh.Channel, args ...string) (*exec.C
 		return nil, errors.New("command already started")
 	}
 
-	cmd := exec.Command("/bin/sh", args...)
+	cmd := exec.Command("/bin/bash", "-c", command)
 	cmd.Stdout = channel
 	cmd.Stderr = channel.Stderr()
 
