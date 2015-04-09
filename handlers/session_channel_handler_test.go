@@ -162,6 +162,21 @@ var _ = Describe("SessionChannelHandler", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 					Ω(stdoutBytes).Should(ContainSubstring("Caught SIGUSR1"))
 				})
+
+				It("exits with an exit-signal response", func() {
+					err := session.Signal(ssh.SIGUSR2)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = stdin.Close()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Wait()
+					Ω(err).Should(HaveOccurred())
+
+					exitErr, ok := err.(*ssh.ExitError)
+					Ω(ok).Should(BeTrue())
+					Ω(exitErr.Signal()).Should(Equal("USR2"))
+				})
 			})
 		})
 
@@ -200,6 +215,19 @@ var _ = Describe("SessionChannelHandler", func() {
 
 					Ω(result).Should(ContainSubstring("ENV1=value1"))
 					Ω(result).Should(ContainSubstring("ENV2=value2"))
+				})
+
+				It("uses the value last specified", func() {
+					err := session.Setenv("ENV1", "original")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Setenv("ENV1", "updated")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					result, err := session.Output("/usr/bin/env")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(result).Should(ContainSubstring("ENV1=updated"))
 				})
 
 				It("can override PATH and LANG", func() {
@@ -262,13 +290,35 @@ var _ = Describe("SessionChannelHandler", func() {
 					Ω(stdoutBytes).ShouldNot(ContainSubstring("ENV3"))
 				})
 			})
+		})
 
-			Context("and the request fails to unmarshal", func() {
-				It("rejects the request", func() {
-					accepted, err := session.SendRequest("env", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
-					Ω(err).ShouldNot(HaveOccurred())
-					Ω(accepted).Should(BeFalse())
-				})
+		Context("when a pty request is received", func() {
+			var terminalModes ssh.TerminalModes
+
+			BeforeEach(func() {
+				err := session.RequestPty("vt100", 43, 80, terminalModes)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("should allocate a tty for the session", func() {
+				result, err := session.Output("tty")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(result).ShouldNot(ContainSubstring("not a tty"))
+			})
+
+			It("should set the terminal type", func() {
+				result, err := session.Output(`/bin/echo -n "$TERM"`)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(string(result)).Should(Equal("vt100"))
+			})
+
+			It("sets the correct window size for the terminal", func() {
+				result, err := session.Output("stty size")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(result).Should(ContainSubstring("43 80"))
 			})
 		})
 
@@ -393,9 +443,33 @@ var _ = Describe("SessionChannelHandler", func() {
 			}
 		})
 
-		Context("and an exec request is sent with a malformed payload", func() {
+		Context("and an exec request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("exec", true, ssh.Marshal(struct{ Bogus uint32 }{Bogus: 1138}))
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(accepted).Should(BeFalse())
+			})
+		})
+
+		Context("and an env request fails to unmarshal", func() {
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("env", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(accepted).Should(BeFalse())
+			})
+		})
+
+		Context("and a signal request fails to unmarshal", func() {
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("signal", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(accepted).Should(BeFalse())
+			})
+		})
+
+		Context("and a pty request fails to unmarshal", func() {
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("pty-req", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(accepted).Should(BeFalse())
 			})

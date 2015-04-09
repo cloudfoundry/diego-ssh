@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/creack/termios/win"
+	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -50,42 +52,62 @@ func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newC
 		return
 	}
 
-	newSession(logger, handler).serviceChannel(channel, requests)
+	newSession(logger, handler.runner, channel).serviceRequests(requests)
+}
+
+type ptyRequestMsg struct {
+	Term     string
+	Columns  uint32
+	Rows     uint32
+	Width    uint32
+	Height   uint32
+	Modelist string
 }
 
 type session struct {
-	logger lager.Logger
+	logger   lager.Logger
+	complete bool
 
-	runner Runner
+	runner  Runner
+	channel ssh.Channel
 
 	sync.Mutex
 	env     map[string]string
 	command *exec.Cmd
+
+	wg         sync.WaitGroup
+	allocPty   bool
+	ptyRequest ptyRequestMsg
+	ptyMaster  *os.File
 }
 
-func newSession(logger lager.Logger, handler *SessionChannelHandler) *session {
+func newSession(logger lager.Logger, runner Runner, channel ssh.Channel) *session {
 	return &session{
-		logger: logger.Session("session-channel"),
-		runner: handler.runner,
-		env:    map[string]string{},
+		logger:  logger.Session("session-channel"),
+		runner:  runner,
+		channel: channel,
+		env:     map[string]string{},
 	}
 }
 
-func (sess *session) serviceChannel(channel ssh.Channel, requests <-chan *ssh.Request) {
-	sess.logger.Info("starting")
-	defer sess.logger.Info("finished")
+func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
+	logger := sess.logger
+	logger.Info("starting")
+	defer logger.Info("finished")
 
-	defer channel.Close()
+	defer sess.destroy()
 
 	for req := range requests {
 		sess.logger.Info("received-request", lager.Data{"type": req.Type})
 		switch req.Type {
-		case "exec":
-			go sess.handleExecRequest(channel, req)
 		case "env":
 			sess.handleEnvironmentRequest(req)
 		case "signal":
 			sess.handleSignalRequest(req)
+		case "pty-req":
+			sess.handlePtyRequest(req)
+		case "exec":
+			go sess.handleExecRequest(req)
 		default:
 			if req.WantReply {
 				req.Reply(false, nil)
@@ -95,6 +117,8 @@ func (sess *session) serviceChannel(channel ssh.Channel, requests <-chan *ssh.Re
 }
 
 func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-environment-request")
+
 	type envMsg struct {
 		Name  string
 		Value string
@@ -103,12 +127,14 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 
 	err := ssh.Unmarshal(request.Payload, &envMessage)
 	if err != nil {
-		sess.logger.Error("unmarshal-failed", err)
+		logger.Error("unmarshal-failed", err)
 		request.Reply(false, nil)
 		return
 	}
 
-	sess.setenv(envMessage.Name, envMessage.Value)
+	sess.Lock()
+	sess.env[envMessage.Name] = envMessage.Value
+	sess.Unlock()
 
 	if request.WantReply {
 		request.Reply(true, nil)
@@ -116,6 +142,8 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 }
 
 func (sess *session) handleSignalRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-signal-request")
+
 	type signalMsg struct {
 		Signal string
 	}
@@ -123,7 +151,7 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 
 	err := ssh.Unmarshal(request.Payload, &signalMessage)
 	if err != nil {
-		sess.logger.Error("unmarshal-failed", err)
+		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
 			request.Reply(false, nil)
 		}
@@ -134,11 +162,12 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	defer sess.Unlock()
 
 	cmd := sess.command
+
 	if cmd != nil {
 		signal := SyscallSignals[ssh.Signal(signalMessage.Signal)]
 		err := cmd.Process.Signal(signal)
 		if err != nil {
-			sess.logger.Error("process-signal-failed", err)
+			logger.Error("process-signal-failed", err)
 		}
 	}
 
@@ -147,7 +176,35 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	}
 }
 
-func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request) {
+func (sess *session) handlePtyRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-pty-request")
+
+	var ptyRequestMessage ptyRequestMsg
+
+	err := ssh.Unmarshal(request.Payload, &ptyRequestMessage)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	sess.Lock()
+	defer sess.Unlock()
+
+	sess.allocPty = true
+	sess.ptyRequest = ptyRequestMessage
+	sess.env["TERM"] = ptyRequestMessage.Term
+
+	if request.WantReply {
+		request.Reply(true, nil)
+	}
+}
+
+func (sess *session) handleExecRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-exec-request")
+
 	type execMsg struct {
 		Command string
 	}
@@ -155,14 +212,14 @@ func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request
 
 	err := ssh.Unmarshal(request.Payload, &execMessage)
 	if err != nil {
-		sess.logger.Error("unmarshal-failed", err)
+		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
 			request.Reply(false, nil)
 		}
 		return
 	}
 
-	cmd, err := sess.createCommand(channel, execMessage.Command)
+	cmd, err := sess.createCommand(execMessage.Command)
 	if err != nil {
 		if request.WantReply {
 			request.Reply(false, nil)
@@ -174,16 +231,22 @@ func (sess *session) handleExecRequest(channel ssh.Channel, request *ssh.Request
 		request.Reply(true, nil)
 	}
 
-	err = sess.run(cmd)
+	if sess.allocPty {
+		err = sess.runWithPty(cmd)
+	} else {
+		err = sess.run(cmd)
+	}
+
 	if err == nil {
 		err = sess.wait(cmd)
 	}
-	sess.sendExitMessage(channel, err)
 
-	channel.Close()
+	sess.sendExitMessage(err)
+
+	sess.destroy()
 }
 
-func (sess *session) createCommand(channel ssh.Channel, command string) (*exec.Cmd, error) {
+func (sess *session) createCommand(command string) (*exec.Cmd, error) {
 	sess.Lock()
 	defer sess.Unlock()
 
@@ -192,26 +255,10 @@ func (sess *session) createCommand(channel ssh.Channel, command string) (*exec.C
 	}
 
 	cmd := exec.Command("/bin/sh", "-c", command)
-	cmd.Stdout = channel
-	cmd.Stderr = channel.Stderr()
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-
 	cmd.Env = sess.environment()
 	sess.command = cmd
 
-	go helpers.CopyAndClose(sess.logger, stdin, channel)
-
 	return cmd, nil
-}
-
-func (sess *session) setenv(name, value string) {
-	sess.Lock()
-	sess.env[name] = value
-	sess.Unlock()
 }
 
 func (sess *session) environment() []string {
@@ -232,7 +279,13 @@ func (sess *session) environment() []string {
 	return env
 }
 
-func (sess *session) sendExitMessage(channel ssh.Channel, err error) {
+func (sess *session) sendExitMessage(err error) {
+	logger := sess.logger
+
+	if err != nil {
+		logger.Error("building-exit-message-from-error", err)
+	}
+
 	type exitStatusMsg struct {
 		Status uint32
 	}
@@ -245,21 +298,21 @@ func (sess *session) sendExitMessage(channel ssh.Channel, err error) {
 	}
 
 	if err == nil {
-		channel.SendRequest("exit-status", false, ssh.Marshal(exitStatusMsg{}))
+		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitStatusMsg{}))
 		return
 	}
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
 		exitMessage := exitStatusMsg{Status: 255}
-		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
 		return
 	}
 
 	waitStatus, ok := exitError.Sys().(syscall.WaitStatus)
 	if !ok {
 		exitMessage := exitStatusMsg{Status: 255}
-		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
 		return
 	}
 
@@ -268,20 +321,95 @@ func (sess *session) sendExitMessage(channel ssh.Channel, err error) {
 			Signal:     string(SSHSignals[waitStatus.Signal()]),
 			CoreDumped: waitStatus.CoreDump(),
 		}
-		channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
-	} else {
-		exitMessage := exitStatusMsg{Status: uint32(waitStatus.ExitStatus())}
-		channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
+		return
 	}
+
+	exitMessage := exitStatusMsg{Status: uint32(waitStatus.ExitStatus())}
+	sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+}
+
+func setWindowSize(pseudoTty *os.File, columns, rows uint32) error {
+	return win.SetWinsize(pseudoTty.Fd(), &win.Winsize{
+		Width:  uint16(columns),
+		Height: uint16(rows),
+	})
 }
 
 func (sess *session) run(command *exec.Cmd) error {
+	logger := sess.logger.Session("run")
+
 	sess.Lock()
 	defer sess.Unlock()
+
+	command.Stdout = sess.channel
+	command.Stderr = sess.channel.Stderr()
+
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		return err
+	}
+
+	sess.wg.Add(1)
+	go helpers.CopyAndClose(logger, &sess.wg, stdin, sess.channel)
+
+	return sess.runner.Start(command)
+}
+
+func (sess *session) runWithPty(command *exec.Cmd) error {
+	logger := sess.logger.Session("run-with-pty")
+
+	sess.Lock()
+	defer sess.Unlock()
+
+	ptyMaster, ptySlave, err := pty.Open()
+	if err != nil {
+		logger.Error("failed-to-open-pty", err)
+		return err
+	}
+
+	sess.ptyMaster = ptyMaster
+	defer ptySlave.Close()
+
+	command.Stdout = ptySlave
+	command.Stdin = ptySlave
+	command.Stderr = ptySlave
+
+	command.SysProcAttr = &syscall.SysProcAttr{
+		Setctty: true,
+		Setsid:  true,
+	}
+
+	setWindowSize(ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+
+	sess.wg.Add(2)
+	go helpers.Copy(logger, &sess.wg, ptyMaster, sess.channel)
+	go helpers.Copy(logger, &sess.wg, sess.channel, ptyMaster)
 
 	return sess.runner.Start(command)
 }
 
 func (sess *session) wait(command *exec.Cmd) error {
 	return sess.runner.Wait(command)
+}
+
+func (sess *session) destroy() {
+	sess.Lock()
+	defer sess.Unlock()
+
+	if sess.complete {
+		return
+	}
+
+	sess.complete = true
+
+	sess.wg.Wait()
+
+	if sess.ptyMaster != nil {
+		sess.ptyMaster.Close()
+	}
+
+	if sess.channel != nil {
+		sess.channel.Close()
+	}
 }
