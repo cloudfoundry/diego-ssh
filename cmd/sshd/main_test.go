@@ -32,9 +32,10 @@ var _ = Describe("SSH daemon", func() {
 
 	startSSHDaemon := func() *ginkgomon.Runner {
 		runner := ginkgomon.New(ginkgomon.Config{
-			Name:          "sshd",
-			AnsiColorCode: "1;96m",
-			StartCheck:    "sshd.started",
+			Name:              "sshd",
+			AnsiColorCode:     "1;96m",
+			StartCheck:        "sshd.started",
+			StartCheckTimeout: 10 * time.Second,
 			Command: exec.Command(
 				sshdPath,
 				"-address", address,
