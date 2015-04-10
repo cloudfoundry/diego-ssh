@@ -106,6 +106,8 @@ func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
 			sess.handleSignalRequest(req)
 		case "pty-req":
 			sess.handlePtyRequest(req)
+		case "window-change":
+			sess.handleWindowChangeRequest(req)
 		case "exec":
 			go sess.handleExecRequest(req)
 		default:
@@ -196,6 +198,46 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 	sess.allocPty = true
 	sess.ptyRequest = ptyRequestMessage
 	sess.env["TERM"] = ptyRequestMessage.Term
+
+	if request.WantReply {
+		request.Reply(true, nil)
+	}
+}
+
+func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-window-change")
+
+	type windowChangeMsg struct {
+		Columns  uint32
+		Rows     uint32
+		WidthPx  uint32
+		HeightPx uint32
+	}
+	var windowChangeMessage windowChangeMsg
+
+	err := ssh.Unmarshal(request.Payload, &windowChangeMessage)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	sess.Lock()
+	defer sess.Unlock()
+
+	if sess.allocPty {
+		sess.ptyRequest.Columns = windowChangeMessage.Columns
+		sess.ptyRequest.Rows = windowChangeMessage.Rows
+	}
+
+	if sess.ptyMaster != nil {
+		err = setWindowSize(sess.ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+		if err != nil {
+			logger.Error("failed-to-set-window-size", err)
+		}
+	}
 
 	if request.WantReply {
 		request.Reply(true, nil)
@@ -383,8 +425,8 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 	setWindowSize(ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 
 	sess.wg.Add(2)
-	go helpers.Copy(logger, &sess.wg, ptyMaster, sess.channel)
-	go helpers.Copy(logger, &sess.wg, sess.channel, ptyMaster)
+	go helpers.Copy(logger.Session("to-pty"), &sess.wg, ptyMaster, sess.channel)
+	go helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
 
 	return sess.runner.Start(command)
 }

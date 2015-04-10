@@ -322,6 +322,57 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
+		Context("when a window change request is received", func() {
+			type winChangeMsg struct {
+				Columns  uint32
+				Rows     uint32
+				WidthPx  uint32
+				HeightPx uint32
+			}
+
+			var result []byte
+
+			Context("before a pty is allocated", func() {
+				BeforeEach(func() {
+					_, err := session.SendRequest("window-change", false, ssh.Marshal(winChangeMsg{
+						Rows:    50,
+						Columns: 132,
+					}))
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.RequestPty("vt100", 43, 80, ssh.TerminalModes{})
+					Ω(err).ShouldNot(HaveOccurred())
+
+					result, err = session.Output("stty size")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("ignores the request", func() {
+					Ω(result).Should(ContainSubstring("43 80"))
+				})
+			})
+
+			Context("after a pty is allocated", func() {
+				BeforeEach(func() {
+					err := session.RequestPty("vt100", 43, 80, ssh.TerminalModes{})
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = session.SendRequest("window-change", false, ssh.Marshal(winChangeMsg{
+						Rows:    50,
+						Columns: 132,
+					}))
+					Ω(err).ShouldNot(HaveOccurred())
+
+					result, err = session.Output("stty size")
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("changes the the size of the terminal", func() {
+					Ω(result).Should(ContainSubstring("50 132"))
+				})
+			})
+		})
+
 		Context("after executing a command", func() {
 			BeforeEach(func() {
 				err := session.Run("true")
@@ -470,6 +521,14 @@ var _ = Describe("SessionChannelHandler", func() {
 		Context("and a pty request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("pty-req", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(accepted).Should(BeFalse())
+			})
+		})
+
+		Context("and a window change request fails to unmarshal", func() {
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("window-change", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(accepted).Should(BeFalse())
 			})
