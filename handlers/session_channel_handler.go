@@ -35,13 +35,36 @@ func (commandRunner) Wait(cmd *exec.Cmd) error {
 	return cmd.Wait()
 }
 
-type SessionChannelHandler struct {
-	runner Runner
+//go:generate counterfeiter -o fakes/fake_shell_locator.go . ShellLocator
+type ShellLocator interface {
+	ShellPath() string
 }
 
-func NewSessionChannelHandler(runner Runner) *SessionChannelHandler {
+type shellLocator struct{}
+
+func NewShellLocator() ShellLocator {
+	return &shellLocator{}
+}
+
+func (shellLocator) ShellPath() string {
+	for _, shell := range []string{"/bin/bash", "/usr/local/bin/bash", "/bin/sh", "bash", "sh"} {
+		if path, err := exec.LookPath(shell); err == nil {
+			return path
+		}
+	}
+
+	return "/bin/sh"
+}
+
+type SessionChannelHandler struct {
+	runner       Runner
+	shellLocator ShellLocator
+}
+
+func NewSessionChannelHandler(runner Runner, shellLocator ShellLocator) *SessionChannelHandler {
 	return &SessionChannelHandler{
-		runner: runner,
+		runner:       runner,
+		shellLocator: shellLocator,
 	}
 }
 
@@ -52,7 +75,7 @@ func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newC
 		return
 	}
 
-	newSession(logger, handler.runner, channel).serviceRequests(requests)
+	handler.newSession(logger, channel).serviceRequests(requests)
 }
 
 type ptyRequestMsg struct {
@@ -68,8 +91,9 @@ type session struct {
 	logger   lager.Logger
 	complete bool
 
-	runner  Runner
-	channel ssh.Channel
+	shellPath string
+	runner    Runner
+	channel   ssh.Channel
 
 	sync.Mutex
 	env     map[string]string
@@ -78,15 +102,17 @@ type session struct {
 	wg         sync.WaitGroup
 	allocPty   bool
 	ptyRequest ptyRequestMsg
-	ptyMaster  *os.File
+
+	ptyMaster *os.File
 }
 
-func newSession(logger lager.Logger, runner Runner, channel ssh.Channel) *session {
+func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel) *session {
 	return &session{
-		logger:  logger.Session("session-channel"),
-		runner:  runner,
-		channel: channel,
-		env:     map[string]string{},
+		logger:    logger.Session("session-channel"),
+		runner:    handler.runner,
+		shellPath: handler.shellLocator.ShellPath(),
+		channel:   channel,
+		env:       map[string]string{},
 	}
 }
 
@@ -109,7 +135,9 @@ func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
 		case "window-change":
 			sess.handleWindowChangeRequest(req)
 		case "exec":
-			go sess.handleExecRequest(req)
+			sess.handleExecRequest(req)
+		case "shell":
+			sess.handleShellRequest(req)
 		default:
 			if req.WantReply {
 				req.Reply(false, nil)
@@ -261,8 +289,21 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 		return
 	}
 
-	cmd, err := sess.createCommand(execMessage.Command)
+	sess.executeShell(request, "-c", execMessage.Command)
+}
+
+func (sess *session) handleShellRequest(request *ssh.Request) {
+	sess.executeShell(request)
+}
+
+func (sess *session) executeShell(request *ssh.Request, args ...string) {
+	logger := sess.logger.Session("execute-shell")
+
+	sess.Lock()
+	cmd, err := sess.createCommand(args...)
 	if err != nil {
+		sess.Unlock()
+		logger.Error("failed-to-create-command", err)
 		if request.WantReply {
 			request.Reply(false, nil)
 		}
@@ -279,24 +320,27 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 		err = sess.run(cmd)
 	}
 
-	if err == nil {
-		err = sess.wait(cmd)
+	sess.Unlock()
+
+	if err != nil {
+		sess.sendExitMessage(err)
+		sess.destroy()
+		return
 	}
 
-	sess.sendExitMessage(err)
-
-	sess.destroy()
+	go func() {
+		err := sess.wait(cmd)
+		sess.sendExitMessage(err)
+		sess.destroy()
+	}()
 }
 
-func (sess *session) createCommand(command string) (*exec.Cmd, error) {
-	sess.Lock()
-	defer sess.Unlock()
-
+func (sess *session) createCommand(args ...string) (*exec.Cmd, error) {
 	if sess.command != nil {
 		return nil, errors.New("command already started")
 	}
 
-	cmd := exec.Command("/bin/sh", "-c", command)
+	cmd := exec.Command(sess.shellPath, args...)
 	cmd.Env = sess.environment()
 	sess.command = cmd
 
@@ -322,7 +366,9 @@ func (sess *session) environment() []string {
 }
 
 func (sess *session) sendExitMessage(err error) {
-	logger := sess.logger
+	logger := sess.logger.Session("send-exit-message")
+	logger.Info("started")
+	defer logger.Info("finished")
 
 	if err != nil {
 		logger.Error("building-exit-message-from-error", err)
@@ -381,9 +427,6 @@ func setWindowSize(pseudoTty *os.File, columns, rows uint32) error {
 func (sess *session) run(command *exec.Cmd) error {
 	logger := sess.logger.Session("run")
 
-	sess.Lock()
-	defer sess.Unlock()
-
 	command.Stdout = sess.channel
 	command.Stderr = sess.channel.Stderr()
 
@@ -393,16 +436,13 @@ func (sess *session) run(command *exec.Cmd) error {
 	}
 
 	sess.wg.Add(1)
-	go helpers.CopyAndClose(logger, &sess.wg, stdin, sess.channel)
+	go helpers.CopyAndClose(logger.Session("to-stdin"), &sess.wg, stdin, sess.channel)
 
 	return sess.runner.Start(command)
 }
 
 func (sess *session) runWithPty(command *exec.Cmd) error {
 	logger := sess.logger.Session("run-with-pty")
-
-	sess.Lock()
-	defer sess.Unlock()
 
 	ptyMaster, ptySlave, err := pty.Open()
 	if err != nil {
@@ -432,6 +472,9 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 }
 
 func (sess *session) wait(command *exec.Cmd) error {
+	logger := sess.logger.Session("wait")
+	logger.Info("started")
+	defer logger.Info("done")
 	return sess.runner.Wait(command)
 }
 
@@ -445,13 +488,13 @@ func (sess *session) destroy() {
 
 	sess.complete = true
 
+	if sess.channel != nil {
+		sess.channel.Close()
+	}
+
 	sess.wg.Wait()
 
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()
-	}
-
-	if sess.channel != nil {
-		sess.channel.Close()
 	}
 }

@@ -27,6 +27,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		serverSSHConfig *ssh.ServerConfig
 
 		runner                *fakes.FakeRunner
+		shellLocator          *fakes.FakeShellLocator
 		sessionChannelHandler *handlers.SessionChannelHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
@@ -44,7 +45,10 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner.StartStub = realRunner.Start
 		runner.WaitStub = realRunner.Wait
 
-		sessionChannelHandler = handlers.NewSessionChannelHandler(runner)
+		shellLocator = &fakes.FakeShellLocator{}
+		shellLocator.ShellPathReturns("/bin/sh")
+
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
@@ -93,6 +97,20 @@ var _ = Describe("SessionChannelHandler", func() {
 			stderrBytes, err := ioutil.ReadAll(stderr)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(stderrBytes).Should(Equal([]byte("Goodbye")))
+		})
+
+		Describe("the shell locator", func() {
+			BeforeEach(func() {
+				err := session.Run("true")
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("uses the shell locator to find the default shell path", func() {
+				Ω(shellLocator.ShellPathCallCount()).Should(Equal(1))
+
+				cmd := runner.StartArgsForCall(0)
+				Ω(cmd.Path).Should(Equal("/bin/sh"))
+			})
 		})
 
 		Context("when stdin is provided by the client", func() {
@@ -320,6 +338,27 @@ var _ = Describe("SessionChannelHandler", func() {
 
 				Ω(result).Should(ContainSubstring("43 80"))
 			})
+
+			Context("when an interactive command is executed", func() {
+				var stdin io.WriteCloser
+
+				BeforeEach(func() {
+					var err error
+					stdin, err = session.StdinPipe()
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+
+				It("terminates the session when the shell exits", func() {
+					err := session.Start("/bin/sh")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = stdin.Write([]byte("exit\n"))
+					Ω(err).ShouldNot(HaveOccurred())
+
+					err = session.Wait()
+					Ω(err).ShouldNot(HaveOccurred())
+				})
+			})
 		})
 
 		Context("when a window change request is received", func() {
@@ -388,6 +427,39 @@ var _ = Describe("SessionChannelHandler", func() {
 
 				err = session.Setenv("foo", "bar")
 				Ω(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("when an interactive shell is requested", func() {
+			var stdin io.WriteCloser
+
+			BeforeEach(func() {
+				var err error
+				stdin, err = session.StdinPipe()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = session.Shell()
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				session.Close()
+			})
+
+			It("starts the shell with the runner", func() {
+				Eventually(runner.StartCallCount).Should(Equal(1))
+
+				command := runner.StartArgsForCall(0)
+				Ω(command.Path).Should(Equal("/bin/sh"))
+				Ω(command.Args).Should(ConsistOf("/bin/sh"))
+			})
+
+			It("terminates the session when the shell exits", func() {
+				_, err := stdin.Write([]byte("exit\n"))
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = session.Wait()
+				Ω(err).ShouldNot(HaveOccurred())
 			})
 		})
 

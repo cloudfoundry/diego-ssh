@@ -60,13 +60,14 @@ func main() {
 	}
 
 	runner := handlers.NewCommandRunner()
+	shellLocator := handlers.NewShellLocator()
 
 	sshDaemon := daemon.New(
 		logger,
 		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
-			"session": handlers.NewSessionChannelHandler(runner),
+			"session": handlers.NewSessionChannelHandler(runner, shellLocator),
 		},
 	)
 	server := server.NewServer(logger, *address, sshDaemon)
