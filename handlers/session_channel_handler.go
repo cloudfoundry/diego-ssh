@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/creack/termios/raw"
 	"github.com/creack/termios/win"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
@@ -261,7 +264,7 @@ func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 	}
 
 	if sess.ptyMaster != nil {
-		err = setWindowSize(sess.ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+		err = setWindowSize(logger, sess.ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 		if err != nil {
 			logger.Error("failed-to-set-window-size", err)
 		}
@@ -417,11 +420,52 @@ func (sess *session) sendExitMessage(err error) {
 	sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
 }
 
-func setWindowSize(pseudoTty *os.File, columns, rows uint32) error {
+func setWindowSize(logger lager.Logger, pseudoTty *os.File, columns, rows uint32) error {
+	logger.Info("new-size", lager.Data{"columns": columns, "rows": rows})
 	return win.SetWinsize(pseudoTty.Fd(), &win.Winsize{
 		Width:  uint16(columns),
 		Height: uint16(rows),
 	})
+}
+
+func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist string) {
+	reader := bytes.NewReader([]byte(modelist))
+
+	for {
+		var opcode uint8
+		var value uint32
+
+		err := binary.Read(reader, binary.BigEndian, &opcode)
+		if err != nil {
+			logger.Error("failed-to-read-modelist-opcode", err)
+			break
+		}
+
+		if opcode == 0 || opcode >= 160 {
+			break
+		}
+
+		err = binary.Read(reader, binary.BigEndian, &value)
+		if err != nil {
+			logger.Error("failed-to-read-modelist-value", err)
+			break
+		}
+
+		termios, err := raw.TcGetAttr(pseudoTty.Fd())
+		if err != nil {
+			logger.Error("failed-to-get-terminal-attrs", err)
+			continue
+		}
+
+		err = TermAttrSetters[opcode].Set(pseudoTty, termios, value)
+		if err != nil {
+			logger.Error("failed-to-set-terminal-attrs", err, lager.Data{
+				"opcode": opcode,
+				"value":  value,
+			})
+			continue
+		}
+	}
 }
 
 func (sess *session) run(command *exec.Cmd) error {
@@ -462,7 +506,8 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 		Setsid:  true,
 	}
 
-	setWindowSize(ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+	setTerminalAttributes(logger, ptyMaster, sess.ptyRequest.Modelist)
+	setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 
 	sess.wg.Add(2)
 	go helpers.Copy(logger.Session("to-pty"), &sess.wg, ptyMaster, sess.channel)

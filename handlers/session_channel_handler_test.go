@@ -314,6 +314,10 @@ var _ = Describe("SessionChannelHandler", func() {
 			var terminalModes ssh.TerminalModes
 
 			BeforeEach(func() {
+				terminalModes = ssh.TerminalModes{}
+			})
+
+			JustBeforeEach(func() {
 				err := session.RequestPty("vt100", 43, 80, terminalModes)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
@@ -339,10 +343,91 @@ var _ = Describe("SessionChannelHandler", func() {
 				Ω(result).Should(ContainSubstring("43 80"))
 			})
 
+			Context("when control character mappings are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					// Swap CTRL-Z (suspend) with CTRL-D (eof)
+					terminalModes[ssh.VEOF] = 26
+					terminalModes[ssh.VSUSP] = 4
+				})
+
+				It("honors the control character changes", func() {
+					result, err := session.Output("stty -a")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(result)).Should(ContainSubstring("susp = ^D"))
+					Ω(string(result)).Should(ContainSubstring("eof = ^Z"))
+				})
+			})
+
+			Context("when input modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					terminalModes[ssh.IGNPAR] = 1
+					terminalModes[ssh.IXON] = 0
+					terminalModes[ssh.IXANY] = 0
+				})
+
+				It("honors the input mode changes", func() {
+					result, err := session.Output("stty -a")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(result)).Should(ContainSubstring(" ignpar"))
+					Ω(string(result)).Should(ContainSubstring(" -ixon"))
+					Ω(string(result)).Should(ContainSubstring(" -ixany"))
+				})
+			})
+
+			Context("when local modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					terminalModes[ssh.IEXTEN] = 0
+					terminalModes[ssh.ECHOCTL] = 1
+				})
+
+				It("honors the local mode changes", func() {
+					result, err := session.Output("stty -a")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(result)).Should(ContainSubstring(" -iexten"))
+					Ω(string(result)).Should(ContainSubstring(" echoctl"))
+				})
+			})
+
+			Context("when output modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					terminalModes[ssh.ONLCR] = 0
+					terminalModes[ssh.ONLRET] = 1
+				})
+
+				It("honors the output mode changes", func() {
+					result, err := session.Output("stty -a")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(result)).Should(ContainSubstring(" -onlcr"))
+					Ω(string(result)).Should(ContainSubstring(" -onlret"))
+				})
+			})
+
+			Context("when control character modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					// Set to E71
+					terminalModes[ssh.PARODD] = 0
+					terminalModes[ssh.CS7] = 1
+					terminalModes[ssh.PARENB] = 1
+				})
+
+				It("honors the control mode changes", func() {
+					result, err := session.Output("stty -a")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(result)).Should(ContainSubstring(" -parodd"))
+					Ω(string(result)).Should(ContainSubstring(" cs7"))
+					Ω(string(result)).Should(ContainSubstring(" parenb"))
+				})
+			})
+
 			Context("when an interactive command is executed", func() {
 				var stdin io.WriteCloser
 
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					var err error
 					stdin, err = session.StdinPipe()
 					Ω(err).ShouldNot(HaveOccurred())
