@@ -33,13 +33,13 @@ var TermAttrSetters map[uint8]TCSetter = map[uint8]TCSetter{
 	ssh.VSTART:   &ccSetter{Character: syscall.VSTART},
 	ssh.VSTOP:    &ccSetter{Character: syscall.VSTOP},
 	ssh.VSUSP:    &ccSetter{Character: syscall.VSUSP},
-	ssh.VDSUSP:   &ccSetter{Character: syscall.VDSUSP},
+	ssh.VDSUSP:   &nopSetter{},
 	ssh.VREPRINT: &ccSetter{Character: syscall.VREPRINT},
 	ssh.VWERASE:  &ccSetter{Character: syscall.VWERASE},
 	ssh.VLNEXT:   &ccSetter{Character: syscall.VLNEXT},
 	ssh.VFLUSH:   &nopSetter{},
 	ssh.VSWTCH:   &nopSetter{},
-	ssh.VSTATUS:  &ccSetter{Character: syscall.VSTATUS},
+	ssh.VSTATUS:  &nopSetter{},
 	ssh.VDISCARD: &ccSetter{Character: syscall.VDISCARD},
 
 	// Input modes
