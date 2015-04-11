@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
-	"github.com/creack/termios/raw"
 	"github.com/creack/termios/win"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
@@ -451,7 +450,12 @@ func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist str
 			break
 		}
 
-		termios, err := raw.TcGetAttr(pseudoTty.Fd())
+		logger.Info("set-terminal-attribute", lager.Data{
+			"opcode": opcode,
+			"value":  fmt.Sprintf("%x", value),
+		})
+
+		termios, err := TcGetAttr(pseudoTty)
 		if err != nil {
 			logger.Error("failed-to-get-terminal-attrs", err)
 			continue
@@ -461,7 +465,7 @@ func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist str
 		if err != nil {
 			logger.Error("failed-to-set-terminal-attrs", err, lager.Data{
 				"opcode": opcode,
-				"value":  value,
+				"value":  fmt.Sprintf("%x", value),
 			})
 			continue
 		}

@@ -4,7 +4,6 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/creack/termios/raw"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -19,7 +18,7 @@ import (
 // };
 
 type TCSetter interface {
-	Set(pty *os.File, termios *raw.Termios, value uint32) error
+	Set(pty *os.File, termios *syscall.Termios, value uint32) error
 }
 
 var TermAttrSetters map[uint8]TCSetter = map[uint8]TCSetter{
@@ -96,39 +95,40 @@ type ccSetter struct {
 	Character uint8
 }
 
-func (cc *ccSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (cc *ccSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	termios.Cc[cc.Character] = byte(value)
-	return raw.TcSetAttr(pty.Fd(), termios)
+	return TcSetAttr(pty, termios)
 }
 
-func (i *iflagSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (i *iflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	if value == 0 {
 		termios.Iflag &^= i.Flag
 	} else {
 		termios.Iflag |= i.Flag
 	}
-	return raw.TcSetAttr(pty.Fd(), termios)
+	return TcSetAttr(pty, termios)
 }
 
-func (l *lflagSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (l *lflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	if value == 0 {
 		termios.Lflag &^= l.Flag
 	} else {
 		termios.Lflag |= l.Flag
 	}
-	return raw.TcSetAttr(pty.Fd(), termios)
+	return TcSetAttr(pty, termios)
 }
 
-func (o *oflagSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (o *oflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	if value == 0 {
 		termios.Oflag &^= o.Flag
 	} else {
 		termios.Oflag |= o.Flag
 	}
-	return raw.TcSetAttr(pty.Fd(), termios)
+
+	return TcSetAttr(pty, termios)
 }
 
-func (c *cflagSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (c *cflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	switch c.Flag {
 	// CSIZE is a field
 	case syscall.CS7, syscall.CS8:
@@ -141,9 +141,10 @@ func (c *cflagSetter) Set(pty *os.File, termios *raw.Termios, value uint32) erro
 			termios.Cflag |= c.Flag
 		}
 	}
-	return raw.TcSetAttr(pty.Fd(), termios)
+
+	return TcSetAttr(pty, termios)
 }
 
-func (n *nopSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
+func (n *nopSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	return nil
 }

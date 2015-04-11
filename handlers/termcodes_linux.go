@@ -2,6 +2,12 @@
 
 package handlers
 
+import (
+	"os"
+	"syscall"
+	"unsafe"
+)
+
 type iflagSetter struct {
 	Flag uint32
 }
@@ -16,4 +22,24 @@ type oflagSetter struct {
 
 type cflagSetter struct {
 	Flag uint32
+}
+
+func TcSetAttr(tty *os.File, termios *syscall.Termios) error {
+	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TCSETS, uintptr(unsafe.Pointer(termios)))
+	if r != 0 {
+		return os.NewSyscallError("SYS_IOCTL", e)
+	}
+
+	return nil
+}
+
+func TcGetAttr(tty *os.File) (*syscall.Termios, error) {
+	termios := &syscall.Termios{}
+
+	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TCGETS, uintptr(unsafe.Pointer(termios)))
+	if r != 0 {
+		return nil, os.NewSyscallError("SYS_IOCTL", e)
+	}
+
+	return termios, nil
 }
