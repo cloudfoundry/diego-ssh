@@ -96,22 +96,6 @@ type ccSetter struct {
 	Character uint8
 }
 
-type iflagSetter struct {
-	Flag uint64
-}
-
-type lflagSetter struct {
-	Flag uint64
-}
-
-type oflagSetter struct {
-	Flag uint64
-}
-
-type cflagSetter struct {
-	Flag uint64
-}
-
 func (cc *ccSetter) Set(pty *os.File, termios *raw.Termios, value uint32) error {
 	termios.Cc[cc.Character] = byte(value)
 	return raw.TcSetAttr(pty.Fd(), termios)
