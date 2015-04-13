@@ -196,6 +196,36 @@ var _ = Describe("Server", func() {
 			})
 		})
 	})
+
+	Describe("ListenAddr", func() {
+		var listener net.Listener
+		BeforeEach(func() {
+			srv = server.NewServer(logger, address, handler)
+		})
+
+		Context("when the server has a listener", func() {
+			BeforeEach(func() {
+				var err error
+				listener, err = net.Listen("tcp", "127.0.0.1:0")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				srv = server.NewServer(logger, address, handler)
+				err = srv.SetListener(listener)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+
+			It("returns the address reported by the listener", func() {
+				Ω(srv.ListenAddr()).Should(Equal(listener.Addr()))
+			})
+		})
+
+		Context("when the server does not have a listener", func() {
+			It("returns an error", func() {
+				_, err := srv.ListenAddr()
+				Ω(err).Should(HaveOccurred())
+			})
+		})
+	})
 })
 
 type testNetError struct {

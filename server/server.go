@@ -63,7 +63,7 @@ func (s *Server) Shutdown() {
 	defer s.mutex.Unlock()
 
 	if !s.stopping {
-		s.logger.Info("stopping-proxy")
+		s.logger.Info("stopping-server")
 		s.stopping = true
 		s.listener.Close()
 	}
@@ -87,6 +87,14 @@ func (s *Server) SetListener(listener net.Listener) error {
 
 	s.listener = listener
 	return nil
+}
+
+func (s *Server) ListenAddr() (net.Addr, error) {
+	if s.listener == nil {
+		return nil, errors.New("No listener")
+	}
+
+	return s.listener.Addr(), nil
 }
 
 func (s *Server) Serve() {
