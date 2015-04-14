@@ -7,12 +7,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type PublicKeyAuthenticator interface {
-	Authenticate(conn ssh.ConnMetadata, publicKey ssh.PublicKey) (*ssh.Permissions, error)
-	PublicKey() ssh.PublicKey
-	User() string
-}
-
 type publicKeyAuthenticator struct {
 	user               string
 	publicKey          ssh.PublicKey
