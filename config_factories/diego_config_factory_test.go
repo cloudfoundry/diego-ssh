@@ -49,7 +49,7 @@ var _ = Describe("DiegoConfigFactory", func() {
 	It("returns the ssh client config", func() {
 		Ω(clientConfig).ShouldNot(BeNil())
 
-		authenticator := authenticators.NewPublicKeyAuthenticator("", TestPublicKey)
+		authenticator := authenticators.NewPublicKeyAuthenticator(TestPublicKey)
 		serverConfig := &ssh.ServerConfig{
 			PublicKeyCallback: authenticator.Authenticate,
 		}

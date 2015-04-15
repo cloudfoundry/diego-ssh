@@ -118,8 +118,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *publicUserKey != "" {
 		decodedPublicKey, err := decodePublicKey(logger)
 		if err == nil {
-			user := os.Getenv("USER")
-			authenticator := authenticators.NewPublicKeyAuthenticator(user, decodedPublicKey)
+			authenticator := authenticators.NewPublicKeyAuthenticator(decodedPublicKey)
 			sshConfig.PublicKeyCallback = authenticator.Authenticate
 		} else {
 			errorStrings = append(errorStrings, err.Error())
