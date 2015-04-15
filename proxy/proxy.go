@@ -127,8 +127,14 @@ func ProxyChannels(logger lager.Logger, conn ssh.Conn, channels <-chan ssh.NewCh
 			continue
 		}
 
-		go helpers.CopyAndClose(logger, nil, targetChan, sourceChan)
-		go helpers.CopyAndClose(logger, nil, sourceChan, targetChan)
+		go func() {
+			helpers.Copy(logger.Session("to-target"), nil, targetChan, sourceChan)
+			targetChan.CloseWrite()
+		}()
+		go func() {
+			helpers.Copy(logger.Session("to-source"), nil, sourceChan, targetChan)
+			sourceChan.CloseWrite()
+		}()
 
 		go ProxyRequests(logger, newChannel.ChannelType(), sourceReqs, targetChan)
 		go ProxyRequests(logger, newChannel.ChannelType(), targetReqs, sourceChan)

@@ -388,21 +388,30 @@ func (sess *session) sendExitMessage(err error) {
 	}
 
 	if err == nil {
-		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitStatusMsg{}))
+		_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitStatusMsg{}))
+		if sendErr != nil {
+			logger.Error("send-exit-status-failed", sendErr)
+		}
 		return
 	}
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
 		exitMessage := exitStatusMsg{Status: 255}
-		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		if sendErr != nil {
+			logger.Error("send-exit-status-failed", sendErr)
+		}
 		return
 	}
 
 	waitStatus, ok := exitError.Sys().(syscall.WaitStatus)
 	if !ok {
 		exitMessage := exitStatusMsg{Status: 255}
-		sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+		if sendErr != nil {
+			logger.Error("send-exit-status-failed", sendErr)
+		}
 		return
 	}
 
@@ -411,12 +420,18 @@ func (sess *session) sendExitMessage(err error) {
 			Signal:     string(SSHSignals[waitStatus.Signal()]),
 			CoreDumped: waitStatus.CoreDump(),
 		}
-		sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
+		_, sendErr := sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
+		if sendErr != nil {
+			logger.Error("send-exit-status-failed", sendErr)
+		}
 		return
 	}
 
 	exitMessage := exitStatusMsg{Status: uint32(waitStatus.ExitStatus())}
-	sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+	_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+	if sendErr != nil {
+		logger.Error("send-exit-status-failed", sendErr)
+	}
 }
 
 func setWindowSize(logger lager.Logger, pseudoTty *os.File, columns, rows uint32) error {

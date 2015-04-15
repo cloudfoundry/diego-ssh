@@ -672,7 +672,7 @@ var _ = Describe("Proxy", func() {
 
 					It("closes the target channel", func() {
 						Eventually(sourceChannel.ReadCallCount).Should(Equal(1))
-						Eventually(targetChannel.CloseCallCount).Should(Equal(1))
+						Eventually(targetChannel.CloseWriteCallCount).Should(Equal(1))
 					})
 				})
 
@@ -683,7 +683,7 @@ var _ = Describe("Proxy", func() {
 
 					It("closes the source channel", func() {
 						Eventually(sourceChannel.ReadCallCount).Should(Equal(1))
-						Eventually(targetChannel.CloseCallCount).Should(Equal(1))
+						Eventually(targetChannel.CloseWriteCallCount).Should(Equal(1))
 					})
 				})
 

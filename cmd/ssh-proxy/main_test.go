@@ -144,6 +144,19 @@ var _ = Describe("SSH proxy", func() {
 
 				Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
 			})
+
+			It("connects to the target daemon", func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				session, err := client.NewSession()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				output, err := session.Output("echo -n hello")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(string(output)).Should(Equal("hello"))
+			})
 		})
 
 		Context("when a client connects with a bad user", func() {
