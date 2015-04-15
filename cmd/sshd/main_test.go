@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"time"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"golang.org/x/crypto/ssh"
@@ -19,34 +19,16 @@ import (
 
 var _ = Describe("SSH daemon", func() {
 	var (
-		runner       ifrit.Runner
-		process      ifrit.Process
-		exitDuration = 3 * time.Second
+		runner  ifrit.Runner
+		process ifrit.Process
 
-		address                     string
-		hostKey                     []byte
-		privateUserKey              []byte
-		publicUserKey               []byte
+		address        string
+		hostKey        string
+		privateUserKey string
+		publicUserKey  string
+
 		allowUnauthenticatedClients bool
 	)
-
-	startSSHDaemon := func() *ginkgomon.Runner {
-		runner := ginkgomon.New(ginkgomon.Config{
-			Name:              "sshd",
-			AnsiColorCode:     "1;96m",
-			StartCheck:        "sshd.started",
-			StartCheckTimeout: 10 * time.Second,
-			Command: exec.Command(
-				sshdPath,
-				"-address", address,
-				"-hostKey", string(hostKey),
-				"-publicUserKey", string(publicUserKey),
-				fmt.Sprintf("-allowUnauthenticatedClients=%t", allowUnauthenticatedClients),
-			),
-		})
-
-		return runner
-	}
 
 	BeforeEach(func() {
 		hostKey = hostKeyPem
@@ -57,19 +39,27 @@ var _ = Describe("SSH daemon", func() {
 		address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	})
 
+	JustBeforeEach(func() {
+		args := testrunner.Args{
+			Address:       address,
+			HostKey:       string(hostKey),
+			PublicUserKey: string(publicUserKey),
+
+			AllowUnauthenticatedClients: allowUnauthenticatedClients,
+		}
+
+		runner = testrunner.New(sshdPath, args)
+		process = ifrit.Invoke(runner)
+	})
+
+	AfterEach(func() {
+		ginkgomon.Kill(process, 3*time.Second)
+	})
+
 	Describe("argument validation", func() {
-		JustBeforeEach(func() {
-			runner = startSSHDaemon()
-			process = ifrit.Invoke(runner)
-		})
-
-		AfterEach(func() {
-			ginkgomon.Kill(process, exitDuration)
-		})
-
 		Context("when an ill-formed host key is provided", func() {
 			BeforeEach(func() {
-				hostKey = []byte("host-key")
+				hostKey = "host-key"
 			})
 
 			It("reports and dies", func() {
@@ -80,7 +70,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when an ill-formed public user key is provided", func() {
 			BeforeEach(func() {
-				publicUserKey = []byte("user-key")
+				publicUserKey = "user-key"
 			})
 
 			It("reports and dies", func() {
@@ -91,7 +81,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("the user public key is not provided", func() {
 			BeforeEach(func() {
-				publicUserKey = []byte{}
+				publicUserKey = ""
 			})
 
 			Context("and allowUnauthenticatedClients is not true", func() {
@@ -125,16 +115,11 @@ var _ = Describe("SSH daemon", func() {
 		)
 
 		JustBeforeEach(func() {
-			runner = startSSHDaemon()
-			process = ginkgomon.Invoke(runner)
 			Ω(process).ShouldNot(BeNil())
-
 			client, dialErr = ssh.Dial("tcp", address, clientConfig)
 		})
 
 		AfterEach(func() {
-			ginkgomon.Interrupt(process, exitDuration)
-
 			if client != nil {
 				client.Close()
 			}
@@ -142,8 +127,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when a host key is not specified", func() {
 			BeforeEach(func() {
-				hostKey = []byte{}
-
+				hostKey = ""
 				allowUnauthenticatedClients = true
 				clientConfig = &ssh.ClientConfig{}
 			})
@@ -170,7 +154,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("uses the host key provided on the command line", func() {
-				sshHostKey, err := ssh.ParsePrivateKey(hostKeyPem)
+				sshHostKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
 				Ω(err).ShouldNot(HaveOccurred())
 
 				sshPublicHostKey := sshHostKey.PublicKey()
@@ -193,7 +177,7 @@ var _ = Describe("SSH daemon", func() {
 
 			Context("and client has a valid private key", func() {
 				BeforeEach(func() {
-					key, err := ssh.ParsePrivateKey(privateUserKey)
+					key, err := ssh.ParsePrivateKey([]byte(privateUserKey))
 					Ω(err).ShouldNot(HaveOccurred())
 
 					clientConfig = &ssh.ClientConfig{

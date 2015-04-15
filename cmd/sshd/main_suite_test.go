@@ -16,9 +16,9 @@ var (
 	sshdPath string
 
 	sshdPort          int
-	hostKeyPem        []byte
-	privateUserKeyPem []byte
-	publicUserKeyPem  []byte
+	hostKeyPem        string
+	privateUserKeyPem string
+	publicUserKeyPem  string
 )
 
 func TestSSHDaemon(t *testing.T) {
@@ -51,9 +51,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &context)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	hostKeyPem = []byte(context["host-key"])
-	privateUserKeyPem = []byte(context["user-private-key"])
-	publicUserKeyPem = []byte(context["user-public-key"])
+	hostKeyPem = context["host-key"]
+	privateUserKeyPem = context["user-private-key"]
+	publicUserKeyPem = context["user-public-key"]
 
 	sshdPort = 7001 + GinkgoParallelNode()
 	sshdPath = context["sshd"]

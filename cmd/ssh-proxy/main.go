@@ -51,18 +51,12 @@ func main() {
 
 	logger, reconfigurableSink := cf_lager.New("ssh-proxy")
 
-	proxyConfig, err := configure(logger)
+	proxyConfig, configFactory, err := configure(logger)
 	if err != nil {
 		logger.Error("configure-failed", err)
 		os.Exit(1)
 	}
 
-	key, err := parsePrivateKey(logger, *privateKey)
-	if err != nil {
-		logger.Fatal("failed-to-parse-private-key", err)
-	}
-
-	configFactory := config_factories.NewDiegoConfigFactory(logger, key)
 	sshProxy := proxy.New(logger, proxyConfig, configFactory)
 	server := server.NewServer(logger, *address, sshProxy)
 
@@ -91,10 +85,10 @@ func main() {
 	os.Exit(0)
 }
 
-func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
+func configure(logger lager.Logger) (*ssh.ServerConfig, proxy.ConfigFactory, error) {
 	if *diegoAPIURL == "" {
-		err := errors.New("digoAPIURL is required")
-		logger.Fatal("failed-to-acquire-host-key", err)
+		err := errors.New("diegoAPIURL is required")
+		logger.Fatal("diego-api-url-required", err)
 	}
 
 	url, err := url.Parse(*diegoAPIURL)
@@ -105,8 +99,6 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	var diegoCreds string
 	if url.User != nil {
 		diegoCreds = url.User.String()
-	} else {
-		diegoCreds = ":"
 	}
 
 	receptorClient := receptor.NewClient(*diegoAPIURL)
@@ -117,7 +109,8 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	if *hostKey == "" {
-		logger.Fatal("hostKey is required", errors.New("missing hostKey"))
+		err := errors.New("hostKey is required")
+		logger.Fatal("host-key-required", err)
 	}
 
 	key, err := parsePrivateKey(logger, *hostKey)
@@ -127,7 +120,19 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	sshConfig.AddHostKey(key)
 
-	return sshConfig, err
+	if *privateKey == "" {
+		err := errors.New("privateKey is required")
+		logger.Fatal("private-key-required", err)
+	}
+
+	key, err = parsePrivateKey(logger, *privateKey)
+	if err != nil {
+		logger.Fatal("failed-to-parse-private-key", err)
+	}
+
+	configFactory := config_factories.NewDiegoConfigFactory(logger, key)
+
+	return sshConfig, configFactory, err
 }
 
 func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error) {
