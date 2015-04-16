@@ -12,10 +12,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("DiegoPasswordAuthenticator", func() {
+var _ = Describe("DiegoProxyAuthenticator", func() {
 
 	var (
-		authenticator  *authenticators.DiegoPasswordAuthenticator
+		authenticator  *authenticators.DiegoProxyAuthenticator
 		metadata       *fake_ssh.FakeConnMetadata
 		logger         *lagertest.TestLogger
 		receptorClient *fake_receptor.FakeClient
@@ -30,7 +30,7 @@ var _ = Describe("DiegoPasswordAuthenticator", func() {
 		logger = lagertest.NewTestLogger("test")
 		receptorClient = new(fake_receptor.FakeClient)
 		receptorCreds = []byte("receptor-user:receptor-password")
-		authenticator = authenticators.NewDiegoPasswordAuthenticator(logger, receptorClient, receptorCreds)
+		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
 
 		metadata = &fake_ssh.FakeConnMetadata{}
 		permissions = nil

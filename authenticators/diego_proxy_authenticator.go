@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type DiegoPasswordAuthenticator struct {
+type DiegoProxyAuthenticator struct {
 	logger         lager.Logger
 	receptorCreds  []byte
 	receptorClient receptor.Client
@@ -23,15 +23,15 @@ var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
 
-func NewDiegoPasswordAuthenticator(logger lager.Logger, receptorClient receptor.Client, receptorCreds []byte) *DiegoPasswordAuthenticator {
-	return &DiegoPasswordAuthenticator{
+func NewDiegoProxyAuthenticator(logger lager.Logger, receptorClient receptor.Client, receptorCreds []byte) *DiegoProxyAuthenticator {
+	return &DiegoProxyAuthenticator{
 		logger:         logger,
 		receptorCreds:  receptorCreds,
 		receptorClient: receptorClient,
 	}
 }
 
-func (dpa *DiegoPasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	logger := dpa.logger.Session("authenticate")
 	logger.Info("authentication-starting")
 	defer logger.Info("authentication-finished")
@@ -64,7 +64,7 @@ func (dpa *DiegoPasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, p
 	return dpa.createPermissions(&lrpResponse), nil
 }
 
-func (dpa *DiegoPasswordAuthenticator) createPermissions(lrp *receptor.ActualLRPResponse) *ssh.Permissions {
+func (dpa *DiegoProxyAuthenticator) createPermissions(lrp *receptor.ActualLRPResponse) *ssh.Permissions {
 	for _, mapping := range lrp.Ports {
 		if mapping.ContainerPort == 2222 {
 			return &ssh.Permissions{
