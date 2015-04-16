@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"encoding/json"
+	"errors"
 	"net"
 	"sync"
 
@@ -9,30 +11,22 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-//go:generate counterfeiter -o fakes/fake_config_factory.go . ConfigFactory
-type ConfigFactory interface {
-	Create(permissions *ssh.Permissions) (config *ssh.ClientConfig, address string, err error)
-}
-
 type Waiter interface {
 	Wait() error
 }
 
 type Proxy struct {
-	logger        lager.Logger
-	serverConfig  *ssh.ServerConfig
-	configFactory ConfigFactory
+	logger       lager.Logger
+	serverConfig *ssh.ServerConfig
 }
 
 func New(
 	logger lager.Logger,
 	serverConfig *ssh.ServerConfig,
-	configFactory ConfigFactory,
 ) *Proxy {
 	return &Proxy{
-		logger:        logger,
-		serverConfig:  serverConfig,
-		configFactory: configFactory,
+		logger:       logger,
+		serverConfig: serverConfig,
 	}
 }
 
@@ -50,15 +44,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	}
 	defer serverConn.Close()
 
-	clientConfig, address, err := p.configFactory.Create(serverConn.Permissions)
-	if err != nil || clientConfig == nil || address == "" {
-		logger.Error("failed-to-create-client-config", err, lager.Data{
-			"address": address,
-		})
-		return
-	}
-
-	clientConn, clientChannels, clientRequests, err := p.newClientConn(logger, address, clientConfig)
+	clientConn, clientChannels, clientRequests, err := NewClientConn(logger, serverConn.Permissions)
 	if err != nil {
 		return
 	}
@@ -180,18 +166,58 @@ func Wait(logger lager.Logger, waiters ...Waiter) {
 	wg.Wait()
 }
 
-func (p *Proxy) newClientConn(logger lager.Logger, address string, config *ssh.ClientConfig) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
+type TargetConfig struct {
+	Address    string `json:"address"`
+	User       string `json:"user,omitempty"`
+	Password   string `json:"password,omitempty"`
+	PrivateKey string `json:"private_key,omitempty"`
+}
+
+func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
+	if permissions == nil || permissions.CriticalOptions == nil {
+		err := errors.New("Invalid permissions from authentication")
+		logger.Error("permissions-and-critical-options-required", err)
+		return nil, nil, nil, err
+	}
+
+	targetConfigJson := permissions.CriticalOptions["proxy-target-config"]
 	logger = logger.Session("new-client-conn", lager.Data{
-		"address": address,
+		"proxy-target-config": targetConfigJson,
 	})
 
-	nConn, err := net.Dial("tcp", address)
+	var targetConfig TargetConfig
+	err := json.Unmarshal([]byte(permissions.CriticalOptions["proxy-target-config"]), &targetConfig)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		return nil, nil, nil, err
+	}
+
+	nConn, err := net.Dial("tcp", targetConfig.Address)
 	if err != nil {
 		logger.Error("dial-failed", err)
 		return nil, nil, nil, err
 	}
 
-	conn, ch, req, err := ssh.NewClientConn(nConn, address, config)
+	clientConfig := &ssh.ClientConfig{}
+
+	if targetConfig.User != "" {
+		clientConfig.User = targetConfig.User
+	}
+
+	if targetConfig.PrivateKey != "" {
+		key, err := ssh.ParsePrivateKey([]byte(targetConfig.PrivateKey))
+		if err != nil {
+			logger.Error("parsing-key-failed", err)
+			return nil, nil, nil, err
+		}
+		clientConfig.Auth = append(clientConfig.Auth, ssh.PublicKeys(key))
+	}
+
+	if targetConfig.User != "" && targetConfig.Password != "" {
+		clientConfig.Auth = append(clientConfig.Auth, ssh.Password(targetConfig.Password))
+	}
+
+	conn, ch, req, err := ssh.NewClientConn(nConn, targetConfig.Address, clientConfig)
 	if err != nil {
 		logger.Error("handshake-failed", err)
 		return nil, nil, nil, err

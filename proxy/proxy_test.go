@@ -1,6 +1,7 @@
 package proxy_test
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -10,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fake_handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
-	"github.com/cloudfoundry-incubator/diego-ssh/proxy/fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	server_fakes "github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
@@ -35,9 +35,9 @@ var _ = Describe("Proxy", func() {
 		var (
 			proxyAuthenticator *fake_authenticators.FakePasswordAuthenticator
 			proxySSHConfig     *ssh.ServerConfig
-			configFactory      *fakes.FakeConfigFactory
 			sshProxy           *proxy.Proxy
 
+			daemonTargetConfig          proxy.TargetConfig
 			daemonAuthenticator         *fake_authenticators.FakePasswordAuthenticator
 			daemonSSHConfig             *ssh.ServerConfig
 			daemonGlobalRequestHandlers map[string]handlers.GlobalRequestHandler
@@ -56,7 +56,6 @@ var _ = Describe("Proxy", func() {
 
 		BeforeEach(func() {
 			proxyAuthenticator = &fake_authenticators.FakePasswordAuthenticator{}
-			configFactory = &fakes.FakeConfigFactory{}
 
 			proxySSHConfig = &ssh.ServerConfig{}
 			proxySSHConfig.PasswordCallback = proxyAuthenticator.Authenticate
@@ -79,10 +78,26 @@ var _ = Describe("Proxy", func() {
 			sshdListener, err = net.Listen("tcp", "127.0.0.1:0")
 			Ω(err).ShouldNot(HaveOccurred())
 			daemonAddress = sshdListener.Addr().String()
+
+			daemonTargetConfig = proxy.TargetConfig{
+				Address:  daemonAddress,
+				User:     "some-user",
+				Password: "some-password",
+			}
+
+			targetConfigJson, err := json.Marshal(daemonTargetConfig)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			permissions := &ssh.Permissions{
+				CriticalOptions: map[string]string{
+					"proxy-target-config": string(targetConfigJson),
+				},
+			}
+			proxyAuthenticator.AuthenticateReturns(permissions, nil)
 		})
 
 		JustBeforeEach(func() {
-			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig, configFactory)
+			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig)
 			proxyServer = server.NewServer(logger, "127.0.0.1:0", sshProxy)
 			proxyServer.SetListener(proxyListener)
 			go proxyServer.Serve()
@@ -131,33 +146,14 @@ var _ = Describe("Proxy", func() {
 					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed: ssh: unable to authenticate")))
 				})
 
-				It("does not use the client config factory create a client configuration", func() {
-					Ω(proxyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
-					Ω(configFactory.CreateCallCount()).Should(Equal(0))
-				})
-
 				It("logs the failure", func() {
 					Eventually(logger).Should(gbytes.Say(`handshake-failed`))
+					Ω(proxyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
 				})
 			})
 
 			Context("when the handshake is successful", func() {
-				var permissions *ssh.Permissions
 				var client *ssh.Client
-
-				BeforeEach(func() {
-					permissions = &ssh.Permissions{
-						CriticalOptions: map[string]string{
-							"critical-1": "critical-value-1",
-							"critical-2": "critical-value-2",
-						},
-						Extensions: map[string]string{
-							"extension-1": "extension-value-1",
-							"extension-2": "extension-value-2",
-						},
-					}
-					proxyAuthenticator.AuthenticateReturns(permissions, nil)
-				})
 
 				JustBeforeEach(func() {
 					var err error
@@ -165,102 +161,44 @@ var _ = Describe("Proxy", func() {
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
-				It("passes the permissions from authentication to the client config factory", func() {
-					Ω(configFactory.CreateCallCount()).Should(Equal(1))
-					Ω(configFactory.CreateArgsForCall(0)).Should(Equal(permissions))
+				It("handshakes with the target using the provided configuration", func() {
+					Eventually(daemonAuthenticator.AuthenticateCallCount).Should(Equal(1))
+
+					metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
+					Ω(metadata.User()).Should(Equal("some-user"))
+					Ω(string(password)).Should(Equal("some-password"))
 				})
 
-				Context("when a target address is not returned from the client factory", func() {
+				Context("when the target address is unreachable", func() {
 					BeforeEach(func() {
-						configFactory.CreateReturns(&ssh.ClientConfig{}, "", nil)
-					})
-
-					It("closes the connection", func() {
-						Eventually(client.Wait).Should(Equal(io.EOF))
-					})
-
-					It("logs the failure", func() {
-						Eventually(logger).Should(gbytes.Say(`failed-to-create-client-config.*"address":""`))
-					})
-				})
-
-				Context("when a client config is not returned from the client factory", func() {
-					BeforeEach(func() {
-						configFactory.CreateReturns(nil, "localhost:0", nil)
-					})
-
-					It("closes the connection", func() {
-						Eventually(client.Wait).Should(Equal(io.EOF))
-					})
-
-					It("logs the failure", func() {
-						Eventually(logger).Should(gbytes.Say(`failed-to-create-client-config`))
-					})
-				})
-
-				Context("when the client config factory fails", func() {
-					BeforeEach(func() {
-						configFactory.CreateReturns(&ssh.ClientConfig{}, "localhost:0", errors.New("boom"))
-					})
-
-					It("closes the connection", func() {
-						Eventually(client.Wait).Should(Equal(io.EOF))
-					})
-
-					It("logs the failure", func() {
-						Eventually(logger).Should(gbytes.Say(`failed-to-create-client-config.*boom`))
-					})
-				})
-
-				Context("when the client config factory provides a target address and configuration", func() {
-					var proxyClientConfig *ssh.ClientConfig
-
-					BeforeEach(func() {
-						proxyClientConfig = &ssh.ClientConfig{
-							User: "some-user",
-							Auth: []ssh.AuthMethod{
-								ssh.Password("some-password"),
+						permissions := &ssh.Permissions{
+							CriticalOptions: map[string]string{
+								"proxy-target-config": `{"address": "0.0.0.0:0"}`,
 							},
 						}
-
-						configFactory.CreateReturns(proxyClientConfig, daemonAddress, nil)
+						proxyAuthenticator.AuthenticateReturns(permissions, nil)
 					})
 
-					It("handshakes with the target using the provided configuration", func() {
-						Ω(configFactory.CreateCallCount()).Should(Equal(1))
-						Eventually(daemonAuthenticator.AuthenticateCallCount).Should(Equal(1))
-
-						metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
-						Ω(metadata.User()).Should(Equal("some-user"))
-						Ω(string(password)).Should(Equal("some-password"))
+					It("closes the connection", func() {
+						Eventually(client.Wait).Should(Equal(io.EOF))
 					})
 
-					Context("when the target address is unreachable", func() {
-						BeforeEach(func() {
-							configFactory.CreateReturns(proxyClientConfig, "0.0.0.0:0", nil)
-						})
+					It("logs the failure", func() {
+						Eventually(logger).Should(gbytes.Say(`new-client-conn.dial-failed.*0\.0\.0\.0:0`))
+					})
+				})
 
-						It("closes the connection", func() {
-							Eventually(client.Wait).Should(Equal(io.EOF))
-						})
-
-						It("logs the failure", func() {
-							Eventually(logger).Should(gbytes.Say(`new-client-conn.dial-failed.*0\.0\.0\.0:0`))
-						})
+				Context("when the handshake fails", func() {
+					BeforeEach(func() {
+						daemonAuthenticator.AuthenticateReturns(nil, errors.New("go away"))
 					})
 
-					Context("when the handshake fails", func() {
-						BeforeEach(func() {
-							daemonAuthenticator.AuthenticateReturns(nil, errors.New("go away"))
-						})
+					It("closes the connection", func() {
+						Eventually(client.Wait).Should(Equal(io.EOF))
+					})
 
-						It("closes the connection", func() {
-							Eventually(client.Wait).Should(Equal(io.EOF))
-						})
-
-						It("logs the failure", func() {
-							Eventually(logger).Should(gbytes.Say(`new-client-conn.handshake-failed`))
-						})
+					It("logs the failure", func() {
+						Eventually(logger).Should(gbytes.Say(`new-client-conn.handshake-failed`))
 					})
 				})
 			})
@@ -271,7 +209,6 @@ var _ = Describe("Proxy", func() {
 				BeforeEach(func() {
 					proxySSHConfig.NoClientAuth = true
 					daemonSSHConfig.NoClientAuth = true
-					configFactory.CreateReturns(&ssh.ClientConfig{}, daemonAddress, nil)
 				})
 
 				JustBeforeEach(func() {
@@ -298,10 +235,16 @@ var _ = Describe("Proxy", func() {
 		})
 
 		Context("after both handshakes have been performed", func() {
+			var clientConfig *ssh.ClientConfig
+
 			BeforeEach(func() {
-				proxySSHConfig.NoClientAuth = true
+				clientConfig = &ssh.ClientConfig{
+					User: "diego:some-instance-guid",
+					Auth: []ssh.AuthMethod{
+						ssh.Password("diego-user:diego-password"),
+					},
+				}
 				daemonSSHConfig.NoClientAuth = true
-				configFactory.CreateReturns(&ssh.ClientConfig{}, daemonAddress, nil)
 			})
 
 			Describe("client requests to target", func() {
@@ -309,7 +252,7 @@ var _ = Describe("Proxy", func() {
 
 				JustBeforeEach(func() {
 					var err error
-					client, err = ssh.Dial("tcp", proxyAddress, &ssh.ClientConfig{})
+					client, err = ssh.Dial("tcp", proxyAddress, clientConfig)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -381,7 +324,6 @@ var _ = Describe("Proxy", func() {
 					targetAddress = listener.Addr().String()
 
 					connectionHandler = &server_fakes.FakeConnectionHandler{}
-					configFactory.CreateReturns(&ssh.ClientConfig{}, targetAddress, nil)
 				})
 
 				JustBeforeEach(func() {
@@ -859,6 +801,225 @@ var _ = Describe("Proxy", func() {
 
 			It("returns gracefully", func() {
 				Eventually(done).Should(Receive())
+			})
+		})
+	})
+
+	Describe("NewClientConn", func() {
+		var (
+			permissions *ssh.Permissions
+
+			daemonSSHConfig *ssh.ServerConfig
+			sshDaemon       *daemon.Daemon
+			sshdListener    net.Listener
+			sshdServer      *server.Server
+
+			clientConn       ssh.Conn
+			newChannelChan   <-chan ssh.NewChannel
+			requestChannel   <-chan *ssh.Request
+			newClientConnErr error
+		)
+
+		BeforeEach(func() {
+			permissions = &ssh.Permissions{
+				CriticalOptions: map[string]string{},
+			}
+
+			daemonSSHConfig = &ssh.ServerConfig{}
+			daemonSSHConfig.AddHostKey(TestHostKey)
+
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			Ω(err).ShouldNot(HaveOccurred())
+
+			sshdListener = listener
+		})
+
+		JustBeforeEach(func() {
+			sshDaemon = daemon.New(logger.Session("sshd"), daemonSSHConfig, nil, nil)
+			sshdServer = server.NewServer(logger, "127.0.0.1:0", sshDaemon)
+			sshdServer.SetListener(sshdListener)
+			go sshdServer.Serve()
+
+			clientConn, newChannelChan, requestChannel, newClientConnErr = proxy.NewClientConn(logger, permissions)
+		})
+
+		AfterEach(func() {
+			sshdServer.Shutdown()
+		})
+
+		Context("when permissions is nil", func() {
+			BeforeEach(func() {
+				permissions = nil
+			})
+
+			It("returns an error", func() {
+				Ω(newClientConnErr).Should(HaveOccurred())
+			})
+
+			It("logs the failure", func() {
+				Eventually(logger).Should(gbytes.Say("permissions-and-critical-options-required"))
+			})
+		})
+
+		Context("when permissions.CriticalOptions is nil", func() {
+			BeforeEach(func() {
+				permissions.CriticalOptions = nil
+			})
+
+			It("returns an error", func() {
+				Ω(newClientConnErr).Should(HaveOccurred())
+			})
+
+			It("logs the failure", func() {
+				Eventually(logger).Should(gbytes.Say("permissions-and-critical-options-required"))
+			})
+		})
+
+		Context("when the config is missing", func() {
+			BeforeEach(func() {
+				delete(permissions.CriticalOptions, "proxy-target-config")
+			})
+
+			It("returns an error", func() {
+				Ω(newClientConnErr).Should(HaveOccurred())
+			})
+
+			It("logs the failure", func() {
+				Eventually(logger).Should(gbytes.Say("unmarshal-failed"))
+			})
+		})
+
+		Context("when the config fails to unmarshal", func() {
+			BeforeEach(func() {
+				permissions.CriticalOptions["proxy-target-config"] = "{ this_is: invalid json"
+			})
+
+			It("returns an error", func() {
+				Ω(newClientConnErr).Should(HaveOccurred())
+			})
+
+			It("logs the failure", func() {
+				Eventually(logger).Should(gbytes.Say("unmarshal-failed"))
+			})
+		})
+
+		Context("when the address in the config is bad", func() {
+			BeforeEach(func() {
+				permissions.CriticalOptions["proxy-target-config"] = `{ "address": "0.0.0.0:0" }`
+			})
+
+			It("returns an error", func() {
+				Ω(newClientConnErr).Should(HaveOccurred())
+			})
+
+			It("logs the failure", func() {
+				Eventually(logger).Should(gbytes.Say("dial-failed"))
+			})
+		})
+
+		Context("when the config contains a user and password", func() {
+			var passwordAuthenticator *fake_authenticators.FakePasswordAuthenticator
+
+			BeforeEach(func() {
+				targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+					Address:  sshdListener.Addr().String(),
+					User:     "my-user",
+					Password: "my-password",
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				permissions = &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						"proxy-target-config": string(targetConfigJson),
+					},
+				}
+
+				passwordAuthenticator = &fake_authenticators.FakePasswordAuthenticator{}
+				daemonSSHConfig.PasswordCallback = passwordAuthenticator.Authenticate
+			})
+
+			It("uses the user and password for authentication", func() {
+				Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+
+				metadata, password := passwordAuthenticator.AuthenticateArgsForCall(0)
+				Ω(metadata.User()).Should(Equal("my-user"))
+				Ω(string(password)).Should(Equal("my-password"))
+			})
+		})
+
+		Context("when the config contains a public key", func() {
+			var publicKeyAuthenticator *fake_authenticators.FakePublicKeyAuthenticator
+
+			BeforeEach(func() {
+				targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+					Address:    sshdListener.Addr().String(),
+					PrivateKey: TestPrivatePem,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				permissions = &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						"proxy-target-config": string(targetConfigJson),
+					},
+				}
+
+				publicKeyAuthenticator = &fake_authenticators.FakePublicKeyAuthenticator{}
+				publicKeyAuthenticator.AuthenticateReturns(&ssh.Permissions{}, nil)
+				daemonSSHConfig.PublicKeyCallback = publicKeyAuthenticator.Authenticate
+			})
+
+			It("will attempt to use the public key for authentication before the password", func() {
+				expectedKey := test_helpers.ParsePublicKeyPem([]byte(TestPublicPem))
+
+				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+
+				_, actualKey := publicKeyAuthenticator.AuthenticateArgsForCall(0)
+				Ω(actualKey.Marshal()).Should(Equal(expectedKey.Marshal()))
+			})
+		})
+
+		Context("when the config contains a user, password, a public key", func() {
+			var publicKeyAuthenticator *fake_authenticators.FakePublicKeyAuthenticator
+			var passwordAuthenticator *fake_authenticators.FakePasswordAuthenticator
+
+			BeforeEach(func() {
+				targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+					Address:    sshdListener.Addr().String(),
+					User:       "my-user",
+					Password:   "my-password",
+					PrivateKey: TestPrivatePem,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				permissions = &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						"proxy-target-config": string(targetConfigJson),
+					},
+				}
+
+				passwordAuthenticator = &fake_authenticators.FakePasswordAuthenticator{}
+				daemonSSHConfig.PasswordCallback = passwordAuthenticator.Authenticate
+
+				publicKeyAuthenticator = &fake_authenticators.FakePublicKeyAuthenticator{}
+				publicKeyAuthenticator.AuthenticateReturns(&ssh.Permissions{}, nil)
+				daemonSSHConfig.PublicKeyCallback = publicKeyAuthenticator.Authenticate
+			})
+
+			It("will attempt to use the public key for authentication before the password", func() {
+				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(0))
+			})
+
+			Context("when public key authentication fails", func() {
+				BeforeEach(func() {
+					passwordAuthenticator.AuthenticateReturns(&ssh.Permissions{}, nil)
+					publicKeyAuthenticator.AuthenticateReturns(nil, errors.New("go away"))
+				})
+
+				It("will fall back to password authentication", func() {
+					Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+					Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				})
 			})
 		})
 	})

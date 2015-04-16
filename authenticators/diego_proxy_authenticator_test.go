@@ -20,6 +20,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		logger         *lagertest.TestLogger
 		receptorClient *fake_receptor.FakeClient
 		receptorCreds  []byte
+		privateKeyPem  string
 
 		permissions *ssh.Permissions
 		password    []byte
@@ -30,7 +31,8 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		logger = lagertest.NewTestLogger("test")
 		receptorClient = new(fake_receptor.FakeClient)
 		receptorCreds = []byte("receptor-user:receptor-password")
-		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
+		privateKeyPem = "pem-encoded-key"
+		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds, privateKeyPem)
 
 		metadata = &fake_ssh.FakeConnMetadata{}
 		permissions = nil
@@ -104,15 +106,13 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		})
 
 		It("saves container information in the critical options of the permissions", func() {
-			expectedOptions := map[string]string{
-				"diego:process-guid":      "some-guid",
-				"diego:index":             "0",
-				"diego:instance-guid":     "some-instance-guid",
-				"diego:container-address": "1.2.3.4",
-				"diego:ssh-daemon-port":   "3333",
-			}
+			expectedConfig := `{
+				"address": "1.2.3.4:3333",
+				"private_key": "pem-encoded-key"
+			}`
 			Ω(permissions).ShouldNot(BeNil())
-			Ω(permissions.CriticalOptions).Should(Equal(expectedOptions))
+			Ω(permissions.CriticalOptions).ShouldNot(BeNil())
+			Ω(permissions.CriticalOptions["proxy-target-config"]).Should(MatchJSON(expectedConfig))
 		})
 
 		Context("when getting the actual LRP information fails", func() {
@@ -122,6 +122,17 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 			It("returns the error", func() {
 				Ω(authErr).Should(Equal(&receptor.Error{}))
+			})
+		})
+
+		Context("when the container port cannot be found", func() {
+			BeforeEach(func() {
+				lrpResponse.Ports = []receptor.PortMapping{}
+				receptorClient.ActualLRPByProcessGuidAndIndexReturns(lrpResponse, nil)
+			})
+
+			It("returns a nil permission reference", func() {
+				Ω(permissions).Should(BeNil())
 			})
 		})
 	})

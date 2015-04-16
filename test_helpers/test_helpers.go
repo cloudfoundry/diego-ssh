@@ -74,13 +74,19 @@ func GenerateSshKeyPair() (ssh.Signer, ssh.PublicKey) {
 	privateKey, err := ssh.ParsePrivateKey(privatePem)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	x509PublicKey, err := x509.ParsePKIXPublicKey(DecodePem(publicPem))
+	publicKey := ParsePublicKeyPem(publicPem)
+
+	return privateKey, publicKey
+}
+
+func ParsePublicKeyPem(data []byte) ssh.PublicKey {
+	x509PublicKey, err := x509.ParsePKIXPublicKey(DecodePem(data))
 	Ω(err).ShouldNot(HaveOccurred())
 
 	publicKey, err := ssh.NewPublicKey(x509PublicKey)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	return privateKey, publicKey
+	return publicKey
 }
 
 func WaitFor(f func() error) error {

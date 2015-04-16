@@ -2,11 +2,13 @@ package authenticators
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
@@ -16,6 +18,7 @@ type DiegoProxyAuthenticator struct {
 	logger         lager.Logger
 	receptorCreds  []byte
 	receptorClient receptor.Client
+	privateKeyPem  string
 }
 
 var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
@@ -23,11 +26,17 @@ var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
 
-func NewDiegoProxyAuthenticator(logger lager.Logger, receptorClient receptor.Client, receptorCreds []byte) *DiegoProxyAuthenticator {
+func NewDiegoProxyAuthenticator(
+	logger lager.Logger,
+	receptorClient receptor.Client,
+	receptorCreds []byte,
+	privateKeyPem string,
+) *DiegoProxyAuthenticator {
 	return &DiegoProxyAuthenticator{
 		logger:         logger,
 		receptorCreds:  receptorCreds,
 		receptorClient: receptorClient,
+		privateKeyPem:  privateKeyPem,
 	}
 }
 
@@ -61,23 +70,34 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	return dpa.createPermissions(&lrpResponse), nil
+	return dpa.createPermissions(&lrpResponse)
 }
 
-func (dpa *DiegoProxyAuthenticator) createPermissions(lrp *receptor.ActualLRPResponse) *ssh.Permissions {
+func (dpa *DiegoProxyAuthenticator) createPermissions(lrp *receptor.ActualLRPResponse) (*ssh.Permissions, error) {
+	var targetConfig *proxy.TargetConfig
+
 	for _, mapping := range lrp.Ports {
 		if mapping.ContainerPort == 2222 {
-			return &ssh.Permissions{
-				CriticalOptions: map[string]string{
-					"diego:process-guid":      lrp.ProcessGuid,
-					"diego:index":             fmt.Sprintf("%d", lrp.Index),
-					"diego:instance-guid":     lrp.InstanceGuid,
-					"diego:container-address": lrp.Address,
-					"diego:ssh-daemon-port":   fmt.Sprintf("%d", mapping.HostPort),
-				},
+			targetConfig = &proxy.TargetConfig{
+				Address:    fmt.Sprintf("%s:%d", lrp.Address, mapping.HostPort),
+				PrivateKey: dpa.privateKeyPem,
 			}
+			break
 		}
 	}
 
-	return nil
+	if targetConfig == nil {
+		return nil, nil
+	}
+
+	targetConfigJson, err := json.Marshal(targetConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ssh.Permissions{
+		CriticalOptions: map[string]string{
+			"proxy-target-config": string(targetConfigJson),
+		},
+	}, nil
 }

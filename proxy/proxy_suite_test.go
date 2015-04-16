@@ -9,7 +9,11 @@ import (
 	"testing"
 )
 
-var TestHostKey ssh.Signer
+var (
+	TestHostKey    ssh.Signer
+	TestPrivatePem string
+	TestPublicPem  string
+)
 
 func TestProxy(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -18,4 +22,9 @@ func TestProxy(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	TestHostKey = test_helpers.GenerateRsaHostKey()
+
+	privatePem, publicPem := test_helpers.GenerateRsaKeyPair()
+
+	TestPrivatePem = string(privatePem)
+	TestPublicPem = string(publicPem)
 })

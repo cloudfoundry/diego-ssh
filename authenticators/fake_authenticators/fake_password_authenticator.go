@@ -9,10 +9,10 @@ import (
 )
 
 type FakePasswordAuthenticator struct {
-	AuthenticateStub        func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
+	AuthenticateStub        func(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
 	authenticateMutex       sync.RWMutex
 	authenticateArgsForCall []struct {
-		conn     ssh.ConnMetadata
+		metadata ssh.ConnMetadata
 		password []byte
 	}
 	authenticateReturns struct {
@@ -21,15 +21,15 @@ type FakePasswordAuthenticator struct {
 	}
 }
 
-func (fake *FakePasswordAuthenticator) Authenticate(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+func (fake *FakePasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	fake.authenticateMutex.Lock()
 	fake.authenticateArgsForCall = append(fake.authenticateArgsForCall, struct {
-		conn     ssh.ConnMetadata
+		metadata ssh.ConnMetadata
 		password []byte
-	}{conn, password})
+	}{metadata, password})
 	fake.authenticateMutex.Unlock()
 	if fake.AuthenticateStub != nil {
-		return fake.AuthenticateStub(conn, password)
+		return fake.AuthenticateStub(metadata, password)
 	} else {
 		return fake.authenticateReturns.result1, fake.authenticateReturns.result2
 	}
@@ -44,7 +44,7 @@ func (fake *FakePasswordAuthenticator) AuthenticateCallCount() int {
 func (fake *FakePasswordAuthenticator) AuthenticateArgsForCall(i int) (ssh.ConnMetadata, []byte) {
 	fake.authenticateMutex.RLock()
 	defer fake.authenticateMutex.RUnlock()
-	return fake.authenticateArgsForCall[i].conn, fake.authenticateArgsForCall[i].password
+	return fake.authenticateArgsForCall[i].metadata, fake.authenticateArgsForCall[i].password
 }
 
 func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissions, result2 error) {

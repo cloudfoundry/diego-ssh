@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/config_factories"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/cloudfoundry-incubator/receptor"
@@ -51,13 +50,13 @@ func main() {
 
 	logger, reconfigurableSink := cf_lager.New("ssh-proxy")
 
-	proxyConfig, configFactory, err := configure(logger)
+	proxyConfig, err := configure(logger)
 	if err != nil {
 		logger.Error("configure-failed", err)
 		os.Exit(1)
 	}
 
-	sshProxy := proxy.New(logger, proxyConfig, configFactory)
+	sshProxy := proxy.New(logger, proxyConfig)
 	server := server.NewServer(logger, *address, sshProxy)
 
 	members := grouper.Members{
@@ -85,7 +84,7 @@ func main() {
 	os.Exit(0)
 }
 
-func configure(logger lager.Logger) (*ssh.ServerConfig, proxy.ConfigFactory, error) {
+func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *diegoAPIURL == "" {
 		err := errors.New("diegoAPIURL is required")
 		logger.Fatal("diego-api-url-required", err)
@@ -101,13 +100,6 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, proxy.ConfigFactory, err
 		diegoCreds = url.User.String()
 	}
 
-	receptorClient := receptor.NewClient(*diegoAPIURL)
-	diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds))
-
-	sshConfig := &ssh.ServerConfig{
-		PasswordCallback: diegoAuthenticator.Authenticate,
-	}
-
 	if *hostKey == "" {
 		err := errors.New("hostKey is required")
 		logger.Fatal("host-key-required", err)
@@ -117,8 +109,6 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, proxy.ConfigFactory, err
 	if err != nil {
 		logger.Fatal("failed-to-parse-host-key", err)
 	}
-
-	sshConfig.AddHostKey(key)
 
 	if *privateKey == "" {
 		err := errors.New("privateKey is required")
@@ -130,9 +120,16 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, proxy.ConfigFactory, err
 		logger.Fatal("failed-to-parse-private-key", err)
 	}
 
-	configFactory := config_factories.NewDiegoConfigFactory(logger, key)
+	receptorClient := receptor.NewClient(*diegoAPIURL)
+	diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds), *privateKey)
 
-	return sshConfig, configFactory, err
+	sshConfig := &ssh.ServerConfig{
+		PasswordCallback: diegoAuthenticator.Authenticate,
+	}
+
+	sshConfig.AddHostKey(key)
+
+	return sshConfig, err
 }
 
 func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error) {
