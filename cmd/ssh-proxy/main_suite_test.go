@@ -25,9 +25,9 @@ var (
 	sshdPort     int
 	sshProxyPort int
 
-	hostKeyPem        string
-	privateUserKeyPem string
-	publicUserKeyPem  string
+	hostKeyPem          string
+	privateKeyPem       string
+	publicAuthorizedKey string
 )
 
 func TestSSHProxy(t *testing.T) {
@@ -45,14 +45,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	hostKeyPem, err := helpers.GeneratePemEncodedRsaKey()
 	Ω(err).ShouldNot(HaveOccurred())
 
-	privateUserKeyPem, publicUserKeyPem := test_helpers.GenerateRsaKeyPair()
+	privatePem, authorizedKey := test_helpers.SSHKeyGen()
 
 	payload, err := json.Marshal(map[string]string{
-		"ssh-proxy":        sshProxy,
-		"sshd":             sshd,
-		"host-key":         string(hostKeyPem),
-		"user-private-key": string(privateUserKeyPem),
-		"user-public-key":  string(publicUserKeyPem),
+		"ssh-proxy":      sshProxy,
+		"sshd":           sshd,
+		"host-key":       string(hostKeyPem),
+		"private-key":    string(privatePem),
+		"authorized-key": string(authorizedKey),
 	})
 
 	Ω(err).ShouldNot(HaveOccurred())
@@ -65,8 +65,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Ω(err).ShouldNot(HaveOccurred())
 
 	hostKeyPem = context["host-key"]
-	privateUserKeyPem = context["user-private-key"]
-	publicUserKeyPem = context["user-public-key"]
+	privateKeyPem = context["private-key"]
+	publicAuthorizedKey = context["authorized-key"]
 
 	sshdPort = 7000 + GinkgoParallelNode()
 	sshdPath = context["sshd"]
@@ -79,7 +79,7 @@ var _ = BeforeEach(func() {
 	sshdArgs := testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", sshdPort),
 		HostKey:       hostKeyPem,
-		PublicUserKey: publicUserKeyPem,
+		AuthorizedKey: publicAuthorizedKey,
 	}
 
 	runner := testrunner.New(sshdPath, sshdArgs)

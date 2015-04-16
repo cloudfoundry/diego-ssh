@@ -22,18 +22,18 @@ var _ = Describe("SSH daemon", func() {
 		runner  ifrit.Runner
 		process ifrit.Process
 
-		address        string
-		hostKey        string
-		privateUserKey string
-		publicUserKey  string
+		address       string
+		hostKey       string
+		privateKey    string
+		authorizedKey string
 
 		allowUnauthenticatedClients bool
 	)
 
 	BeforeEach(func() {
 		hostKey = hostKeyPem
-		privateUserKey = privateUserKeyPem
-		publicUserKey = publicUserKeyPem
+		privateKey = privateKeyPem
+		authorizedKey = publicAuthorizedKey
 
 		allowUnauthenticatedClients = false
 		address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
@@ -43,7 +43,7 @@ var _ = Describe("SSH daemon", func() {
 		args := testrunner.Args{
 			Address:       address,
 			HostKey:       string(hostKey),
-			PublicUserKey: string(publicUserKey),
+			AuthorizedKey: string(authorizedKey),
 
 			AllowUnauthenticatedClients: allowUnauthenticatedClients,
 		}
@@ -68,20 +68,20 @@ var _ = Describe("SSH daemon", func() {
 			})
 		})
 
-		Context("when an ill-formed public user key is provided", func() {
+		Context("when an ill-formed authorized key is provided", func() {
 			BeforeEach(func() {
-				publicUserKey = "user-key"
+				authorizedKey = "authorized-key"
 			})
 
 			It("reports and dies", func() {
-				Ω(runner).Should(gbytes.Say("invalid-public-user-key"))
+				Ω(runner).Should(gbytes.Say(`configure-failed.*ssh: no key found`))
 				Ω(runner).ShouldNot(gexec.Exit(0))
 			})
 		})
 
-		Context("the user public key is not provided", func() {
+		Context("the authorized key is not provided", func() {
 			BeforeEach(func() {
-				publicUserKey = ""
+				authorizedKey = ""
 			})
 
 			Context("and allowUnauthenticatedClients is not true", func() {
@@ -90,7 +90,7 @@ var _ = Describe("SSH daemon", func() {
 				})
 
 				It("reports and dies", func() {
-					Ω(runner).Should(gbytes.Say("public-user-key-required"))
+					Ω(runner).Should(gbytes.Say("authorized-key-required"))
 					Ω(runner).ShouldNot(gexec.Exit(0))
 				})
 			})
@@ -177,7 +177,7 @@ var _ = Describe("SSH daemon", func() {
 
 			Context("and client has a valid private key", func() {
 				BeforeEach(func() {
-					key, err := ssh.ParsePrivateKey([]byte(privateUserKey))
+					key, err := ssh.ParsePrivateKey([]byte(privateKey))
 					Ω(err).ShouldNot(HaveOccurred())
 
 					clientConfig = &ssh.ClientConfig{

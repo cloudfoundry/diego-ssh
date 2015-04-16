@@ -11,7 +11,7 @@ import (
 type Args struct {
 	Address                     string
 	HostKey                     string
-	PublicUserKey               string
+	AuthorizedKey               string
 	AllowUnauthenticatedClients bool
 }
 
@@ -19,7 +19,7 @@ func (args Args) ArgSlice() []string {
 	return []string{
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
-		"-publicUserKey=" + args.PublicUserKey,
+		"-authorizedKey=" + args.AuthorizedKey,
 		"-allowUnauthenticatedClients=" + strconv.FormatBool(args.AllowUnauthenticatedClients),
 	}
 }

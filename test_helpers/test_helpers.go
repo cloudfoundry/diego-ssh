@@ -34,7 +34,7 @@ func GenerateDsaHostKey() ssh.Signer {
 	return privateKey
 }
 
-func GenerateRsaKeyPair() ([]byte, []byte) {
+func SSHKeyGen() ([]byte, []byte) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	Ω(err).ShouldNot(HaveOccurred())
 
@@ -48,17 +48,10 @@ func GenerateRsaKeyPair() ([]byte, []byte) {
 	}
 	privatePem := pem.EncodeToMemory(&privateBlock)
 
-	publicEncoded, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	sshPublicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	pub_blk := pem.Block{
-		Type:    "PUBLIC RSA KEY",
-		Headers: nil,
-		Bytes:   publicEncoded,
-	}
-	publicPem := pem.EncodeToMemory(&pub_blk)
-
-	return privatePem, publicPem
+	return privatePem, ssh.MarshalAuthorizedKey(sshPublicKey)
 }
 
 func DecodePem(data []byte) []byte {
@@ -69,24 +62,15 @@ func DecodePem(data []byte) []byte {
 }
 
 func GenerateSshKeyPair() (ssh.Signer, ssh.PublicKey) {
-	privatePem, publicPem := GenerateRsaKeyPair()
+	privatePem, publicAuthorizedKey := SSHKeyGen()
 
 	privateKey, err := ssh.ParsePrivateKey(privatePem)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	publicKey := ParsePublicKeyPem(publicPem)
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(publicAuthorizedKey)
+	Ω(err).ShouldNot(HaveOccurred())
 
 	return privateKey, publicKey
-}
-
-func ParsePublicKeyPem(data []byte) ssh.PublicKey {
-	x509PublicKey, err := x509.ParsePKIXPublicKey(DecodePem(data))
-	Ω(err).ShouldNot(HaveOccurred())
-
-	publicKey, err := ssh.NewPublicKey(x509PublicKey)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return publicKey
 }
 
 func WaitFor(f func() error) error {

@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	TestHostKey    ssh.Signer
-	TestPrivatePem string
-	TestPublicPem  string
+	TestHostKey ssh.Signer
+
+	TestPrivatePem          string
+	TestPublicAuthorizedKey string
 )
 
 func TestProxy(t *testing.T) {
@@ -23,8 +24,8 @@ func TestProxy(t *testing.T) {
 var _ = BeforeSuite(func() {
 	TestHostKey = test_helpers.GenerateRsaHostKey()
 
-	privatePem, publicPem := test_helpers.GenerateRsaKeyPair()
+	privatePem, publicAuthorizedKey := test_helpers.SSHKeyGen()
 
 	TestPrivatePem = string(privatePem)
-	TestPublicPem = string(publicPem)
+	TestPublicAuthorizedKey = string(publicAuthorizedKey)
 })

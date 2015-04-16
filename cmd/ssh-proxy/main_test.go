@@ -36,7 +36,7 @@ var _ = Describe("SSH proxy", func() {
 
 		hostKey = hostKeyPem
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
-		privateKey = privateUserKeyPem
+		privateKey = privateKeyPem
 		diegoAPIURL = fakeReceptor.URL()
 	})
 

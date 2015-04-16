@@ -11,23 +11,26 @@ import (
 )
 
 var _ = Describe("Keys", func() {
+	var encodedRsaKey []byte
+	var encodedDsaKey []byte
+
+	BeforeSuite(func() {
+		var err error
+		encodedDsaKey, err = helpers.GeneratePemEncodedDsaKey()
+		Ω(err).ShouldNot(HaveOccurred())
+
+		encodedRsaKey, err = helpers.GeneratePemEncodedRsaKey()
+		Ω(err).ShouldNot(HaveOccurred())
+	})
 
 	Describe("GeneratePemEncodedRsaKey", func() {
-		var encoded []byte
-
-		BeforeEach(func() {
-			var err error
-			encoded, err = helpers.GeneratePemEncodedRsaKey()
-			Ω(err).ShouldNot(HaveOccurred())
-		})
-
 		It("generates a RSA PRIVATE KEY block", func() {
-			Ω(encoded).Should(ContainSubstring("--BEGIN RSA PRIVATE KEY--"))
-			Ω(encoded).Should(ContainSubstring("--END RSA PRIVATE KEY--"))
+			Ω(encodedRsaKey).Should(ContainSubstring("--BEGIN RSA PRIVATE KEY--"))
+			Ω(encodedRsaKey).Should(ContainSubstring("--END RSA PRIVATE KEY--"))
 		})
 
 		It("is 2048 bits in length", func() {
-			block, _ := pem.Decode(encoded)
+			block, _ := pem.Decode(encodedRsaKey)
 			key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -35,28 +38,20 @@ var _ = Describe("Keys", func() {
 		})
 
 		It("can be used ass an ssh.Signer", func() {
-			signer, err := ssh.ParsePrivateKey(encoded)
+			signer, err := ssh.ParsePrivateKey(encodedRsaKey)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(signer).ShouldNot(BeNil())
 		})
 	})
 
 	Describe("GeneratePemEncodedDsaKey", func() {
-		var encoded []byte
-
-		BeforeEach(func() {
-			var err error
-			encoded, err = helpers.GeneratePemEncodedDsaKey()
-			Ω(err).ShouldNot(HaveOccurred())
-		})
-
 		It("generates a DSA PRIVATE KEY block", func() {
-			Ω(encoded).Should(ContainSubstring("--BEGIN DSA PRIVATE KEY--"))
-			Ω(encoded).Should(ContainSubstring("--END DSA PRIVATE KEY--"))
+			Ω(encodedDsaKey).Should(ContainSubstring("--BEGIN DSA PRIVATE KEY--"))
+			Ω(encodedDsaKey).Should(ContainSubstring("--END DSA PRIVATE KEY--"))
 		})
 
 		It("is 2048 bits in length", func() {
-			block, _ := pem.Decode(encoded)
+			block, _ := pem.Decode(encodedDsaKey)
 			key, err := ssh.ParseDSAPrivateKey(block.Bytes)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -65,10 +60,9 @@ var _ = Describe("Keys", func() {
 		})
 
 		It("can be used ass an ssh.Signer", func() {
-			signer, err := ssh.ParsePrivateKey(encoded)
+			signer, err := ssh.ParsePrivateKey(encodedDsaKey)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(signer).ShouldNot(BeNil())
 		})
 	})
-
 })

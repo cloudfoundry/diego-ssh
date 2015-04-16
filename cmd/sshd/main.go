@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"flag"
 	"os"
@@ -34,10 +32,10 @@ var hostKey = flag.String(
 	"PEM encoded RSA host key",
 )
 
-var publicUserKey = flag.String(
-	"publicUserKey",
+var authorizedKey = flag.String(
+	"authorizedKey",
 	"",
-	"PEM encoded RSA public key to use for user authentication",
+	"Public key in the OpenSSH authorized_keys format",
 )
 
 var allowUnauthenticatedClients = flag.Bool(
@@ -110,13 +108,13 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	sshConfig.AddHostKey(key)
 	sshConfig.NoClientAuth = *allowUnauthenticatedClients
 
-	if *publicUserKey == "" && !*allowUnauthenticatedClients {
-		logger.Error("public-user-key-required", nil)
+	if *authorizedKey == "" && !*allowUnauthenticatedClients {
+		logger.Error("authorized-key-required", nil)
 		errorStrings = append(errorStrings, "Public user key is required")
 	}
 
-	if *publicUserKey != "" {
-		decodedPublicKey, err := decodePublicKey(logger)
+	if *authorizedKey != "" {
+		decodedPublicKey, err := decodeAuthorizedKey(logger)
 		if err == nil {
 			authenticator := authenticators.NewPublicKeyAuthenticator(decodedPublicKey)
 			sshConfig.PublicKeyCallback = authenticator.Authenticate
@@ -133,26 +131,9 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	return sshConfig, err
 }
 
-func decodePublicKey(logger lager.Logger) (ssh.PublicKey, error) {
-	block, _ := pem.Decode([]byte(*publicUserKey))
-	if block == nil {
-		logger.Error("invalid-public-user-key", nil)
-		return nil, errors.New("Failed to decode public user key")
-	}
-
-	serverPublicKeyRaw, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		logger.Error("failed-to-parse-public-user-key", err)
-		return nil, errors.New("Failed to parse public user key")
-	}
-
-	serverPublicKey, err := ssh.NewPublicKey(serverPublicKeyRaw)
-	if err != nil {
-		logger.Error("failed-to-construct-public-user-key", err)
-		return nil, errors.New("Failed to construct public user key")
-	}
-
-	return serverPublicKey, nil
+func decodeAuthorizedKey(logger lager.Logger) (ssh.PublicKey, error) {
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(*authorizedKey))
+	return publicKey, err
 }
 
 func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {

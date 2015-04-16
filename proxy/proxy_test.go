@@ -969,7 +969,8 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("will attempt to use the public key for authentication before the password", func() {
-				expectedKey := test_helpers.ParsePublicKeyPem([]byte(TestPublicPem))
+				expectedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(TestPublicAuthorizedKey))
+				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
 

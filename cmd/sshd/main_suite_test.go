@@ -15,10 +15,10 @@ import (
 var (
 	sshdPath string
 
-	sshdPort          int
-	hostKeyPem        string
-	privateUserKeyPem string
-	publicUserKeyPem  string
+	sshdPort            int
+	hostKeyPem          string
+	privateKeyPem       string
+	publicAuthorizedKey string
 )
 
 func TestSSHDaemon(t *testing.T) {
@@ -33,13 +33,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	hostKeyPem, err := helpers.GeneratePemEncodedRsaKey()
 	Ω(err).ShouldNot(HaveOccurred())
 
-	privateUserKeyPem, publicUserKeyPem := test_helpers.GenerateRsaKeyPair()
+	privatePem, authorizedKey := test_helpers.SSHKeyGen()
 
 	payload, err := json.Marshal(map[string]string{
-		"sshd":             sshd,
-		"host-key":         string(hostKeyPem),
-		"user-private-key": string(privateUserKeyPem),
-		"user-public-key":  string(publicUserKeyPem),
+		"sshd":           sshd,
+		"host-key":       string(hostKeyPem),
+		"private-key":    string(privatePem),
+		"authorized-key": string(authorizedKey),
 	})
 
 	Ω(err).ShouldNot(HaveOccurred())
@@ -52,8 +52,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Ω(err).ShouldNot(HaveOccurred())
 
 	hostKeyPem = context["host-key"]
-	privateUserKeyPem = context["user-private-key"]
-	publicUserKeyPem = context["user-public-key"]
+	privateKeyPem = context["private-key"]
+	publicAuthorizedKey = context["authorized-key"]
 
 	sshdPort = 7001 + GinkgoParallelNode()
 	sshdPath = context["sshd"]
