@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"net"
 	"os"
 	"strings"
 
@@ -59,13 +60,15 @@ func main() {
 
 	runner := handlers.NewCommandRunner()
 	shellLocator := handlers.NewShellLocator()
+	dialer := &net.Dialer{}
 
 	sshDaemon := daemon.New(
 		logger,
 		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
-			"session": handlers.NewSessionChannelHandler(runner, shellLocator),
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator),
+			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
 		},
 	)
 	server := server.NewServer(logger, *address, sshDaemon)

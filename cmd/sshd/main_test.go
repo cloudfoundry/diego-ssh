@@ -1,9 +1,13 @@
 package main_test
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
@@ -15,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/ghttp"
 )
 
 var _ = Describe("SSH daemon", func() {
@@ -107,7 +112,7 @@ var _ = Describe("SSH daemon", func() {
 		})
 	})
 
-	Describe("execution", func() {
+	Describe("daemon execution", func() {
 		var (
 			client       *ssh.Client
 			dialErr      error
@@ -210,7 +215,32 @@ var _ = Describe("SSH daemon", func() {
 				Ω(client).ShouldNot(BeNil())
 			})
 
-			It("allows a client without credentials to execute commands", func() {
+		})
+	})
+
+	Describe("SSH features", func() {
+		var clientConfig *ssh.ClientConfig
+		var client *ssh.Client
+
+		BeforeEach(func() {
+			allowUnauthenticatedClients = true
+			clientConfig = &ssh.ClientConfig{}
+		})
+
+		JustBeforeEach(func() {
+			Ω(process).ShouldNot(BeNil())
+
+			var dialErr error
+			client, dialErr = ssh.Dial("tcp", address, clientConfig)
+			Ω(dialErr).ShouldNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			client.Close()
+		})
+
+		Context("when a client requests the execution of a command", func() {
+			It("runs the command", func() {
 				session, err := client.NewSession()
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -218,6 +248,61 @@ var _ = Describe("SSH daemon", func() {
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(string(result)).Should(Equal("Hello there!"))
+			})
+		})
+
+		Context("when a client requests a shell", func() {
+			It("creates a shell environment", func() {
+				session, err := client.NewSession()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				stdout := &bytes.Buffer{}
+
+				session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
+				session.Stdout = stdout
+
+				session.Setenv("ENV_VAR", "env_var_value")
+				err = session.Shell()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = session.Wait()
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(stdout.String()).Should(ContainSubstring("env_var_value"))
+			})
+		})
+
+		Context("when a client requests a local port forward", func() {
+			var server *ghttp.Server
+			BeforeEach(func() {
+				server = ghttp.NewServer()
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/"),
+						ghttp.RespondWith(http.StatusOK, "hi from jim\n"),
+					),
+				)
+			})
+
+			It("forwards the local port to the target from the server side", func() {
+				lconn, err := client.Dial("tcp", server.Addr())
+				Ω(err).ShouldNot(HaveOccurred())
+
+				transport := &http.Transport{
+					Dial: func(network, addr string) (net.Conn, error) {
+						return lconn, nil
+					},
+				}
+				client := &http.Client{Transport: transport}
+
+				resp, err := client.Get("http://127.0.0.1/")
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(resp.StatusCode).Should(Equal(http.StatusOK))
+
+				reader := bufio.NewReader(resp.Body)
+				line, err := reader.ReadString('\n')
+				Ω(err).ShouldNot(HaveOccurred())
+				Ω(line).Should(ContainSubstring("hi from jim"))
 			})
 		})
 	})
