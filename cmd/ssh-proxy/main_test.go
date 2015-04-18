@@ -1,7 +1,9 @@
 package main_test
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -114,6 +116,28 @@ var _ = Describe("SSH proxy", func() {
 
 		JustBeforeEach(func() {
 			Ω(process).ShouldNot(BeNil())
+		})
+
+		Context("when the client attempts to verify the host key", func() {
+			var handshakeHostKey ssh.PublicKey
+
+			BeforeEach(func() {
+				clientConfig.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+					handshakeHostKey = key
+					return errors.New("fail")
+				}
+			})
+
+			It("receives the correct host key", func() {
+				_, err := ssh.Dial("tcp", address, clientConfig)
+				Ω(err).Should(HaveOccurred())
+
+				proxyHostKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
+				Ω(err).ShouldNot(HaveOccurred())
+
+				proxyPublicHostKey := proxyHostKey.PublicKey()
+				Ω(proxyPublicHostKey.Marshal()).Should(Equal(handshakeHostKey.Marshal()))
+			})
 		})
 
 		Context("when the client authenticates with the right data", func() {

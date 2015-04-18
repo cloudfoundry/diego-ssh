@@ -100,22 +100,12 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		diegoCreds = url.User.String()
 	}
 
-	if *hostKey == "" {
-		err := errors.New("hostKey is required")
-		logger.Fatal("host-key-required", err)
-	}
-
-	key, err := parsePrivateKey(logger, *hostKey)
-	if err != nil {
-		logger.Fatal("failed-to-parse-host-key", err)
-	}
-
 	if *privateKey == "" {
 		err := errors.New("privateKey is required")
 		logger.Fatal("private-key-required", err)
 	}
 
-	key, err = parsePrivateKey(logger, *privateKey)
+	key, err := parsePrivateKey(logger, *privateKey)
 	if err != nil {
 		logger.Fatal("failed-to-parse-private-key", err)
 	}
@@ -125,6 +115,16 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: diegoAuthenticator.Authenticate,
+	}
+
+	if *hostKey == "" {
+		err := errors.New("hostKey is required")
+		logger.Fatal("host-key-required", err)
+	}
+
+	key, err = parsePrivateKey(logger, *hostKey)
+	if err != nil {
+		logger.Fatal("failed-to-parse-host-key", err)
 	}
 
 	sshConfig.AddHostKey(key)
