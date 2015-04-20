@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
@@ -25,6 +26,7 @@ var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
 
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
+var RouteNotFoundErr error = errors.New("SSH routing info not found")
 
 func NewDiegoProxyAuthenticator(
 	logger lager.Logger,
@@ -64,23 +66,40 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	lrpResponse, err := dpa.receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
+	actual, err := dpa.receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
 	if err != nil {
-		logger.Error("get-lrp-failed", err)
+		logger.Error("get-actual-lrp-failed", err)
 		return nil, err
 	}
 
-	return dpa.createPermissions(&lrpResponse)
+	desired, err := dpa.receptorClient.GetDesiredLRP(processGuid)
+	if err != nil {
+		logger.Error("get-desired-lrp-failed", err)
+		return nil, err
+	}
+
+	sshRoute, err := getRoutingInfo(&desired)
+	if err != nil {
+		logger.Error("get-routing-info-failed", err)
+		return nil, err
+	}
+
+	return dpa.createPermissions(sshRoute, &actual)
 }
 
-func (dpa *DiegoProxyAuthenticator) createPermissions(lrp *receptor.ActualLRPResponse) (*ssh.Permissions, error) {
+func (dpa *DiegoProxyAuthenticator) createPermissions(
+	sshRoute *models.SSHRoute,
+	actual *receptor.ActualLRPResponse,
+) (*ssh.Permissions, error) {
 	var targetConfig *proxy.TargetConfig
 
-	for _, mapping := range lrp.Ports {
-		if mapping.ContainerPort == 2222 {
+	for _, mapping := range actual.Ports {
+		if mapping.ContainerPort == sshRoute.ContainerPort {
 			targetConfig = &proxy.TargetConfig{
-				Address:    fmt.Sprintf("%s:%d", lrp.Address, mapping.HostPort),
+				Address:    fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
 				PrivateKey: dpa.privateKeyPem,
+				User:       sshRoute.User,
+				Password:   sshRoute.Password,
 			}
 			break
 		}
@@ -100,4 +119,23 @@ func (dpa *DiegoProxyAuthenticator) createPermissions(lrp *receptor.ActualLRPRes
 			"proxy-target-config": string(targetConfigJson),
 		},
 	}, nil
+}
+
+func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*models.SSHRoute, error) {
+	if desired.Routes == nil {
+		return nil, RouteNotFoundErr
+	}
+
+	rawMessage := desired.Routes[models.DIEGO_SSH]
+	if rawMessage == nil {
+		return nil, RouteNotFoundErr
+	}
+
+	var sshRoute models.SSHRoute
+	err := json.Unmarshal(*rawMessage, &sshRoute)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sshRoute, nil
 }
