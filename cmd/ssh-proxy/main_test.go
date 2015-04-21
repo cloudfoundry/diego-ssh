@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
-	"github.com/cloudfoundry-incubator/diego-ssh/models"
+	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -141,7 +141,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the client authenticates with the right data", func() {
 			BeforeEach(func() {
-				sshRoute := models.SSHRoute{
+				sshRoute := routes.SSHRoute{
 					ContainerPort:   9999,
 					PrivateKey:      privateKeyPem,
 					HostFingerprint: "aa:bb",
@@ -156,7 +156,7 @@ var _ = Describe("SSH proxy", func() {
 					ProcessGuid: "process-guid",
 					Instances:   1,
 					Routes: receptor.RoutingInfo{
-						models.DIEGO_SSH: &diegoSSHRouteMessage,
+						routes.DIEGO_SSH: &diegoSSHRouteMessage,
 					},
 				}
 

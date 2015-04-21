@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/models"
+	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
@@ -19,7 +19,7 @@ import (
 var _ = Describe("DiegoProxyAuthenticator", func() {
 	var (
 		receptorClient     *fake_receptor.FakeClient
-		expectedRoute      models.SSHRoute
+		expectedRoute      routes.SSHRoute
 		desiredLRPResponse receptor.DesiredLRPResponse
 		actualLrpResponse  receptor.ActualLRPResponse
 	)
@@ -35,7 +35,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		})
 		Ω(err).ShouldNot(HaveOccurred())
 
-		expectedRoute = models.SSHRoute{
+		expectedRoute = routes.SSHRoute{
 			ContainerPort:   1111,
 			PrivateKey:      "pem-encoded-key",
 			HostFingerprint: "host-fingerprint",
@@ -54,7 +54,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			Instances:   2,
 			Routes: receptor.RoutingInfo{
 				cfroutes.CF_ROUTER: &cfRoutesMessage,
-				models.DIEGO_SSH:   &diegoSSHRouteMessage,
+				routes.DIEGO_SSH:   &diegoSSHRouteMessage,
 			},
 		}
 
@@ -215,7 +215,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 				Context("when the desired LRP does not include an SSH route", func() {
 					BeforeEach(func() {
-						delete(desiredLRPResponse.Routes, models.DIEGO_SSH)
+						delete(desiredLRPResponse.Routes, routes.DIEGO_SSH)
 						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 					})
 
@@ -227,7 +227,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				Context("when the ssh route fails to unmarshal", func() {
 					BeforeEach(func() {
 						message := json.RawMessage([]byte(`{,:`))
-						desiredLRPResponse.Routes[models.DIEGO_SSH] = &message
+						desiredLRPResponse.Routes[routes.DIEGO_SSH] = &message
 						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 					})
 

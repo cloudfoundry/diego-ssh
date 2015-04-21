@@ -1,4 +1,4 @@
-package models_test
+package routes_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestModels(t *testing.T) {
+func TestRoutes(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Models Suite")
+	RunSpecs(t, "Routes Suite")
 }

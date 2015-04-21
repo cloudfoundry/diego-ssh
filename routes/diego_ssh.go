@@ -1,4 +1,4 @@
-package models
+package routes
 
 const DIEGO_SSH = "diego-ssh"
 

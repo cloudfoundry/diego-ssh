@@ -1,19 +1,19 @@
-package models_test
+package routes_test
 
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/models"
+	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Diego SSH Route", func() {
-	var route models.SSHRoute
+	var route routes.SSHRoute
 
 	BeforeEach(func() {
-		route = models.SSHRoute{
+		route = routes.SSHRoute{
 			ContainerPort:   2222,
 			HostFingerprint: "my-key-fingerprint",
 			User:            "user",
@@ -73,7 +73,7 @@ var _ = Describe("Diego SSH Route", func() {
 			payload, err := json.Marshal(route)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			var result models.SSHRoute
+			var result routes.SSHRoute
 			err = json.Unmarshal(payload, &result)
 			Ω(err).ShouldNot(HaveOccurred())
 

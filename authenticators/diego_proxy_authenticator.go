@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
+	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
@@ -85,7 +85,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 }
 
 func (dpa *DiegoProxyAuthenticator) createPermissions(
-	sshRoute *models.SSHRoute,
+	sshRoute *routes.SSHRoute,
 	actual *receptor.ActualLRPResponse,
 ) (*ssh.Permissions, error) {
 	var targetConfig *proxy.TargetConfig
@@ -119,17 +119,17 @@ func (dpa *DiegoProxyAuthenticator) createPermissions(
 	}, nil
 }
 
-func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*models.SSHRoute, error) {
+func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*routes.SSHRoute, error) {
 	if desired.Routes == nil {
 		return nil, RouteNotFoundErr
 	}
 
-	rawMessage := desired.Routes[models.DIEGO_SSH]
+	rawMessage := desired.Routes[routes.DIEGO_SSH]
 	if rawMessage == nil {
 		return nil, RouteNotFoundErr
 	}
 
-	var sshRoute models.SSHRoute
+	var sshRoute routes.SSHRoute
 	err := json.Unmarshal(*rawMessage, &sshRoute)
 	if err != nil {
 		return nil, err
