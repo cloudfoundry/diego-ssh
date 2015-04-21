@@ -8,7 +8,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 
@@ -27,14 +26,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 	BeforeEach(func() {
 		receptorClient = new(fake_receptor.FakeClient)
 
-		cfRoutes, err := json.Marshal(cfroutes.CFRoutes{
-			cfroutes.CFRoute{
-				Hostnames: []string{"host1.example.com", "host2.example.com"},
-				Port:      8080,
-			},
-		})
-		Ω(err).ShouldNot(HaveOccurred())
-
 		expectedRoute = routes.SSHRoute{
 			ContainerPort:   1111,
 			PrivateKey:      "pem-encoded-key",
@@ -46,15 +37,13 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		diegoSSHRoutePayload, err := json.Marshal(expectedRoute)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		cfRoutesMessage := json.RawMessage(cfRoutes)
 		diegoSSHRouteMessage := json.RawMessage(diegoSSHRoutePayload)
 
 		desiredLRPResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: "some-guid",
 			Instances:   2,
 			Routes: receptor.RoutingInfo{
-				cfroutes.CF_ROUTER: &cfRoutesMessage,
-				routes.DIEGO_SSH:   &diegoSSHRouteMessage,
+				routes.DIEGO_SSH: &diegoSSHRouteMessage,
 			},
 		}
 
