@@ -69,7 +69,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		}
 
 		receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLrpResponse, nil)
-
 		receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 	})
 
@@ -79,7 +78,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			metadata      *fake_ssh.FakeConnMetadata
 			logger        *lagertest.TestLogger
 			receptorCreds []byte
-			privateKeyPem string
 
 			permissions *ssh.Permissions
 			password    []byte
@@ -89,8 +87,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		BeforeEach(func() {
 			logger = lagertest.NewTestLogger("test")
 			receptorCreds = []byte("receptor-user:receptor-password")
-			privateKeyPem = "pem-encoded-key"
-			authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds, privateKeyPem)
+			authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
 
 			metadata = &fake_ssh.FakeConnMetadata{}
 			permissions = nil
@@ -136,7 +133,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		})
 
 		Context("when authentication is successful", func() {
-
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
 				password = []byte("receptor-user:receptor-password")
@@ -144,7 +140,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 			It("gets information about the desired lrp referenced in the username", func() {
 				Ω(receptorClient.GetDesiredLRPCallCount()).Should(Equal(1))
-
 				Ω(receptorClient.GetDesiredLRPArgsForCall(0)).Should(Equal("some-guid"))
 			})
 
@@ -158,11 +153,13 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 			It("saves container information in the critical options of the permissions", func() {
 				expectedConfig := `{
-				"address": "1.2.3.4:3333",
-				"private_key": "pem-encoded-key",
-				"user": "user",
-				"password": "password"
-			}`
+					"address": "1.2.3.4:3333",
+					"host_fingerprint": "host-fingerprint",
+					"private_key": "pem-encoded-key",
+					"user": "user",
+					"password": "password"
+				}`
+
 				Ω(permissions).ShouldNot(BeNil())
 				Ω(permissions.CriticalOptions).ShouldNot(BeNil())
 				Ω(permissions.CriticalOptions["proxy-target-config"]).Should(MatchJSON(expectedConfig))
@@ -194,8 +191,8 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 					receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLrpResponse, nil)
 				})
 
-				It("returns a nil permission reference", func() {
-					Ω(permissions).Should(BeNil())
+				It("returns an empty permission reference", func() {
+					Ω(permissions).Should(Equal(&ssh.Permissions{}))
 				})
 			})
 		})
@@ -209,7 +206,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 					BeforeEach(func() {
 						desiredLRPResponse.Routes = nil
 						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-
 					})
 
 					It("fails the authentication", func() {
@@ -239,7 +235,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 						Ω(authErr).Should(HaveOccurred())
 					})
 				})
-
 			})
 		})
 	})

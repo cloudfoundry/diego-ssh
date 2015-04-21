@@ -19,7 +19,6 @@ type DiegoProxyAuthenticator struct {
 	logger         lager.Logger
 	receptorCreds  []byte
 	receptorClient receptor.Client
-	privateKeyPem  string
 }
 
 var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
@@ -32,13 +31,11 @@ func NewDiegoProxyAuthenticator(
 	logger lager.Logger,
 	receptorClient receptor.Client,
 	receptorCreds []byte,
-	privateKeyPem string,
 ) *DiegoProxyAuthenticator {
 	return &DiegoProxyAuthenticator{
 		logger:         logger,
 		receptorCreds:  receptorCreds,
 		receptorClient: receptorClient,
-		privateKeyPem:  privateKeyPem,
 	}
 }
 
@@ -96,17 +93,18 @@ func (dpa *DiegoProxyAuthenticator) createPermissions(
 	for _, mapping := range actual.Ports {
 		if mapping.ContainerPort == sshRoute.ContainerPort {
 			targetConfig = &proxy.TargetConfig{
-				Address:    fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
-				PrivateKey: dpa.privateKeyPem,
-				User:       sshRoute.User,
-				Password:   sshRoute.Password,
+				Address:         fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
+				HostFingerprint: sshRoute.HostFingerprint,
+				PrivateKey:      sshRoute.PrivateKey,
+				User:            sshRoute.User,
+				Password:        sshRoute.Password,
 			}
 			break
 		}
 	}
 
 	if targetConfig == nil {
-		return nil, nil
+		return &ssh.Permissions{}, nil
 	}
 
 	targetConfigJson, err := json.Marshal(targetConfig)

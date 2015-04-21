@@ -167,10 +167,11 @@ func Wait(logger lager.Logger, waiters ...Waiter) {
 }
 
 type TargetConfig struct {
-	Address    string `json:"address"`
-	User       string `json:"user,omitempty"`
-	Password   string `json:"password,omitempty"`
-	PrivateKey string `json:"private_key,omitempty"`
+	Address         string `json:"address"`
+	HostFingerprint string `json:"host_fingerprint"`
+	User            string `json:"user,omitempty"`
+	Password        string `json:"password,omitempty"`
+	PrivateKey      string `json:"private_key,omitempty"`
 }
 
 func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {

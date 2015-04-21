@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
+	"github.com/cloudfoundry-incubator/diego-ssh/models"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -29,7 +31,6 @@ var _ = Describe("SSH proxy", func() {
 
 		address     string
 		hostKey     string
-		privateKey  string
 		diegoAPIURL string
 	)
 
@@ -38,7 +39,6 @@ var _ = Describe("SSH proxy", func() {
 
 		hostKey = hostKeyPem
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
-		privateKey = privateKeyPem
 		diegoAPIURL = fakeReceptor.URL()
 	})
 
@@ -46,7 +46,6 @@ var _ = Describe("SSH proxy", func() {
 		args := testrunner.Args{
 			Address:     address,
 			HostKey:     hostKey,
-			PrivateKey:  privateKey,
 			DiegoAPIURL: diegoAPIURL,
 		}
 
@@ -142,13 +141,32 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the client authenticates with the right data", func() {
 			BeforeEach(func() {
+				sshRoute := models.SSHRoute{
+					ContainerPort:   9999,
+					PrivateKey:      privateKeyPem,
+					HostFingerprint: "aa:bb",
+				}
+
+				sshRoutePayload, err := json.Marshal(sshRoute)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				diegoSSHRouteMessage := json.RawMessage(sshRoutePayload)
+
+				desiredLRP := receptor.DesiredLRPResponse{
+					ProcessGuid: "process-guid",
+					Instances:   1,
+					Routes: receptor.RoutingInfo{
+						models.DIEGO_SSH: &diegoSSHRouteMessage,
+					},
+				}
+
 				actualLRP := receptor.ActualLRPResponse{
 					ProcessGuid:  "process-guid",
 					Index:        0,
 					InstanceGuid: "some-instance-guid",
 					Address:      "127.0.0.1",
 					Ports: []receptor.PortMapping{
-						{ContainerPort: 2222, HostPort: uint16(sshdPort)},
+						{ContainerPort: 9999, HostPort: uint16(sshdPort)},
 					},
 				}
 
@@ -156,6 +174,10 @@ var _ = Describe("SSH proxy", func() {
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v1/actual_lrps/process-guid/index/0"),
 						ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
+					),
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v1/desired_lrps/process-guid"),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, desiredLRP),
 					),
 				)
 			})
@@ -166,7 +188,7 @@ var _ = Describe("SSH proxy", func() {
 
 				client.Close()
 
-				Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
+				Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
 			})
 
 			It("connects to the target daemon", func() {

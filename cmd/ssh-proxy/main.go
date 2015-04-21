@@ -31,12 +31,6 @@ var hostKey = flag.String(
 	"PEM encoded RSA host key",
 )
 
-var privateKey = flag.String(
-	"privateKey",
-	"",
-	"PEM encoded RSA private key for authentication",
-)
-
 var diegoAPIURL = flag.String(
 	"diegoAPIURL",
 	"",
@@ -100,18 +94,8 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		diegoCreds = url.User.String()
 	}
 
-	if *privateKey == "" {
-		err := errors.New("privateKey is required")
-		logger.Fatal("private-key-required", err)
-	}
-
-	key, err := parsePrivateKey(logger, *privateKey)
-	if err != nil {
-		logger.Fatal("failed-to-parse-private-key", err)
-	}
-
 	receptorClient := receptor.NewClient(*diegoAPIURL)
-	diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds), *privateKey)
+	diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds))
 
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: diegoAuthenticator.Authenticate,
@@ -122,7 +106,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		logger.Fatal("host-key-required", err)
 	}
 
-	key, err = parsePrivateKey(logger, *hostKey)
+	key, err := parsePrivateKey(logger, *hostKey)
 	if err != nil {
 		logger.Fatal("failed-to-parse-host-key", err)
 	}

@@ -10,7 +10,6 @@ import (
 type Args struct {
 	Address     string
 	HostKey     string
-	PrivateKey  string
 	DiegoAPIURL string
 }
 
@@ -18,7 +17,6 @@ func (args Args) ArgSlice() []string {
 	return []string{
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
-		"-privateKey=" + args.PrivateKey,
 		"-diegoAPIURL=" + args.DiegoAPIURL,
 	}
 }
