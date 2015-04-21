@@ -95,9 +95,9 @@ func (dpa *DiegoProxyAuthenticator) createPermissions(
 			targetConfig = &proxy.TargetConfig{
 				Address:         fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
 				HostFingerprint: sshRoute.HostFingerprint,
-				PrivateKey:      sshRoute.PrivateKey,
 				User:            sshRoute.User,
 				Password:        sshRoute.Password,
+				PrivateKey:      sshRoute.PrivateKey,
 			}
 			break
 		}

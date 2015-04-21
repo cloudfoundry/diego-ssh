@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
+	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/tedsuo/ifrit"
@@ -29,15 +30,21 @@ var _ = Describe("SSH proxy", func() {
 		process      ifrit.Process
 		exitDuration = 3 * time.Second
 
-		address     string
-		hostKey     string
-		diegoAPIURL string
+		address            string
+		hostKey            string
+		hostKeyFingerprint string
+		diegoAPIURL        string
 	)
 
 	BeforeEach(func() {
 		fakeReceptor = ghttp.NewServer()
 
 		hostKey = hostKeyPem
+
+		privateKey, err := ssh.ParsePrivateKey([]byte(hostKey))
+		Ω(err).ShouldNot(HaveOccurred())
+		hostKeyFingerprint = helpers.MD5Fingerprint(privateKey.PublicKey())
+
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
 		diegoAPIURL = fakeReceptor.URL()
 	})
@@ -144,7 +151,7 @@ var _ = Describe("SSH proxy", func() {
 				sshRoute := routes.SSHRoute{
 					ContainerPort:   9999,
 					PrivateKey:      privateKeyPem,
-					HostFingerprint: "aa:bb",
+					HostFingerprint: hostKeyFingerprint,
 				}
 
 				sshRoutePayload, err := json.Marshal(sshRoute)
@@ -170,14 +177,16 @@ var _ = Describe("SSH proxy", func() {
 					},
 				}
 
-				fakeReceptor.AppendHandlers(
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v1/actual_lrps/process-guid/index/0"),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
-					),
+				fakeReceptor.RouteToHandler("GET", "/v1/desired_lrps/process-guid",
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/v1/desired_lrps/process-guid"),
 						ghttp.RespondWithJSONEncoded(http.StatusOK, desiredLRP),
+					),
+				)
+				fakeReceptor.RouteToHandler("GET", "/v1/actual_lrps/process-guid/index/0",
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v1/actual_lrps/process-guid/index/0"),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
 					),
 				)
 			})

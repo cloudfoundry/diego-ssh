@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fake_handlers"
+	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	server_fakes "github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
@@ -80,9 +81,10 @@ var _ = Describe("Proxy", func() {
 			daemonAddress = sshdListener.Addr().String()
 
 			daemonTargetConfig = proxy.TargetConfig{
-				Address:  daemonAddress,
-				User:     "some-user",
-				Password: "some-password",
+				Address:         daemonAddress,
+				HostFingerprint: helpers.MD5Fingerprint(TestHostKey.PublicKey()),
+				User:            "some-user",
+				Password:        "some-password",
 			}
 
 			targetConfigJson, err := json.Marshal(daemonTargetConfig)
@@ -152,7 +154,7 @@ var _ = Describe("Proxy", func() {
 				})
 			})
 
-			Context("when the handshake is successful", func() {
+			Context("when the client handshake is successful", func() {
 				var client *ssh.Client
 
 				JustBeforeEach(func() {
@@ -167,6 +169,85 @@ var _ = Describe("Proxy", func() {
 					metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
 					Ω(metadata.User()).Should(Equal("some-user"))
 					Ω(string(password)).Should(Equal("some-password"))
+				})
+
+				Context("when the target contains a host fingerprint", func() {
+					Context("when the fingerprint is an md5 hash", func() {
+						BeforeEach(func() {
+							targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+								Address:         sshdListener.Addr().String(),
+								HostFingerprint: helpers.MD5Fingerprint(TestHostKey.PublicKey()),
+								User:            "some-user",
+								Password:        "some-password",
+							})
+							Ω(err).ShouldNot(HaveOccurred())
+
+							permissions := &ssh.Permissions{
+								CriticalOptions: map[string]string{
+									"proxy-target-config": string(targetConfigJson),
+								},
+							}
+							proxyAuthenticator.AuthenticateReturns(permissions, nil)
+						})
+
+						It("handshakes with the target using the provided configuration", func() {
+							Eventually(daemonAuthenticator.AuthenticateCallCount).Should(Equal(1))
+						})
+					})
+
+					Context("when the host fingerprint is a sha1 hash", func() {
+						BeforeEach(func() {
+							targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+								Address:         sshdListener.Addr().String(),
+								HostFingerprint: helpers.SHA1Fingerprint(TestHostKey.PublicKey()),
+								User:            "some-user",
+								Password:        "some-password",
+							})
+							Ω(err).ShouldNot(HaveOccurred())
+
+							permissions := &ssh.Permissions{
+								CriticalOptions: map[string]string{
+									"proxy-target-config": string(targetConfigJson),
+								},
+							}
+							proxyAuthenticator.AuthenticateReturns(permissions, nil)
+						})
+
+						It("handshakes with the target using the provided configuration", func() {
+							Eventually(daemonAuthenticator.AuthenticateCallCount).Should(Equal(1))
+						})
+					})
+
+					Context("when the actual host fingerpreint does not match the expected fingerprint", func() {
+						BeforeEach(func() {
+							targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+								Address:         sshdListener.Addr().String(),
+								HostFingerprint: "bogus-fingerprint",
+								User:            "some-user",
+								Password:        "some-password",
+							})
+							Ω(err).ShouldNot(HaveOccurred())
+
+							permissions := &ssh.Permissions{
+								CriticalOptions: map[string]string{
+									"proxy-target-config": string(targetConfigJson),
+								},
+							}
+							proxyAuthenticator.AuthenticateReturns(permissions, nil)
+						})
+
+						It("does not attempt authentication with the target", func() {
+							Consistently(daemonAuthenticator.AuthenticateCallCount).Should(Equal(0))
+						})
+
+						It("closes the connection", func() {
+							Eventually(client.Wait).Should(Equal(io.EOF))
+						})
+
+						It("logs the failure", func() {
+							Eventually(logger).Should(gbytes.Say(`host-key-fingerprint-mismatch`))
+						})
+					})
 				})
 
 				Context("when the target address is unreachable", func() {
@@ -968,13 +1049,47 @@ var _ = Describe("Proxy", func() {
 				daemonSSHConfig.PublicKeyCallback = publicKeyAuthenticator.Authenticate
 			})
 
-			It("will attempt to use the public key for authentication before the password", func() {
+			It("will use the public key for authentication", func() {
 				expectedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(TestPublicAuthorizedKey))
 				Ω(err).ShouldNot(HaveOccurred())
 
 				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
 
 				_, actualKey := publicKeyAuthenticator.AuthenticateArgsForCall(0)
+				Ω(actualKey.Marshal()).Should(Equal(expectedKey.Marshal()))
+			})
+		})
+
+		Context("when the config contains a user and a public key", func() {
+			var publicKeyAuthenticator *fake_authenticators.FakePublicKeyAuthenticator
+
+			BeforeEach(func() {
+				targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+					Address:    sshdListener.Addr().String(),
+					User:       "my-user",
+					PrivateKey: TestPrivatePem,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				permissions = &ssh.Permissions{
+					CriticalOptions: map[string]string{
+						"proxy-target-config": string(targetConfigJson),
+					},
+				}
+
+				publicKeyAuthenticator = &fake_authenticators.FakePublicKeyAuthenticator{}
+				publicKeyAuthenticator.AuthenticateReturns(&ssh.Permissions{}, nil)
+				daemonSSHConfig.PublicKeyCallback = publicKeyAuthenticator.Authenticate
+			})
+
+			It("will use the user and public key for authentication", func() {
+				expectedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(TestPublicAuthorizedKey))
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+
+				metadata, actualKey := publicKeyAuthenticator.AuthenticateArgsForCall(0)
+				Ω(metadata.User()).Should(Equal("my-user"))
 				Ω(actualKey.Marshal()).Should(Equal(expectedKey.Marshal()))
 			})
 		})

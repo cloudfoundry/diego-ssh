@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/pivotal-golang/lager"
@@ -13,6 +14,14 @@ import (
 
 type Waiter interface {
 	Wait() error
+}
+
+type TargetConfig struct {
+	Address         string `json:"address"`
+	HostFingerprint string `json:"host_fingerprint"`
+	User            string `json:"user,omitempty"`
+	Password        string `json:"password,omitempty"`
+	PrivateKey      string `json:"private_key,omitempty"`
 }
 
 type Proxy struct {
@@ -166,14 +175,6 @@ func Wait(logger lager.Logger, waiters ...Waiter) {
 	wg.Wait()
 }
 
-type TargetConfig struct {
-	Address         string `json:"address"`
-	HostFingerprint string `json:"host_fingerprint"`
-	User            string `json:"user,omitempty"`
-	Password        string `json:"password,omitempty"`
-	PrivateKey      string `json:"private_key,omitempty"`
-}
-
 func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
 	if permissions == nil || permissions.CriticalOptions == nil {
 		err := errors.New("Invalid permissions from authentication")
@@ -216,6 +217,28 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn,
 
 	if targetConfig.User != "" && targetConfig.Password != "" {
 		clientConfig.Auth = append(clientConfig.Auth, ssh.Password(targetConfig.Password))
+	}
+
+	if targetConfig.HostFingerprint != "" {
+		clientConfig.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			expectedFingerprint := targetConfig.HostFingerprint
+
+			var actualFingerprint string
+			switch utf8.RuneCountInString(expectedFingerprint) {
+			case helpers.MD5_FINGERPRINT_LENGTH:
+				actualFingerprint = helpers.MD5Fingerprint(key)
+			case helpers.SHA1_FINGERPRINT_LENGTH:
+				actualFingerprint = helpers.SHA1Fingerprint(key)
+			}
+
+			if expectedFingerprint != actualFingerprint {
+				err := errors.New("Host fingerprint mismatch")
+				logger.Error("host-key-fingerprint-mismatch", err)
+				return err
+			}
+
+			return nil
+		}
 	}
 
 	conn, ch, req, err := ssh.NewClientConn(nConn, targetConfig.Address, clientConfig)
