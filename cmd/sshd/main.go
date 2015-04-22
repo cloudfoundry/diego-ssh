@@ -12,7 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -142,12 +142,12 @@ func decodeAuthorizedKey(logger lager.Logger) (ssh.PublicKey, error) {
 func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 	var encoded []byte
 	if *hostKey == "" {
-		var err error
-		encoded, err = helpers.GeneratePemEncodedRsaKey(1024)
+		hostKeyPair, err := keys.NewRSA(1024)
 		if err != nil {
 			logger.Error("failed-to-generate-host-key", err)
 			return nil, err
 		}
+		encoded = []byte(hostKeyPair.PEMEncodedPrivateKey())
 	} else {
 		encoded = []byte(*hostKey)
 	}
