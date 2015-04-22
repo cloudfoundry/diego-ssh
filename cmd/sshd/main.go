@@ -142,7 +142,8 @@ func decodeAuthorizedKey(logger lager.Logger) (ssh.PublicKey, error) {
 func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 	var encoded []byte
 	if *hostKey == "" {
-		hostKeyPair, err := keys.NewRSA(1024)
+		hostKeyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
+
 		if err != nil {
 			logger.Error("failed-to-generate-host-key", err)
 			return nil, err

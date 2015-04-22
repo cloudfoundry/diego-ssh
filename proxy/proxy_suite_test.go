@@ -22,10 +22,10 @@ func TestProxy(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	hostKey, err := keys.NewRSA(1024)
+	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	privateKey, err := keys.NewRSA(1024)
+	privateKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
 	TestHostKey = hostKey.PrivateKey()

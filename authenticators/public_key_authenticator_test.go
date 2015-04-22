@@ -25,7 +25,7 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 	)
 
 	BeforeEach(func() {
-		keyPair, err := keys.NewRSA(1024)
+		keyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 		Ω(err).ShouldNot(HaveOccurred())
 
 		privateKey = keyPair.PrivateKey()

@@ -10,7 +10,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type RSAKeyPair interface {
+//go:generate counterfeiter -o fake_keys/fake_key_pair.go . KeyPair
+type KeyPair interface {
 	PrivateKey() ssh.Signer
 	PEMEncodedPrivateKey() string
 
@@ -19,12 +20,25 @@ type RSAKeyPair interface {
 	AuthorizedKey() string
 }
 
+//go:generate counterfeiter -o fake_keys/fake_ssh_key_factory.go . SSHKeyFactory
+type SSHKeyFactory interface {
+	NewKeyPair(bits int) (KeyPair, error)
+}
+
+var RSAKeyPairFactory SSHKeyFactory = &keyPairFactory{}
+
+type keyPairFactory struct{}
+
+func (r *keyPairFactory) NewKeyPair(bits int) (KeyPair, error) {
+	return newRSA(bits)
+}
+
 type rsaKeyPair struct {
 	encodedPrivateKey string
 	privateKey        ssh.Signer
 }
 
-func NewRSA(bits int) (RSAKeyPair, error) {
+func newRSA(bits int) (KeyPair, error) {
 	key, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		return nil, err

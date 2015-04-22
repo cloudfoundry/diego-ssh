@@ -29,10 +29,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	sshd, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
 
-	hostKey, err := keys.NewRSA(1024)
+	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	privateKey, err := keys.NewRSA(1024)
+	privateKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
 	payload, err := json.Marshal(map[string]string{

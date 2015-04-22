@@ -13,7 +13,7 @@ import (
 )
 
 var _ = Describe("RSA", func() {
-	var keyPair keys.RSAKeyPair
+	var keyPair keys.KeyPair
 	var bits int
 
 	BeforeEach(func() {
@@ -22,7 +22,7 @@ var _ = Describe("RSA", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		keyPair, err = keys.NewRSA(bits)
+		keyPair, err = keys.RSAKeyPairFactory.NewKeyPair(bits)
 		Ω(err).ShouldNot(HaveOccurred())
 	})
 
