@@ -39,12 +39,19 @@ func NewDiegoProxyAuthenticator(
 	}
 }
 
+func (dpa *DiegoProxyAuthenticator) ShouldAuthenticate(metadata ssh.ConnMetadata) bool {
+	if !UserRegex.MatchString(metadata.User()) {
+		return false
+	}
+	return true
+}
+
 func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	logger := dpa.logger.Session("authenticate")
 	logger.Info("authentication-starting")
 	defer logger.Info("authentication-finished")
 
-	if !UserRegex.MatchString(metadata.User()) {
+	if !dpa.ShouldAuthenticate(metadata) {
 		logger.Error("regex-match-fail", InvalidDomainErr)
 		return nil, InvalidDomainErr
 	}

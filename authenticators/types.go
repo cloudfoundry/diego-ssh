@@ -11,4 +11,5 @@ type PublicKeyAuthenticator interface {
 //go:generate counterfeiter -o fake_authenticators/fake_password_authenticator.go . PasswordAuthenticator
 type PasswordAuthenticator interface {
 	Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
+	ShouldAuthenticate(metadata ssh.ConnMetadata) bool
 }

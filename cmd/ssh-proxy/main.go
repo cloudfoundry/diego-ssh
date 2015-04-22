@@ -96,9 +96,10 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	receptorClient := receptor.NewClient(*diegoAPIURL)
 	diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds))
+	authenticator := authenticators.NewCompositeAuthenticator([]authenticators.PasswordAuthenticator{diegoAuthenticator})
 
 	sshConfig := &ssh.ServerConfig{
-		PasswordCallback: diegoAuthenticator.Authenticate,
+		PasswordCallback: authenticator.Authenticate,
 	}
 
 	if *hostKey == "" {

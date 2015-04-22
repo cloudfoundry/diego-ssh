@@ -19,6 +19,14 @@ type FakePasswordAuthenticator struct {
 		result1 *ssh.Permissions
 		result2 error
 	}
+	ShouldAuthenticateStub        func(metadata ssh.ConnMetadata) bool
+	shouldAuthenticateMutex       sync.RWMutex
+	shouldAuthenticateArgsForCall []struct {
+		metadata ssh.ConnMetadata
+	}
+	shouldAuthenticateReturns struct {
+		result1 bool
+	}
 }
 
 func (fake *FakePasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
@@ -53,6 +61,38 @@ func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissi
 		result1 *ssh.Permissions
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakePasswordAuthenticator) ShouldAuthenticate(metadata ssh.ConnMetadata) bool {
+	fake.shouldAuthenticateMutex.Lock()
+	fake.shouldAuthenticateArgsForCall = append(fake.shouldAuthenticateArgsForCall, struct {
+		metadata ssh.ConnMetadata
+	}{metadata})
+	fake.shouldAuthenticateMutex.Unlock()
+	if fake.ShouldAuthenticateStub != nil {
+		return fake.ShouldAuthenticateStub(metadata)
+	} else {
+		return fake.shouldAuthenticateReturns.result1
+	}
+}
+
+func (fake *FakePasswordAuthenticator) ShouldAuthenticateCallCount() int {
+	fake.shouldAuthenticateMutex.RLock()
+	defer fake.shouldAuthenticateMutex.RUnlock()
+	return len(fake.shouldAuthenticateArgsForCall)
+}
+
+func (fake *FakePasswordAuthenticator) ShouldAuthenticateArgsForCall(i int) ssh.ConnMetadata {
+	fake.shouldAuthenticateMutex.RLock()
+	defer fake.shouldAuthenticateMutex.RUnlock()
+	return fake.shouldAuthenticateArgsForCall[i].metadata
+}
+
+func (fake *FakePasswordAuthenticator) ShouldAuthenticateReturns(result1 bool) {
+	fake.ShouldAuthenticateStub = nil
+	fake.shouldAuthenticateReturns = struct {
+		result1 bool
+	}{result1}
 }
 
 var _ authenticators.PasswordAuthenticator = new(FakePasswordAuthenticator)

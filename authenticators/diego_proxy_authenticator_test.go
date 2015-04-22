@@ -21,6 +21,10 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		expectedRoute      routes.SSHRoute
 		desiredLRPResponse receptor.DesiredLRPResponse
 		actualLrpResponse  receptor.ActualLRPResponse
+		authenticator      *authenticators.DiegoProxyAuthenticator
+		logger             *lagertest.TestLogger
+		receptorCreds      []byte
+		metadata           *fake_ssh.FakeConnMetadata
 	)
 
 	BeforeEach(func() {
@@ -59,26 +63,22 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 		receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLrpResponse, nil)
 		receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
+
+		logger = lagertest.NewTestLogger("test")
+		receptorCreds = []byte("receptor-user:receptor-password")
+		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
+
+		metadata = &fake_ssh.FakeConnMetadata{}
 	})
 
 	Describe("Authenticate", func() {
 		var (
-			authenticator *authenticators.DiegoProxyAuthenticator
-			metadata      *fake_ssh.FakeConnMetadata
-			logger        *lagertest.TestLogger
-			receptorCreds []byte
-
 			permissions *ssh.Permissions
 			password    []byte
 			authErr     error
 		)
 
 		BeforeEach(func() {
-			logger = lagertest.NewTestLogger("test")
-			receptorCreds = []byte("receptor-user:receptor-password")
-			authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
-
-			metadata = &fake_ssh.FakeConnMetadata{}
 			permissions = nil
 			password = []byte{}
 		})
@@ -224,6 +224,28 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 						Ω(authErr).Should(HaveOccurred())
 					})
 				})
+			})
+		})
+	})
+
+	Describe("ShouldAuthenticate", func() {
+		Context("when the user metadata begins with the appropriate prefix", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("diego:some-guid/0")
+			})
+
+			It("returns true", func() {
+				Ω(authenticator.ShouldAuthenticate(metadata)).Should(BeTrue())
+			})
+		})
+
+		Context("when the user metadata does not begin with the appropriate prefix", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("cf:some-guid/0")
+			})
+
+			It("returns false", func() {
+				Ω(authenticator.ShouldAuthenticate(metadata)).Should(BeFalse())
 			})
 		})
 	})
