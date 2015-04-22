@@ -11,56 +11,55 @@ import (
 )
 
 var _ = Describe("Keys", func() {
-	var encodedRsaKey []byte
-	var encodedDsaKey []byte
-
-	BeforeSuite(func() {
-		var err error
-		encodedDsaKey, err = helpers.GeneratePemEncodedDsaKey()
-		Ω(err).ShouldNot(HaveOccurred())
-
-		encodedRsaKey, err = helpers.GeneratePemEncodedRsaKey()
-		Ω(err).ShouldNot(HaveOccurred())
-	})
-
 	Describe("GeneratePemEncodedRsaKey", func() {
+		var encodedRsaKey []byte
+		var bits int
+
+		BeforeEach(func() {
+			bits = 1024
+		})
+
+		JustBeforeEach(func() {
+			var err error
+			encodedRsaKey, err = helpers.GeneratePemEncodedRsaKey(bits)
+			Ω(err).ShouldNot(HaveOccurred())
+		})
+
 		It("generates a RSA PRIVATE KEY block", func() {
 			Ω(encodedRsaKey).Should(ContainSubstring("--BEGIN RSA PRIVATE KEY--"))
 			Ω(encodedRsaKey).Should(ContainSubstring("--END RSA PRIVATE KEY--"))
 		})
 
-		It("is 2048 bits in length", func() {
-			block, _ := pem.Decode(encodedRsaKey)
-			key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-			Ω(err).ShouldNot(HaveOccurred())
+		Context("when generating a key with 1024 bits", func() {
+			BeforeEach(func() {
+				bits = 1024
+			})
 
-			Ω(key.N.BitLen()).Should(Equal(2048))
+			It("is 1024 bits in length", func() {
+				block, _ := pem.Decode(encodedRsaKey)
+				key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(key.N.BitLen()).Should(Equal(1024))
+			})
+		})
+
+		Context("when generating a key with 2048 bits", func() {
+			BeforeEach(func() {
+				bits = 2048
+			})
+
+			It("is 2048 bits in length", func() {
+				block, _ := pem.Decode(encodedRsaKey)
+				key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				Ω(key.N.BitLen()).Should(Equal(2048))
+			})
 		})
 
 		It("can be used ass an ssh.Signer", func() {
 			signer, err := ssh.ParsePrivateKey(encodedRsaKey)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(signer).ShouldNot(BeNil())
-		})
-	})
-
-	Describe("GeneratePemEncodedDsaKey", func() {
-		It("generates a DSA PRIVATE KEY block", func() {
-			Ω(encodedDsaKey).Should(ContainSubstring("--BEGIN DSA PRIVATE KEY--"))
-			Ω(encodedDsaKey).Should(ContainSubstring("--END DSA PRIVATE KEY--"))
-		})
-
-		It("is 2048 bits in length", func() {
-			block, _ := pem.Decode(encodedDsaKey)
-			key, err := ssh.ParseDSAPrivateKey(block.Bytes)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			Ω(key.P.BitLen()).Should(Equal(2048))
-			Ω(key.Q.BitLen()).Should(Equal(256))
-		})
-
-		It("can be used ass an ssh.Signer", func() {
-			signer, err := ssh.ParsePrivateKey(encodedDsaKey)
 			Ω(err).ShouldNot(HaveOccurred())
 			Ω(signer).ShouldNot(BeNil())
 		})

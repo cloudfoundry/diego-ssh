@@ -42,7 +42,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	sshd, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
 
-	hostKeyPem, err := helpers.GeneratePemEncodedRsaKey()
+	hostKeyPem, err := helpers.GeneratePemEncodedRsaKey(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
 	privatePem, authorizedKey := test_helpers.SSHKeyGen()

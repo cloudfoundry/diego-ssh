@@ -15,17 +15,7 @@ import (
 )
 
 func GenerateRsaHostKey() ssh.Signer {
-	encoded, err := helpers.GeneratePemEncodedRsaKey()
-	Ω(err).ShouldNot(HaveOccurred())
-
-	privateKey, err := ssh.ParsePrivateKey(encoded)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return privateKey
-}
-
-func GenerateDsaHostKey() ssh.Signer {
-	encoded, err := helpers.GeneratePemEncodedDsaKey()
+	encoded, err := helpers.GeneratePemEncodedRsaKey(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
 	privateKey, err := ssh.ParsePrivateKey(encoded)
@@ -35,7 +25,7 @@ func GenerateDsaHostKey() ssh.Signer {
 }
 
 func SSHKeyGen() ([]byte, []byte) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
 	err = privateKey.Validate()

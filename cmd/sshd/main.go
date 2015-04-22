@@ -143,7 +143,7 @@ func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 	var encoded []byte
 	if *hostKey == "" {
 		var err error
-		encoded, err = helpers.GeneratePemEncodedRsaKey()
+		encoded, err = helpers.GeneratePemEncodedRsaKey(1024)
 		if err != nil {
 			logger.Error("failed-to-generate-host-key", err)
 			return nil, err
