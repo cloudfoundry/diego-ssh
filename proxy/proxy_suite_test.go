@@ -1,7 +1,7 @@
 package proxy_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
@@ -22,10 +22,13 @@ func TestProxy(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	TestHostKey = test_helpers.GenerateRsaHostKey()
+	hostKey, err := keys.NewRSA(1024)
+	Ω(err).ShouldNot(HaveOccurred())
 
-	privatePem, publicAuthorizedKey := test_helpers.SSHKeyGen()
+	privateKey, err := keys.NewRSA(1024)
+	Ω(err).ShouldNot(HaveOccurred())
 
-	TestPrivatePem = string(privatePem)
-	TestPublicAuthorizedKey = string(publicAuthorizedKey)
+	TestHostKey = hostKey.PrivateKey()
+	TestPrivatePem = privateKey.PEMEncodedPrivateKey()
+	TestPublicAuthorizedKey = privateKey.AuthorizedKey()
 })

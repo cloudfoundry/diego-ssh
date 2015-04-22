@@ -2,7 +2,7 @@ package authenticators_test
 
 import (
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	"golang.org/x/crypto/ssh"
 
@@ -25,7 +25,12 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 	)
 
 	BeforeEach(func() {
-		privateKey, publicKey = test_helpers.GenerateSshKeyPair()
+		keyPair, err := keys.NewRSA(1024)
+		Ω(err).ShouldNot(HaveOccurred())
+
+		privateKey = keyPair.PrivateKey()
+		publicKey = keyPair.PublicKey()
+
 		authenticator = authenticators.NewPublicKeyAuthenticator(publicKey)
 
 		metadata = &fake_ssh.FakeConnMetadata{}

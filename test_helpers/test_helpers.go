@@ -1,67 +1,13 @@
 package test_helpers
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"net"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"golang.org/x/crypto/ssh"
 )
-
-func GenerateRsaHostKey() ssh.Signer {
-	encoded, err := helpers.GeneratePemEncodedRsaKey(1024)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	privateKey, err := ssh.ParsePrivateKey(encoded)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return privateKey
-}
-
-func SSHKeyGen() ([]byte, []byte) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	err = privateKey.Validate()
-	Ω(err).ShouldNot(HaveOccurred())
-
-	privateBlock := pem.Block{
-		Type:    "RSA PRIVATE KEY",
-		Headers: nil,
-		Bytes:   x509.MarshalPKCS1PrivateKey(privateKey),
-	}
-	privatePem := pem.EncodeToMemory(&privateBlock)
-
-	sshPublicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return privatePem, ssh.MarshalAuthorizedKey(sshPublicKey)
-}
-
-func DecodePem(data []byte) []byte {
-	block, _ := pem.Decode([]byte(data))
-	Ω(block).ShouldNot(BeNil())
-
-	return block.Bytes
-}
-
-func GenerateSshKeyPair() (ssh.Signer, ssh.PublicKey) {
-	privatePem, publicAuthorizedKey := SSHKeyGen()
-
-	privateKey, err := ssh.ParsePrivateKey(privatePem)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(publicAuthorizedKey)
-	Ω(err).ShouldNot(HaveOccurred())
-
-	return privateKey, publicKey
-}
 
 func WaitFor(f func() error) error {
 	ch := make(chan error)

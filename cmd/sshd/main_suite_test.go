@@ -3,8 +3,7 @@ package main_test
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -30,16 +29,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	sshd, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
 
-	hostKeyPem, err := helpers.GeneratePemEncodedRsaKey(1024)
+	hostKey, err := keys.NewRSA(1024)
 	Ω(err).ShouldNot(HaveOccurred())
 
-	privatePem, authorizedKey := test_helpers.SSHKeyGen()
+	privateKey, err := keys.NewRSA(1024)
+	Ω(err).ShouldNot(HaveOccurred())
 
 	payload, err := json.Marshal(map[string]string{
 		"sshd":           sshd,
-		"host-key":       string(hostKeyPem),
-		"private-key":    string(privatePem),
-		"authorized-key": string(authorizedKey),
+		"host-key":       hostKey.PEMEncodedPrivateKey(),
+		"private-key":    privateKey.PEMEncodedPrivateKey(),
+		"authorized-key": privateKey.AuthorizedKey(),
 	})
 
 	Ω(err).ShouldNot(HaveOccurred())

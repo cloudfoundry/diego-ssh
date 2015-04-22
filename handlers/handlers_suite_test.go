@@ -1,7 +1,7 @@
 package handlers_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
@@ -17,5 +17,8 @@ func TestHandlers(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	TestHostKey = test_helpers.GenerateRsaHostKey()
+	hostKey, err := keys.NewRSA(1024)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	TestHostKey = hostKey.PrivateKey()
 })
