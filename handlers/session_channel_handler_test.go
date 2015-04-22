@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -163,8 +164,11 @@ var _ = Describe("SessionChannelHandler", func() {
 					stdout, err = session.StdoutPipe()
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = session.Start("trap 'echo Caught SIGUSR1' USR1; cat")
+					err = session.Start("trap 'echo Caught SIGUSR1' USR1; echo trapped; cat")
 					Ω(err).ShouldNot(HaveOccurred())
+
+					reader := bufio.NewReader(stdout)
+					Eventually(reader.ReadLine).Should(ContainSubstring("trapped"))
 				})
 
 				It("delivers the signal to the process", func() {
