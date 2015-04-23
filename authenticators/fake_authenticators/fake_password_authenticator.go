@@ -19,13 +19,11 @@ type FakePasswordAuthenticator struct {
 		result1 *ssh.Permissions
 		result2 error
 	}
-	ShouldAuthenticateStub        func(metadata ssh.ConnMetadata) bool
-	shouldAuthenticateMutex       sync.RWMutex
-	shouldAuthenticateArgsForCall []struct {
-		metadata ssh.ConnMetadata
-	}
-	shouldAuthenticateReturns struct {
-		result1 bool
+	RealmStub        func() string
+	realmMutex       sync.RWMutex
+	realmArgsForCall []struct{}
+	realmReturns struct {
+		result1 string
 	}
 }
 
@@ -63,35 +61,27 @@ func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissi
 	}{result1, result2}
 }
 
-func (fake *FakePasswordAuthenticator) ShouldAuthenticate(metadata ssh.ConnMetadata) bool {
-	fake.shouldAuthenticateMutex.Lock()
-	fake.shouldAuthenticateArgsForCall = append(fake.shouldAuthenticateArgsForCall, struct {
-		metadata ssh.ConnMetadata
-	}{metadata})
-	fake.shouldAuthenticateMutex.Unlock()
-	if fake.ShouldAuthenticateStub != nil {
-		return fake.ShouldAuthenticateStub(metadata)
+func (fake *FakePasswordAuthenticator) Realm() string {
+	fake.realmMutex.Lock()
+	fake.realmArgsForCall = append(fake.realmArgsForCall, struct{}{})
+	fake.realmMutex.Unlock()
+	if fake.RealmStub != nil {
+		return fake.RealmStub()
 	} else {
-		return fake.shouldAuthenticateReturns.result1
+		return fake.realmReturns.result1
 	}
 }
 
-func (fake *FakePasswordAuthenticator) ShouldAuthenticateCallCount() int {
-	fake.shouldAuthenticateMutex.RLock()
-	defer fake.shouldAuthenticateMutex.RUnlock()
-	return len(fake.shouldAuthenticateArgsForCall)
+func (fake *FakePasswordAuthenticator) RealmCallCount() int {
+	fake.realmMutex.RLock()
+	defer fake.realmMutex.RUnlock()
+	return len(fake.realmArgsForCall)
 }
 
-func (fake *FakePasswordAuthenticator) ShouldAuthenticateArgsForCall(i int) ssh.ConnMetadata {
-	fake.shouldAuthenticateMutex.RLock()
-	defer fake.shouldAuthenticateMutex.RUnlock()
-	return fake.shouldAuthenticateArgsForCall[i].metadata
-}
-
-func (fake *FakePasswordAuthenticator) ShouldAuthenticateReturns(result1 bool) {
-	fake.ShouldAuthenticateStub = nil
-	fake.shouldAuthenticateReturns = struct {
-		result1 bool
+func (fake *FakePasswordAuthenticator) RealmReturns(result1 string) {
+	fake.RealmStub = nil
+	fake.realmReturns = struct {
+		result1 string
 	}{result1}
 }
 

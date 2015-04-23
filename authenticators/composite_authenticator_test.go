@@ -14,20 +14,20 @@ import (
 var _ = Describe("CompositeAuthenticator", func() {
 	Describe("Authenticate", func() {
 		var (
-			authenticator *authenticators.CompositeAuthenticator
-			auths         []authenticators.PasswordAuthenticator
-			metadata      *fake_ssh.FakeConnMetadata
-			password      []byte
+			authenticator    *authenticators.CompositeAuthenticator
+			authenticatorMap map[string]authenticators.PasswordAuthenticator
+			metadata         *fake_ssh.FakeConnMetadata
+			password         []byte
 		)
 
 		BeforeEach(func() {
-			auths = []authenticators.PasswordAuthenticator{}
+			authenticatorMap = map[string]authenticators.PasswordAuthenticator{}
 			metadata = &fake_ssh.FakeConnMetadata{}
 			password = []byte{}
 		})
 
 		JustBeforeEach(func() {
-			authenticator = authenticators.NewCompositeAuthenticator(auths)
+			authenticator = authenticators.NewCompositeAuthenticator(authenticatorMap)
 		})
 
 		Context("when no authenticators are specified", func() {
@@ -37,7 +37,7 @@ var _ = Describe("CompositeAuthenticator", func() {
 			})
 		})
 
-		Context("when one or more authenticator is specified", func() {
+		Context("when one or more authenticators are specified", func() {
 			var (
 				authenticatorOne *fake_authenticators.FakePasswordAuthenticator
 				authenticatorTwo *fake_authenticators.FakePasswordAuthenticator
@@ -46,13 +46,13 @@ var _ = Describe("CompositeAuthenticator", func() {
 			BeforeEach(func() {
 				authenticatorOne = &fake_authenticators.FakePasswordAuthenticator{}
 				authenticatorTwo = &fake_authenticators.FakePasswordAuthenticator{}
-				auths = append(auths, authenticatorOne, authenticatorTwo)
+				authenticatorMap["one"] = authenticatorOne
+				authenticatorMap["two"] = authenticatorOne
 			})
 
-			Context("and the first authenticator is matched by the connection metadata", func() {
+			Context("and the users realm matches the first authenticator", func() {
 				BeforeEach(func() {
-					authenticatorOne.ShouldAuthenticateReturns(true)
-					authenticatorTwo.ShouldAuthenticateReturns(false)
+					metadata.UserReturns("one:garbage")
 				})
 
 				Context("and the authenticator successfully authenticates", func() {
@@ -69,6 +69,15 @@ var _ = Describe("CompositeAuthenticator", func() {
 						Ω(err).ShouldNot(HaveOccurred())
 						Ω(perms).Should(Equal(permissions))
 					})
+
+					It("should provide the metadata to the authenticator", func() {
+						_, err := authenticator.Authenticate(metadata, password)
+						Ω(err).ShouldNot(HaveOccurred())
+						m, p := authenticatorOne.AuthenticateArgsForCall(0)
+
+						Ω(m).Should(Equal(metadata))
+						Ω(p).Should(Equal(password))
+					})
 				})
 
 				Context("and the authenticator fails to authenticate", func() {
@@ -82,40 +91,35 @@ var _ = Describe("CompositeAuthenticator", func() {
 					})
 				})
 
-				It("does not attempt to authenticate with any further authenticators", func() {
+				It("does not attempt to authenticate with any other authenticators", func() {
 					authenticator.Authenticate(metadata, password)
-					Ω(authenticatorTwo.ShouldAuthenticateCallCount()).Should(Equal(0))
 					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
 				})
 			})
 
-			Context("and the second authenticator fails to match the connection metadata", func() {
+			Context("and the user realm is not valid", func() {
 				BeforeEach(func() {
-					authenticatorOne.ShouldAuthenticateReturns(false)
-					authenticatorTwo.ShouldAuthenticateReturns(true)
-				})
-
-				It("attempts to authenticate with the second authenticator", func() {
-					authenticator.Authenticate(metadata, password)
-					Ω(authenticatorOne.ShouldAuthenticateCallCount()).Should(Equal(1))
-					Ω(authenticatorOne.AuthenticateCallCount()).Should(Equal(0))
-					Ω(authenticatorTwo.ShouldAuthenticateCallCount()).Should(Equal(1))
-					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(1))
-				})
-			})
-
-			Context("and no authenticators are matched by the connection metadata", func() {
-				BeforeEach(func() {
-					authenticatorOne.ShouldAuthenticateReturns(false)
-					authenticatorTwo.ShouldAuthenticateReturns(false)
+					metadata.UserReturns("one")
 				})
 
 				It("fails to authenticate", func() {
 					_, err := authenticator.Authenticate(metadata, password)
 
 					Ω(err).Should(MatchError("Invalid credentials"))
-					Ω(authenticatorOne.ShouldAuthenticateCallCount()).Should(Equal(1))
-					Ω(authenticatorTwo.ShouldAuthenticateCallCount()).Should(Equal(1))
+					Ω(authenticatorOne.AuthenticateCallCount()).Should(Equal(0))
+					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
+				})
+			})
+
+			Context("and the user realm does not match any authenticators", func() {
+				BeforeEach(func() {
+					metadata.UserReturns("jim:")
+				})
+
+				It("fails to authenticate", func() {
+					_, err := authenticator.Authenticate(metadata, password)
+
+					Ω(err).Should(MatchError("Invalid credentials"))
 					Ω(authenticatorOne.AuthenticateCallCount()).Should(Equal(0))
 					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
 				})

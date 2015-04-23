@@ -228,25 +228,9 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		})
 	})
 
-	Describe("ShouldAuthenticate", func() {
-		Context("when the user metadata begins with the appropriate prefix", func() {
-			BeforeEach(func() {
-				metadata.UserReturns("diego:some-guid/0")
-			})
-
-			It("returns true", func() {
-				Ω(authenticator.ShouldAuthenticate(metadata)).Should(BeTrue())
-			})
-		})
-
-		Context("when the user metadata does not begin with the appropriate prefix", func() {
-			BeforeEach(func() {
-				metadata.UserReturns("cf:some-guid/0")
-			})
-
-			It("returns false", func() {
-				Ω(authenticator.ShouldAuthenticate(metadata)).Should(BeFalse())
-			})
+	Describe("Realm", func() {
+		It("is diego", func() {
+			Ω(authenticator.Realm()).Should(Equal("diego"))
 		})
 	})
 })

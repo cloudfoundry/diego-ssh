@@ -15,13 +15,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const DIEGO_REALM = "diego"
+
 type DiegoProxyAuthenticator struct {
 	logger         lager.Logger
 	receptorCreds  []byte
 	receptorClient receptor.Client
 }
 
-var UserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.*)/(\d+)`)
+var UserRegex *regexp.Regexp = regexp.MustCompile(DIEGO_REALM + `:(.*)/(\d+)`)
 
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
@@ -39,11 +41,8 @@ func NewDiegoProxyAuthenticator(
 	}
 }
 
-func (dpa *DiegoProxyAuthenticator) ShouldAuthenticate(metadata ssh.ConnMetadata) bool {
-	if !UserRegex.MatchString(metadata.User()) {
-		return false
-	}
-	return true
+func (dpa *DiegoProxyAuthenticator) Realm() string {
+	return DIEGO_REALM
 }
 
 func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
@@ -51,7 +50,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 	logger.Info("authentication-starting")
 	defer logger.Info("authentication-finished")
 
-	if !dpa.ShouldAuthenticate(metadata) {
+	if !UserRegex.MatchString(metadata.User()) {
 		logger.Error("regex-match-fail", InvalidDomainErr)
 		return nil, InvalidDomainErr
 	}
