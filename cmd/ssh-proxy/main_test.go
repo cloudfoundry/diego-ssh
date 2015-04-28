@@ -36,6 +36,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint string
 		diegoAPIURL        string
 		ccAPIURL           string
+		cfOnly             bool
 	)
 
 	BeforeEach(func() {
@@ -49,7 +50,9 @@ var _ = Describe("SSH proxy", func() {
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
 		diegoAPIURL = fakeReceptor.URL()
+
 		ccAPIURL = ""
+		cfOnly = false
 	})
 
 	JustBeforeEach(func() {
@@ -58,6 +61,7 @@ var _ = Describe("SSH proxy", func() {
 			HostKey:     hostKey,
 			DiegoAPIURL: diegoAPIURL,
 			CCAPIURL:    ccAPIURL,
+			CFOnly:      cfOnly,
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -412,6 +416,18 @@ var _ = Describe("SSH proxy", func() {
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
+			})
+
+			Context("and the cf-only flag is set", func() {
+				BeforeEach(func() {
+					cfOnly = true
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(0))
 				})
 			})
 		})

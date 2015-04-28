@@ -12,14 +12,21 @@ type Args struct {
 	HostKey     string
 	DiegoAPIURL string
 	CCAPIURL    string
+	CFOnly      bool
 }
 
 func (args Args) ArgSlice() []string {
+	cfOnlyArg := ""
+	if args.CFOnly {
+		cfOnlyArg = "-cfOnly"
+	}
+
 	return []string{
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
 		"-diegoAPIURL=" + args.DiegoAPIURL,
 		"-ccAPIURL=" + args.CCAPIURL,
+		cfOnlyArg,
 	}
 }
 
