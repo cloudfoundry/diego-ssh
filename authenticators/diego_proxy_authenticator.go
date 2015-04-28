@@ -23,7 +23,7 @@ type DiegoProxyAuthenticator struct {
 	receptorClient receptor.Client
 }
 
-var UserRegex *regexp.Regexp = regexp.MustCompile(DIEGO_REALM + `:(.*)/(\d+)`)
+var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(DIEGO_REALM + `:(.*)/(\d+)`)
 
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
@@ -50,7 +50,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 	logger.Info("authentication-starting")
 	defer logger.Info("authentication-finished")
 
-	if !UserRegex.MatchString(metadata.User()) {
+	if !DiegoUserRegex.MatchString(metadata.User()) {
 		logger.Error("regex-match-fail", InvalidDomainErr)
 		return nil, InvalidDomainErr
 	}
@@ -60,7 +60,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, InvalidCredentialsErr
 	}
 
-	guidAndIndex := UserRegex.FindStringSubmatch(metadata.User())
+	guidAndIndex := DiegoUserRegex.FindStringSubmatch(metadata.User())
 
 	processGuid := guidAndIndex[1]
 	index, err := strconv.Atoi(guidAndIndex[2])
@@ -69,28 +69,33 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	actual, err := dpa.receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
+	permissions, err := sshPermissionsFromProcess(processGuid, index, dpa.receptorClient)
 	if err != nil {
-		logger.Error("get-actual-lrp-failed", err)
+		logger.Error("building-ssh-permissions-failed", err)
+	}
+	return permissions, err
+}
+
+func sshPermissionsFromProcess(processGuid string, index int, receptorClient receptor.Client) (*ssh.Permissions, error) {
+	actual, err := receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
+	if err != nil {
 		return nil, err
 	}
 
-	desired, err := dpa.receptorClient.GetDesiredLRP(processGuid)
+	desired, err := receptorClient.GetDesiredLRP(processGuid)
 	if err != nil {
-		logger.Error("get-desired-lrp-failed", err)
 		return nil, err
 	}
 
 	sshRoute, err := getRoutingInfo(&desired)
 	if err != nil {
-		logger.Error("get-routing-info-failed", err)
 		return nil, err
 	}
 
-	return dpa.createPermissions(sshRoute, &actual)
+	return createPermissions(sshRoute, &actual)
 }
 
-func (dpa *DiegoProxyAuthenticator) createPermissions(
+func createPermissions(
 	sshRoute *routes.SSHRoute,
 	actual *receptor.ActualLRPResponse,
 ) (*ssh.Permissions, error) {

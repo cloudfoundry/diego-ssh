@@ -11,6 +11,7 @@ type Args struct {
 	Address     string
 	HostKey     string
 	DiegoAPIURL string
+	CCAPIURL    string
 }
 
 func (args Args) ArgSlice() []string {
@@ -18,6 +19,7 @@ func (args Args) ArgSlice() []string {
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
 		"-diegoAPIURL=" + args.DiegoAPIURL,
+		"-ccAPIURL=" + args.CCAPIURL,
 	}
 }
 

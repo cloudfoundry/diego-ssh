@@ -5,9 +5,11 @@ import (
 	"flag"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
+	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
@@ -35,6 +37,18 @@ var diegoAPIURL = flag.String(
 	"diegoAPIURL",
 	"",
 	"URL of diego API",
+)
+
+var ccAPIURL = flag.String(
+	"ccAPIURL",
+	"",
+	"URL of Cloud Controller API",
+)
+
+var communicationTimeout = flag.Duration(
+	"communicationTimeout",
+	10*time.Second,
+	"Timeout applied to all HTTP requests.",
 )
 
 func main() {
@@ -79,6 +93,8 @@ func main() {
 }
 
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
+	cf_http.Initialize(*communicationTimeout)
+
 	if *diegoAPIURL == "" {
 		err := errors.New("diegoAPIURL is required")
 		logger.Fatal("diego-api-url-required", err)
@@ -87,6 +103,11 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	url, err := url.Parse(*diegoAPIURL)
 	if err != nil {
 		logger.Fatal("failed-to-parse-diego-api-url", err)
+	}
+
+	_, err = url.Parse(*ccAPIURL)
+	if *ccAPIURL != "" && err != nil {
+		logger.Fatal("failed-to-parse-cc-api-url", err)
 	}
 
 	var diegoCreds string
@@ -99,6 +120,13 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	authenticatorMap := map[string]authenticators.PasswordAuthenticator{
 		diegoAuthenticator.Realm(): diegoAuthenticator,
 	}
+
+	if *ccAPIURL != "" {
+		ccClient := cf_http.NewClient()
+		cfAuthenticator := authenticators.NewCFAuthenticator(logger, ccClient, *ccAPIURL, receptorClient)
+		authenticatorMap[cfAuthenticator.Realm()] = cfAuthenticator
+	}
+
 	authenticator := authenticators.NewCompositeAuthenticator(authenticatorMap)
 
 	sshConfig := &ssh.ServerConfig{

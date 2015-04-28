@@ -190,39 +190,39 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
 				password = []byte("receptor-user:receptor-password")
+			})
 
-				Context("when the desired LRP does not include routes", func() {
-					BeforeEach(func() {
-						desiredLRPResponse.Routes = nil
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
-
-					It("fails the authentication", func() {
-						Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
-					})
+			Context("when the desired LRP does not include routes", func() {
+				BeforeEach(func() {
+					desiredLRPResponse.Routes = nil
+					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 				})
 
-				Context("when the desired LRP does not include an SSH route", func() {
-					BeforeEach(func() {
-						delete(desiredLRPResponse.Routes, routes.DIEGO_SSH)
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
+				It("fails the authentication", func() {
+					Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
+				})
+			})
 
-					It("fails the authentication", func() {
-						Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
-					})
+			Context("when the desired LRP does not include an SSH route", func() {
+				BeforeEach(func() {
+					delete(desiredLRPResponse.Routes, routes.DIEGO_SSH)
+					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 				})
 
-				Context("when the ssh route fails to unmarshal", func() {
-					BeforeEach(func() {
-						message := json.RawMessage([]byte(`{,:`))
-						desiredLRPResponse.Routes[routes.DIEGO_SSH] = &message
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
+				It("fails the authentication", func() {
+					Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
+				})
+			})
 
-					It("fails the authentication", func() {
-						Ω(authErr).Should(HaveOccurred())
-					})
+			Context("when the ssh route fails to unmarshal", func() {
+				BeforeEach(func() {
+					message := json.RawMessage([]byte(`{,:`))
+					desiredLRPResponse.Routes[routes.DIEGO_SSH] = &message
+					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
+				})
+
+				It("fails the authentication", func() {
+					Ω(authErr).Should(HaveOccurred())
 				})
 			})
 		})

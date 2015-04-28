@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
@@ -34,6 +35,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKey            string
 		hostKeyFingerprint string
 		diegoAPIURL        string
+		ccAPIURL           string
 	)
 
 	BeforeEach(func() {
@@ -47,6 +49,7 @@ var _ = Describe("SSH proxy", func() {
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
 		diegoAPIURL = fakeReceptor.URL()
+		ccAPIURL = ""
 	})
 
 	JustBeforeEach(func() {
@@ -54,6 +57,7 @@ var _ = Describe("SSH proxy", func() {
 			Address:     address,
 			HostKey:     hostKey,
 			DiegoAPIURL: diegoAPIURL,
+			CCAPIURL:    ccAPIURL,
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -108,19 +112,77 @@ var _ = Describe("SSH proxy", func() {
 				Ω(runner).ShouldNot(gexec.Exit(0))
 			})
 		})
+
+		Context("when the cc URL cannot be parsed", func() {
+			BeforeEach(func() {
+				ccAPIURL = ":://goober-swallow#yuck"
+			})
+
+			It("reports the problem and terminates", func() {
+				Ω(runner).Should(gbytes.Say("failed-to-parse-cc-api-url"))
+				Ω(runner).ShouldNot(gexec.Exit(0))
+			})
+		})
 	})
 
 	Describe("execution", func() {
-		var clientConfig *ssh.ClientConfig
+		var (
+			clientConfig *ssh.ClientConfig
+			processGuid  string
+		)
 
 		BeforeEach(func() {
+			processGuid = "process-guid"
 			clientConfig = &ssh.ClientConfig{
-				User: "diego:process-guid/0",
+				User: "user",
 				Auth: []ssh.AuthMethod{ssh.Password("")},
 			}
 		})
 
 		JustBeforeEach(func() {
+			sshRoute := routes.SSHRoute{
+				ContainerPort:   9999,
+				PrivateKey:      privateKeyPem,
+				HostFingerprint: hostKeyFingerprint,
+			}
+
+			sshRoutePayload, err := json.Marshal(sshRoute)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			diegoSSHRouteMessage := json.RawMessage(sshRoutePayload)
+
+			desiredLRP := receptor.DesiredLRPResponse{
+				ProcessGuid: processGuid,
+				Instances:   1,
+				Routes: receptor.RoutingInfo{
+					routes.DIEGO_SSH: &diegoSSHRouteMessage,
+				},
+			}
+
+			actualLRP := receptor.ActualLRPResponse{
+				ProcessGuid:  processGuid,
+				Index:        0,
+				InstanceGuid: "some-instance-guid",
+				Address:      "127.0.0.1",
+				Ports: []receptor.PortMapping{
+					{ContainerPort: 9999, HostPort: uint16(sshdPort)},
+				},
+			}
+
+			fakeReceptor.RouteToHandler("GET", "/v1/desired_lrps/"+processGuid,
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v1/desired_lrps/"+processGuid),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, desiredLRP),
+				),
+			)
+
+			fakeReceptor.RouteToHandler("GET", "/v1/actual_lrps/"+processGuid+"/index/0",
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/v1/actual_lrps/"+processGuid+"/index/0"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
+				),
+			)
+
 			Ω(process).ShouldNot(BeNil())
 		})
 
@@ -146,105 +208,211 @@ var _ = Describe("SSH proxy", func() {
 			})
 		})
 
-		Context("when the client authenticates with the right data", func() {
+		Context("when the client uses the cf realm", func() {
+			var fakeCC *ghttp.Server
+
 			BeforeEach(func() {
-				sshRoute := routes.SSHRoute{
-					ContainerPort:   9999,
-					PrivateKey:      privateKeyPem,
-					HostFingerprint: hostKeyFingerprint,
+				processGuid = "app-guid-app-version"
+
+				clientConfig = &ssh.ClientConfig{
+					User: "cf:app-guid/0",
+					Auth: []ssh.AuthMethod{ssh.Password("bearer token")},
 				}
 
-				sshRoutePayload, err := json.Marshal(sshRoute)
-				Ω(err).ShouldNot(HaveOccurred())
+				fakeCC = ghttp.NewServer()
+				ccAPIURL = fakeCC.URL()
 
-				diegoSSHRouteMessage := json.RawMessage(sshRoutePayload)
-
-				desiredLRP := receptor.DesiredLRPResponse{
-					ProcessGuid: "process-guid",
-					Instances:   1,
-					Routes: receptor.RoutingInfo{
-						routes.DIEGO_SSH: &diegoSSHRouteMessage,
+				ccAppResponse := authenticators.AppResponse{
+					Entity: authenticators.AppEntity{
+						Version:  "app-version",
+						AllowSSH: true,
+						Diego:    true,
+					},
+					Metadata: authenticators.AppMetadata{
+						Guid: "app-guid",
 					},
 				}
 
-				actualLRP := receptor.ActualLRPResponse{
-					ProcessGuid:  "process-guid",
-					Index:        0,
-					InstanceGuid: "some-instance-guid",
-					Address:      "127.0.0.1",
-					Ports: []receptor.PortMapping{
-						{ContainerPort: 9999, HostPort: uint16(sshdPort)},
-					},
+				fakeCC.RouteToHandler("GET", "/v2/apps/app-guid",
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/v2/apps/app-guid"),
+						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, ccAppResponse),
+					),
+				)
+			})
+
+			Context("when the client authenticates with the right data", func() {
+				It("acquires the lrp info from the receptor", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					client.Close()
+
+					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
+				})
+
+				It("connects to the target daemon", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					session, err := client.NewSession()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					output, err := session.Output("echo -n hello")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(output)).Should(Equal("hello"))
+				})
+			})
+
+			Context("when the app-guid does not exist in cc", func() {
+				BeforeEach(func() {
+					clientConfig.User = "cf:bad-app-guid/0"
+
+					fakeCC.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/apps/bad-app-guid"),
+							ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+						),
+					)
+				})
+
+				It("attempts to acquire the app info from cc", func() {
+					ssh.Dial("tcp", address, clientConfig)
+					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
+			})
+
+			Context("when the instance index does not exist", func() {
+				BeforeEach(func() {
+					clientConfig.User = "cf:bad-app-guid/0"
+
+					ccAppResponse := authenticators.AppResponse{
+						Entity: authenticators.AppEntity{
+							Version:  "app-version",
+							AllowSSH: true,
+							Diego:    true,
+						},
+						Metadata: authenticators.AppMetadata{
+							Guid: "bad-app-guid",
+						},
+					}
+
+					fakeCC.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v2/apps/bad-app-guid"),
+							ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+							ghttp.RespondWithJSONEncoded(http.StatusOK, ccAppResponse),
+						),
+					)
+
+					fakeReceptor.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v1/actual_lrps/bad-app-guid-app-version/index/0"),
+							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+						),
+					)
+				})
+
+				It("attempts to acquire the app info from receptor", func() {
+					ssh.Dial("tcp", address, clientConfig)
+					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
+			})
+
+			Context("when the ccAPIURL is not configured", func() {
+				BeforeEach(func() {
+					ccAPIURL = ""
+				})
+
+				It("fails authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
+
+				It("does not attempt to grab the app info from cc", func() {
+					ssh.Dial("tcp", address, clientConfig)
+					Consistently(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+				})
+			})
+		})
+
+		Context("when the client uses the diego realm", func() {
+			BeforeEach(func() {
+				clientConfig = &ssh.ClientConfig{
+					User: "diego:process-guid/0",
+					Auth: []ssh.AuthMethod{ssh.Password("")},
 				}
-
-				fakeReceptor.RouteToHandler("GET", "/v1/desired_lrps/process-guid",
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v1/desired_lrps/process-guid"),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, desiredLRP),
-					),
-				)
-				fakeReceptor.RouteToHandler("GET", "/v1/actual_lrps/process-guid/index/0",
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v1/actual_lrps/process-guid/index/0"),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
-					),
-				)
 			})
 
-			It("acquires the lrp info from the receptor", func() {
-				client, err := ssh.Dial("tcp", address, clientConfig)
-				Ω(err).ShouldNot(HaveOccurred())
+			Context("when the client authenticates with the right data", func() {
+				It("acquires the lrp info from the receptor", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).ShouldNot(HaveOccurred())
 
-				client.Close()
+					client.Close()
 
-				Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
+					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
+				})
+
+				It("connects to the target daemon", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).ShouldNot(HaveOccurred())
+
+					session, err := client.NewSession()
+					Ω(err).ShouldNot(HaveOccurred())
+
+					output, err := session.Output("echo -n hello")
+					Ω(err).ShouldNot(HaveOccurred())
+
+					Ω(string(output)).Should(Equal("hello"))
+				})
 			})
 
-			It("connects to the target daemon", func() {
-				client, err := ssh.Dial("tcp", address, clientConfig)
-				Ω(err).ShouldNot(HaveOccurred())
+			Context("when a client connects with a bad user", func() {
+				BeforeEach(func() {
+					clientConfig.User = "cf-user"
+				})
 
-				session, err := client.NewSession()
-				Ω(err).ShouldNot(HaveOccurred())
-
-				output, err := session.Output("echo -n hello")
-				Ω(err).ShouldNot(HaveOccurred())
-
-				Ω(string(output)).Should(Equal("hello"))
-			})
-		})
-
-		Context("when a client connects with a bad user", func() {
-			BeforeEach(func() {
-				clientConfig.User = "cf-user"
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
 			})
 
-			It("fails the authentication", func() {
-				_, err := ssh.Dial("tcp", address, clientConfig)
-				Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
-			})
-		})
+			Context("when a client uses a bad process guid", func() {
+				BeforeEach(func() {
+					clientConfig.User = "diego:bad-process-guid/0"
 
-		Context("when a client uses a bad process guid", func() {
-			BeforeEach(func() {
-				clientConfig.User = "diego:bad-process-guid/0"
+					fakeReceptor.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/v1/actual_lrps/bad-process-guid/index/0"),
+							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+						),
+					)
+				})
 
-				fakeReceptor.AppendHandlers(
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v1/actual_lrps/bad-process-guid/index/0"),
-						ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
-					),
-				)
-			})
+				It("attempts to acquire the lrp info from the receptor", func() {
+					ssh.Dial("tcp", address, clientConfig)
+					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
+				})
 
-			It("attempts to acquire the lrp info from the receptor", func() {
-				ssh.Dial("tcp", address, clientConfig)
-				Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
-			})
-
-			It("fails the authentication", func() {
-				_, err := ssh.Dial("tcp", address, clientConfig)
-				Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				})
 			})
 		})
 	})
