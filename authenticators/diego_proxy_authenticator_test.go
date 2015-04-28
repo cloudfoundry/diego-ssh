@@ -39,7 +39,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		}
 
 		diegoSSHRoutePayload, err := json.Marshal(expectedRoute)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		diegoSSHRouteMessage := json.RawMessage(diegoSSHRoutePayload)
 
@@ -95,7 +95,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("authenticates the password against the receptor user:password", func() {
-					Ω(authErr).ShouldNot(HaveOccurred())
+					Expect(authErr).NotTo(HaveOccurred())
 				})
 			})
 
@@ -105,7 +105,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("fails the authentication", func() {
-					Ω(authErr).Should(MatchError("Invalid authentication domain"))
+					Expect(authErr).To(MatchError("Invalid authentication domain"))
 				})
 			})
 
@@ -116,7 +116,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("fails the authentication", func() {
-					Ω(authErr).Should(MatchError("Invalid credentials"))
+					Expect(authErr).To(MatchError("Invalid credentials"))
 				})
 			})
 		})
@@ -128,16 +128,16 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			})
 
 			It("gets information about the desired lrp referenced in the username", func() {
-				Ω(receptorClient.GetDesiredLRPCallCount()).Should(Equal(1))
-				Ω(receptorClient.GetDesiredLRPArgsForCall(0)).Should(Equal("some-guid"))
+				Expect(receptorClient.GetDesiredLRPCallCount()).To(Equal(1))
+				Expect(receptorClient.GetDesiredLRPArgsForCall(0)).To(Equal("some-guid"))
 			})
 
 			It("gets information about the the actual lrp from the username", func() {
-				Ω(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).Should(Equal(1))
+				Expect(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).To(Equal(1))
 
 				guid, index := receptorClient.ActualLRPByProcessGuidAndIndexArgsForCall(0)
-				Ω(guid).Should(Equal("some-guid"))
-				Ω(index).Should(Equal(0))
+				Expect(guid).To(Equal("some-guid"))
+				Expect(index).To(Equal(0))
 			})
 
 			It("saves container information in the critical options of the permissions", func() {
@@ -149,9 +149,9 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 					"password": "password"
 				}`
 
-				Ω(permissions).ShouldNot(BeNil())
-				Ω(permissions.CriticalOptions).ShouldNot(BeNil())
-				Ω(permissions.CriticalOptions["proxy-target-config"]).Should(MatchJSON(expectedConfig))
+				Expect(permissions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
 			})
 
 			Context("when getting the desired LRP information fails", func() {
@@ -160,7 +160,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("returns the error", func() {
-					Ω(authErr).Should(Equal(&receptor.Error{}))
+					Expect(authErr).To(Equal(&receptor.Error{}))
 				})
 			})
 
@@ -170,7 +170,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("returns the error", func() {
-					Ω(authErr).Should(Equal(&receptor.Error{}))
+					Expect(authErr).To(Equal(&receptor.Error{}))
 				})
 			})
 
@@ -181,7 +181,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("returns an empty permission reference", func() {
-					Ω(permissions).Should(Equal(&ssh.Permissions{}))
+					Expect(permissions).To(Equal(&ssh.Permissions{}))
 				})
 			})
 		})
@@ -199,7 +199,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("fails the authentication", func() {
-					Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
+					Expect(authErr).To(Equal(authenticators.RouteNotFoundErr))
 				})
 			})
 
@@ -210,7 +210,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("fails the authentication", func() {
-					Ω(authErr).Should(Equal(authenticators.RouteNotFoundErr))
+					Expect(authErr).To(Equal(authenticators.RouteNotFoundErr))
 				})
 			})
 
@@ -222,7 +222,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 				})
 
 				It("fails the authentication", func() {
-					Ω(authErr).Should(HaveOccurred())
+					Expect(authErr).To(HaveOccurred())
 				})
 			})
 		})
@@ -230,7 +230,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 	Describe("Realm", func() {
 		It("is diego", func() {
-			Ω(authenticator.Realm()).Should(Equal("diego"))
+			Expect(authenticator.Realm()).To(Equal("diego"))
 		})
 	})
 })

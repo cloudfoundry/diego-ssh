@@ -11,13 +11,13 @@ type FakePublicKey struct {
 	TypeStub        func() string
 	typeMutex       sync.RWMutex
 	typeArgsForCall []struct{}
-	typeReturns struct {
+	typeReturns     struct {
 		result1 string
 	}
 	MarshalStub        func() []byte
 	marshalMutex       sync.RWMutex
 	marshalArgsForCall []struct{}
-	marshalReturns struct {
+	marshalReturns     struct {
 		result1 []byte
 	}
 	VerifyStub        func(data []byte, sig *ssh.Signature) error

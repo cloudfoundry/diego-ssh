@@ -22,7 +22,7 @@ type FakePasswordAuthenticator struct {
 	RealmStub        func() string
 	realmMutex       sync.RWMutex
 	realmArgsForCall []struct{}
-	realmReturns struct {
+	realmReturns     struct {
 		result1 string
 	}
 }

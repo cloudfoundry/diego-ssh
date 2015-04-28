@@ -37,8 +37,8 @@ var _ = Describe("Copy", func() {
 		})
 
 		It("copies from source to target", func() {
-			Ω(fakeWriter.WriteCallCount()).Should(Equal(1))
-			Ω(string(fakeWriter.WriteArgsForCall(0))).Should(Equal("message"))
+			Expect(fakeWriter.WriteCallCount()).To(Equal(1))
+			Expect(string(fakeWriter.WriteArgsForCall(0))).To(Equal("message"))
 		})
 
 		Context("when a wait group is provided", func() {
@@ -69,12 +69,12 @@ var _ = Describe("Copy", func() {
 		})
 
 		It("copies from source to target", func() {
-			Ω(fakeWriteCloser.WriteCallCount()).Should(Equal(1))
-			Ω(string(fakeWriteCloser.WriteArgsForCall(0))).Should(Equal("message"))
+			Expect(fakeWriteCloser.WriteCallCount()).To(Equal(1))
+			Expect(string(fakeWriteCloser.WriteArgsForCall(0))).To(Equal("message"))
 		})
 
 		It("closes the target when the copy is complete", func() {
-			Ω(fakeWriteCloser.CloseCallCount()).Should(Equal(1))
+			Expect(fakeWriteCloser.CloseCallCount()).To(Equal(1))
 		})
 
 		Context("when a wait group is provided", func() {

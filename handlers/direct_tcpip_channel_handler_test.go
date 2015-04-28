@@ -48,7 +48,7 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		}
 
 		echoListener, err := net.Listen("tcp", "127.0.0.1:0")
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		echoAddress = echoListener.Addr().String()
 
 		echoServer = server.NewServer(logger.Session("echo"), "", echoHandler)
@@ -91,7 +91,7 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		JustBeforeEach(func() {
 			var dialErr error
 			conn, dialErr = client.Dial("tcp", echoAddress)
-			Ω(dialErr).ShouldNot(HaveOccurred())
+			Expect(dialErr).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -99,11 +99,11 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		})
 
 		It("dials the the target from the remote end", func() {
-			Ω(testDialer.DialCallCount()).Should(Equal(1))
+			Expect(testDialer.DialCallCount()).To(Equal(1))
 
 			net, addr := testDialer.DialArgsForCall(0)
-			Ω(net).Should(Equal("tcp"))
-			Ω(addr).Should(Equal(echoAddress))
+			Expect(net).To(Equal("tcp"))
+			Expect(addr).To(Equal(echoAddress))
 		})
 
 		It("copies data between the local and target connections", func() {
@@ -114,9 +114,9 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 			writer.Flush()
 
 			data, err := reader.ReadString('\n')
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(data).Should(Equal("Hello, World!\n"))
+			Expect(data).To(Equal("Hello, World!\n"))
 		})
 
 		Describe("channel close coordination", func() {
@@ -146,7 +146,7 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 				It("the handler returns", func() {
 					Consistently(completed).ShouldNot(Receive())
 
-					Ω(echoHandler.HandleConnectionCallCount()).Should(Equal(1))
+					Expect(echoHandler.HandleConnectionCallCount()).To(Equal(1))
 					echoConn := echoHandler.HandleConnectionArgsForCall(0)
 					echoConn.Close()
 
@@ -159,10 +159,11 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 	Context("when the direct-tcpip extra data fails to unmarshal", func() {
 		It("rejects the open channel request", func() {
 			_, _, err := client.OpenChannel("direct-tcpip", ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
-			Ω(err).Should(Equal(&ssh.OpenChannelError{
+			Expect(err).To(Equal(&ssh.OpenChannelError{
 				Reason:  ssh.ConnectionFailed,
 				Message: "Failed to parse open channel message",
 			}))
+
 		})
 	})
 
@@ -175,10 +176,11 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 
 		It("rejects the open channel request", func() {
 			_, err := client.Dial("tcp", echoAddress)
-			Ω(err).Should(Equal(&ssh.OpenChannelError{
+			Expect(err).To(Equal(&ssh.OpenChannelError{
 				Reason:  ssh.ConnectionFailed,
 				Message: "woops",
 			}))
+
 		})
 	})
 
@@ -193,10 +195,10 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 
 		BeforeEach(func() {
 			addr, port, err := net.SplitHostPort(echoAddress)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			p, err := strconv.ParseUint(port, 10, 16)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			directTcpipMessage.TargetAddr = addr
 			directTcpipMessage.TargetPort = uint32(p)
@@ -204,11 +206,11 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 
 		It("rejects the requests", func() {
 			channel, _, err := client.OpenChannel("direct-tcpip", ssh.Marshal(directTcpipMessage))
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			accepted, err := channel.SendRequest("something", true, nil)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(accepted).Should(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(accepted).To(BeFalse())
 
 			channel.Close()
 		})

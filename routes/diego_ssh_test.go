@@ -39,9 +39,9 @@ var _ = Describe("Diego SSH Route", func() {
 
 			It("marshals the structure correctly", func() {
 				payload, err := json.Marshal(route)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(payload).Should(MatchJSON(expectedJson))
+				Expect(payload).To(MatchJSON(expectedJson))
 			})
 		})
 
@@ -61,9 +61,9 @@ var _ = Describe("Diego SSH Route", func() {
 
 			It("marshals the structure correctly", func() {
 				payload, err := json.Marshal(route)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(payload).Should(MatchJSON(expectedJson))
+				Expect(payload).To(MatchJSON(expectedJson))
 			})
 		})
 	})
@@ -71,13 +71,13 @@ var _ = Describe("Diego SSH Route", func() {
 	Describe("Round Trip Marshalling", func() {
 		It("successfully marshals and unmarshals", func() {
 			payload, err := json.Marshal(route)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			var result routes.SSHRoute
 			err = json.Unmarshal(payload, &result)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(result).Should(Equal(route))
+			Expect(result).To(Equal(route))
 		})
 	})
 })

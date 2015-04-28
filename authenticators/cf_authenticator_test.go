@@ -97,7 +97,7 @@ var _ = Describe("CFAuthenticator", func() {
 			}
 
 			diegoSSHRoutePayload, err := json.Marshal(expectedRoute)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			diegoSSHRouteMessage := json.RawMessage(diegoSSHRoutePayload)
 
@@ -130,8 +130,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidRequestErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidRequestErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -141,8 +141,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidCredentialsErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -152,8 +152,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidCredentialsErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -163,8 +163,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidCredentialsErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -174,8 +174,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidCredentialsErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -185,28 +185,28 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidDomainErr))
+					Expect(err).To(Equal(authenticators.InvalidDomainErr))
 				})
 			})
 		})
 
 		Context("when a client has valid username and password", func() {
 			It("fetches the app from CC using the bearer token", func() {
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 			})
 
 			It("gets information about the desired lrp referenced in the username", func() {
-				Ω(receptorClient.GetDesiredLRPCallCount()).Should(Equal(1))
-				Ω(receptorClient.GetDesiredLRPArgsForCall(0)).Should(Equal("app-guid-app-version"))
+				Expect(receptorClient.GetDesiredLRPCallCount()).To(Equal(1))
+				Expect(receptorClient.GetDesiredLRPArgsForCall(0)).To(Equal("app-guid-app-version"))
 			})
 
 			It("gets information about the the actual lrp from the username", func() {
-				Ω(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).Should(Equal(1))
+				Expect(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).To(Equal(1))
 
 				guid, index := receptorClient.ActualLRPByProcessGuidAndIndexArgsForCall(0)
-				Ω(guid).Should(Equal("app-guid-app-version"))
-				Ω(index).Should(Equal(1))
+				Expect(guid).To(Equal("app-guid-app-version"))
+				Expect(index).To(Equal(1))
 			})
 
 			It("saves container information in the critical options of the permissions", func() {
@@ -218,9 +218,9 @@ var _ = Describe("CFAuthenticator", func() {
 								"password": "password"
 							}`
 
-				Ω(permissions).ShouldNot(BeNil())
-				Ω(permissions.CriticalOptions).ShouldNot(BeNil())
-				Ω(permissions.CriticalOptions["proxy-target-config"]).Should(MatchJSON(expectedConfig))
+				Expect(permissions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
 			})
 
 			Context("and fetching the app from cc returns a non-200 status code", func() {
@@ -230,8 +230,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.FetchAppFailedErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(err).To(Equal(authenticators.FetchAppFailedErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 			})
 
@@ -241,8 +241,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails authentication", func() {
-					Ω(err).Should(Equal(authenticators.NotDiegoErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(err).To(Equal(authenticators.NotDiegoErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 			})
 
@@ -252,8 +252,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails authentication", func() {
-					Ω(err).Should(Equal(authenticators.SSHDisabledErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(err).To(Equal(authenticators.SSHDisabledErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 			})
 
@@ -267,8 +267,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidCCResponse))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(err).To(Equal(authenticators.InvalidCCResponse))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 			})
 
@@ -281,8 +281,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(BeAssignableToTypeOf(&url.Error{}))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 			})
 
@@ -292,8 +292,8 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("fails to authenticate", func() {
-					Ω(err).Should(Equal(authenticators.InvalidRequestErr))
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(Equal(authenticators.InvalidRequestErr))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -303,7 +303,7 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("returns the error", func() {
-					Ω(err).Should(Equal(&receptor.Error{}))
+					Expect(err).To(Equal(&receptor.Error{}))
 				})
 			})
 
@@ -313,7 +313,7 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("returns the error", func() {
-					Ω(err).Should(Equal(&receptor.Error{}))
+					Expect(err).To(Equal(&receptor.Error{}))
 				})
 			})
 
@@ -324,7 +324,7 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 
 				It("returns an empty permission reference", func() {
-					Ω(permissions).Should(Equal(&ssh.Permissions{}))
+					Expect(permissions).To(Equal(&ssh.Permissions{}))
 				})
 			})
 
@@ -336,7 +336,7 @@ var _ = Describe("CFAuthenticator", func() {
 					})
 
 					It("fails the authentication", func() {
-						Ω(err).Should(Equal(authenticators.RouteNotFoundErr))
+						Expect(err).To(Equal(authenticators.RouteNotFoundErr))
 					})
 				})
 
@@ -347,7 +347,7 @@ var _ = Describe("CFAuthenticator", func() {
 					})
 
 					It("fails the authentication", func() {
-						Ω(err).Should(Equal(authenticators.RouteNotFoundErr))
+						Expect(err).To(Equal(authenticators.RouteNotFoundErr))
 					})
 				})
 
@@ -359,7 +359,7 @@ var _ = Describe("CFAuthenticator", func() {
 					})
 
 					It("fails the authentication", func() {
-						Ω(err).Should(HaveOccurred())
+						Expect(err).To(HaveOccurred())
 					})
 				})
 			})
@@ -368,7 +368,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 	Describe("Realm", func() {
 		It("is cf", func() {
-			Ω(authenticator.Realm()).Should(Equal("cf"))
+			Expect(authenticator.Realm()).To(Equal("cf"))
 		})
 	})
 })

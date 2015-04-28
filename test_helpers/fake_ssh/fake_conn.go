@@ -12,37 +12,37 @@ type FakeConn struct {
 	UserStub        func() string
 	userMutex       sync.RWMutex
 	userArgsForCall []struct{}
-	userReturns struct {
+	userReturns     struct {
 		result1 string
 	}
 	SessionIDStub        func() []byte
 	sessionIDMutex       sync.RWMutex
 	sessionIDArgsForCall []struct{}
-	sessionIDReturns struct {
+	sessionIDReturns     struct {
 		result1 []byte
 	}
 	ClientVersionStub        func() []byte
 	clientVersionMutex       sync.RWMutex
 	clientVersionArgsForCall []struct{}
-	clientVersionReturns struct {
+	clientVersionReturns     struct {
 		result1 []byte
 	}
 	ServerVersionStub        func() []byte
 	serverVersionMutex       sync.RWMutex
 	serverVersionArgsForCall []struct{}
-	serverVersionReturns struct {
+	serverVersionReturns     struct {
 		result1 []byte
 	}
 	RemoteAddrStub        func() net.Addr
 	remoteAddrMutex       sync.RWMutex
 	remoteAddrArgsForCall []struct{}
-	remoteAddrReturns struct {
+	remoteAddrReturns     struct {
 		result1 net.Addr
 	}
 	LocalAddrStub        func() net.Addr
 	localAddrMutex       sync.RWMutex
 	localAddrArgsForCall []struct{}
-	localAddrReturns struct {
+	localAddrReturns     struct {
 		result1 net.Addr
 	}
 	SendRequestStub        func(name string, wantReply bool, payload []byte) (bool, []byte, error)
@@ -71,13 +71,13 @@ type FakeConn struct {
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 	WaitStub        func() error
 	waitMutex       sync.RWMutex
 	waitArgsForCall []struct{}
-	waitReturns struct {
+	waitReturns     struct {
 		result1 error
 	}
 }

@@ -30,13 +30,13 @@ type FakeChannel struct {
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 	CloseWriteStub        func() error
 	closeWriteMutex       sync.RWMutex
 	closeWriteArgsForCall []struct{}
-	closeWriteReturns struct {
+	closeWriteReturns     struct {
 		result1 error
 	}
 	SendRequestStub        func(name string, wantReply bool, payload []byte) (bool, error)
@@ -53,7 +53,7 @@ type FakeChannel struct {
 	StderrStub        func() io.ReadWriter
 	stderrMutex       sync.RWMutex
 	stderrArgsForCall []struct{}
-	stderrReturns struct {
+	stderrReturns     struct {
 		result1 io.ReadWriter
 	}
 }

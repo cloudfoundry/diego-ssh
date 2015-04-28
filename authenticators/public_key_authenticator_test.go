@@ -26,7 +26,7 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 
 	BeforeEach(func() {
 		keyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		privateKey = keyPair.PrivateKey()
 		publicKey = keyPair.PublicKey()
@@ -42,8 +42,8 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 	})
 
 	It("creates an authenticator", func() {
-		Ω(authenticator).ShouldNot(BeNil())
-		Ω(authenticator.PublicKey()).Should(Equal(publicKey))
+		Expect(authenticator).NotTo(BeNil())
+		Expect(authenticator.PublicKey()).To(Equal(publicKey))
 	})
 
 	Describe("Authenticate", func() {
@@ -53,8 +53,8 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 
 		Context("when the public key matches", func() {
 			It("does not return an error", func() {
-				Ω(authnError).ShouldNot(HaveOccurred())
-				Ω(permissions).ShouldNot(BeNil())
+				Expect(authnError).NotTo(HaveOccurred())
+				Expect(permissions).NotTo(BeNil())
 			})
 		})
 
@@ -66,8 +66,8 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 			})
 
 			It("fails the authentication", func() {
-				Ω(authnError).Should(HaveOccurred())
-				Ω(permissions).Should(BeNil())
+				Expect(authnError).To(HaveOccurred())
+				Expect(permissions).To(BeNil())
 			})
 		})
 	})

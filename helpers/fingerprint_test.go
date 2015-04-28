@@ -49,7 +49,7 @@ var _ = Describe("Fingerprint", func() {
 
 	BeforeEach(func() {
 		privateKey, err := ssh.ParsePrivateKey([]byte(TestPrivateKeyPem))
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		publicKey = privateKey.PublicKey()
 	})
@@ -60,11 +60,11 @@ var _ = Describe("Fingerprint", func() {
 		})
 
 		It("should have the correct length", func() {
-			Ω(utf8.RuneCountInString(fingerprint)).Should(Equal(helpers.MD5_FINGERPRINT_LENGTH))
+			Expect(utf8.RuneCountInString(fingerprint)).To(Equal(helpers.MD5_FINGERPRINT_LENGTH))
 		})
 
 		It("should match the expected fingerprint", func() {
-			Ω(fingerprint).Should(Equal(ExpectedMD5Fingerprint))
+			Expect(fingerprint).To(Equal(ExpectedMD5Fingerprint))
 		})
 	})
 
@@ -74,11 +74,11 @@ var _ = Describe("Fingerprint", func() {
 		})
 
 		It("should have the correct length", func() {
-			Ω(utf8.RuneCountInString(fingerprint)).Should(Equal(helpers.SHA1_FINGERPRINT_LENGTH))
+			Expect(utf8.RuneCountInString(fingerprint)).To(Equal(helpers.SHA1_FINGERPRINT_LENGTH))
 		})
 
 		It("should match the expected fingerprint", func() {
-			Ω(fingerprint).Should(Equal(ExpectedSHA1Fingerprint))
+			Expect(fingerprint).To(Equal(ExpectedSHA1Fingerprint))
 		})
 	})
 })

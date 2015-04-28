@@ -19,7 +19,7 @@ func TestDaemon(t *testing.T) {
 var _ = BeforeSuite(func() {
 	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	TestHostKey = hostKey.PrivateKey()
 })

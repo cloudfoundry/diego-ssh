@@ -73,11 +73,11 @@ var _ = Describe("Proxy", func() {
 
 			var err error
 			proxyListener, err = net.Listen("tcp", "127.0.0.1:0")
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			proxyAddress = proxyListener.Addr().String()
 
 			sshdListener, err = net.Listen("tcp", "127.0.0.1:0")
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			daemonAddress = sshdListener.Addr().String()
 
 			daemonTargetConfig = proxy.TargetConfig{
@@ -88,7 +88,7 @@ var _ = Describe("Proxy", func() {
 			}
 
 			targetConfigJson, err := json.Marshal(daemonTargetConfig)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			permissions := &ssh.Permissions{
 				CriticalOptions: map[string]string{
@@ -129,13 +129,13 @@ var _ = Describe("Proxy", func() {
 
 			It("performs a handshake with the client using the proxy server config", func() {
 				_, err := ssh.Dial("tcp", proxyAddress, clientConfig)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(proxyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				Expect(proxyAuthenticator.AuthenticateCallCount()).To(Equal(1))
 
 				metadata, password := proxyAuthenticator.AuthenticateArgsForCall(0)
-				Ω(metadata.User()).Should(Equal("diego:some-instance-guid"))
-				Ω(string(password)).Should(Equal("diego-user:diego-password"))
+				Expect(metadata.User()).To(Equal("diego:some-instance-guid"))
+				Expect(string(password)).To(Equal("diego-user:diego-password"))
 			})
 
 			Context("when the handshake fails", func() {
@@ -145,12 +145,12 @@ var _ = Describe("Proxy", func() {
 
 				JustBeforeEach(func() {
 					_, err := ssh.Dial("tcp", proxyAddress, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed: ssh: unable to authenticate")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed: ssh: unable to authenticate")))
 				})
 
 				It("logs the failure", func() {
 					Eventually(logger).Should(gbytes.Say(`handshake-failed`))
-					Ω(proxyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+					Expect(proxyAuthenticator.AuthenticateCallCount()).To(Equal(1))
 				})
 			})
 
@@ -160,15 +160,15 @@ var _ = Describe("Proxy", func() {
 				JustBeforeEach(func() {
 					var err error
 					client, err = ssh.Dial("tcp", proxyAddress, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("handshakes with the target using the provided configuration", func() {
 					Eventually(daemonAuthenticator.AuthenticateCallCount).Should(Equal(1))
 
 					metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
-					Ω(metadata.User()).Should(Equal("some-user"))
-					Ω(string(password)).Should(Equal("some-password"))
+					Expect(metadata.User()).To(Equal("some-user"))
+					Expect(string(password)).To(Equal("some-password"))
 				})
 
 				Context("when the target contains a host fingerprint", func() {
@@ -180,7 +180,7 @@ var _ = Describe("Proxy", func() {
 								User:            "some-user",
 								Password:        "some-password",
 							})
-							Ω(err).ShouldNot(HaveOccurred())
+							Expect(err).NotTo(HaveOccurred())
 
 							permissions := &ssh.Permissions{
 								CriticalOptions: map[string]string{
@@ -203,7 +203,7 @@ var _ = Describe("Proxy", func() {
 								User:            "some-user",
 								Password:        "some-password",
 							})
-							Ω(err).ShouldNot(HaveOccurred())
+							Expect(err).NotTo(HaveOccurred())
 
 							permissions := &ssh.Permissions{
 								CriticalOptions: map[string]string{
@@ -226,7 +226,7 @@ var _ = Describe("Proxy", func() {
 								User:            "some-user",
 								Password:        "some-password",
 							})
-							Ω(err).ShouldNot(HaveOccurred())
+							Expect(err).NotTo(HaveOccurred())
 
 							permissions := &ssh.Permissions{
 								CriticalOptions: map[string]string{
@@ -303,7 +303,7 @@ var _ = Describe("Proxy", func() {
 					go sshProxy.HandleConnection(fakeServerConnection)
 
 					clientConn, clientChannels, clientRequests, err := ssh.NewClientConn(clientNetConn, "0.0.0.0", clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					client := ssh.NewClient(clientConn, clientChannels, clientRequests)
 					client.Close()
@@ -334,7 +334,7 @@ var _ = Describe("Proxy", func() {
 				JustBeforeEach(func() {
 					var err error
 					client, err = ssh.Dial("tcp", proxyAddress, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				AfterEach(func() {
@@ -354,16 +354,16 @@ var _ = Describe("Proxy", func() {
 
 					It("gets forwarded to the daemon and the response comes back", func() {
 						accepted, response, err := client.SendRequest("test-global-request", true, []byte("request-payload"))
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(accepted).Should(BeTrue())
-						Ω(response).Should(Equal([]byte("response-payload")))
+						Expect(err).NotTo(HaveOccurred())
+						Expect(accepted).To(BeTrue())
+						Expect(response).To(Equal([]byte("response-payload")))
 
-						Ω(globalRequestHandler.HandleRequestCallCount()).Should(Equal(1))
+						Expect(globalRequestHandler.HandleRequestCallCount()).To(Equal(1))
 
 						_, request := globalRequestHandler.HandleRequestArgsForCall(0)
-						Ω(request.Type).Should(Equal("test-global-request"))
-						Ω(request.WantReply).Should(BeTrue())
-						Ω(request.Payload).Should(Equal([]byte("request-payload")))
+						Expect(request.Type).To(Equal("test-global-request"))
+						Expect(request.WantReply).To(BeTrue())
+						Expect(request.Payload).To(Equal([]byte("request-payload")))
 					})
 				})
 
@@ -380,7 +380,7 @@ var _ = Describe("Proxy", func() {
 
 					It("gets forwarded to the daemon", func() {
 						_, _, err := client.OpenChannel("test", nil)
-						Ω(err).Should(Equal(&ssh.OpenChannelError{Reason: ssh.Prohibited, Message: "not now"}))
+						Expect(err).To(Equal(&ssh.OpenChannelError{Reason: ssh.Prohibited, Message: "not now"}))
 					})
 				})
 			})
@@ -401,7 +401,7 @@ var _ = Describe("Proxy", func() {
 				BeforeEach(func() {
 					var err error
 					listener, err = net.Listen("tcp", "127.0.0.1:0")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 					targetAddress = listener.Addr().String()
 
 					connectionHandler = &server_fakes.FakeConnectionHandler{}
@@ -414,7 +414,7 @@ var _ = Describe("Proxy", func() {
 
 					clientNetConn, err := net.Dial("tcp", targetAddress)
 					clientConn, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", &ssh.ClientConfig{})
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				AfterEach(func() {
@@ -427,12 +427,12 @@ var _ = Describe("Proxy", func() {
 							defer GinkgoRecover()
 
 							serverConn, _, _, err := ssh.NewServerConn(conn, daemonSSHConfig)
-							Ω(err).ShouldNot(HaveOccurred())
+							Expect(err).NotTo(HaveOccurred())
 
 							accepted, response, err := serverConn.SendRequest("test", true, []byte("test-data"))
-							Ω(err).ShouldNot(HaveOccurred())
-							Ω(accepted).Should(BeTrue())
-							Ω(response).Should(Equal([]byte("response-data")))
+							Expect(err).NotTo(HaveOccurred())
+							Expect(accepted).To(BeTrue())
+							Expect(response).To(Equal([]byte("response-data")))
 
 							serverConn.Close()
 						}
@@ -452,18 +452,18 @@ var _ = Describe("Proxy", func() {
 							defer GinkgoRecover()
 
 							serverConn, _, _, err := ssh.NewServerConn(conn, daemonSSHConfig)
-							Ω(err).ShouldNot(HaveOccurred())
+							Expect(err).NotTo(HaveOccurred())
 
 							channel, requests, err := serverConn.OpenChannel("test-channel", []byte("extra-data"))
-							Ω(err).ShouldNot(HaveOccurred())
-							Ω(channel).ShouldNot(BeNil())
-							Ω(requests).ShouldNot(BeClosed())
+							Expect(err).NotTo(HaveOccurred())
+							Expect(channel).NotTo(BeNil())
+							Expect(requests).NotTo(BeClosed())
 
 							channel.Write([]byte("hello"))
 
 							channelResponse := make([]byte, 7)
 							channel.Read(channelResponse)
-							Ω(string(channelResponse)).Should(Equal("goodbye"))
+							Expect(string(channelResponse)).To(Equal("goodbye"))
 
 							channel.Close()
 							serverConn.Close()
@@ -474,17 +474,17 @@ var _ = Describe("Proxy", func() {
 						var newChannel ssh.NewChannel
 						Eventually(clientChannels).Should(Receive(&newChannel))
 
-						Ω(newChannel.ChannelType()).Should(Equal("test-channel"))
-						Ω(newChannel.ExtraData()).Should(Equal([]byte("extra-data")))
+						Expect(newChannel.ChannelType()).To(Equal("test-channel"))
+						Expect(newChannel.ExtraData()).To(Equal([]byte("extra-data")))
 
 						channel, requests, err := newChannel.Accept()
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(channel).ShouldNot(BeNil())
-						Ω(requests).ShouldNot(BeClosed())
+						Expect(err).NotTo(HaveOccurred())
+						Expect(channel).NotTo(BeNil())
+						Expect(requests).NotTo(BeClosed())
 
 						channelRequest := make([]byte, 5)
 						channel.Read(channelRequest)
-						Ω(string(channelRequest)).Should(Equal("hello"))
+						Expect(string(channelRequest)).To(Equal("hello"))
 
 						channel.Write([]byte("goodbye"))
 						channel.Close()
@@ -531,14 +531,14 @@ var _ = Describe("Proxy", func() {
 				Consistently(sshConn.SendRequestCallCount).Should(Equal(2))
 
 				reqType, wantReply, payload := sshConn.SendRequestArgsForCall(0)
-				Ω(reqType).Should(Equal("test"))
-				Ω(wantReply).Should(BeFalse())
-				Ω(payload).Should(Equal([]byte("test-data")))
+				Expect(reqType).To(Equal("test"))
+				Expect(wantReply).To(BeFalse())
+				Expect(payload).To(Equal([]byte("test-data")))
 
 				reqType, wantReply, payload = sshConn.SendRequestArgsForCall(1)
-				Ω(reqType).Should(Equal("test"))
-				Ω(wantReply).Should(BeFalse())
-				Ω(payload).Should(Equal([]byte("test-data")))
+				Expect(reqType).To(Equal("test"))
+				Expect(wantReply).To(BeFalse())
+				Expect(payload).To(Equal([]byte("test-data")))
 			})
 		})
 
@@ -641,8 +641,8 @@ var _ = Describe("Proxy", func() {
 				Consistently(targetConn.OpenChannelCallCount).Should(Equal(1))
 
 				channelType, extraData := targetConn.OpenChannelArgsForCall(0)
-				Ω(channelType).Should(Equal("test"))
-				Ω(extraData).Should(Equal([]byte("extra-data")))
+				Expect(channelType).To(Equal("test"))
+				Expect(extraData).To(Equal([]byte("extra-data")))
 			})
 
 			Context("when the target accepts the connection", func() {
@@ -665,7 +665,7 @@ var _ = Describe("Proxy", func() {
 						Eventually(targetChannel.WriteCallCount).ShouldNot(Equal(0))
 
 						data := targetChannel.WriteArgsForCall(0)
-						Ω(data).Should(Equal([]byte("abc")))
+						Expect(data).To(Equal([]byte("abc")))
 					})
 				})
 
@@ -684,7 +684,7 @@ var _ = Describe("Proxy", func() {
 						Eventually(sourceChannel.WriteCallCount).ShouldNot(Equal(0))
 
 						data := sourceChannel.WriteArgsForCall(0)
-						Ω(data).Should(Equal([]byte("xyz")))
+						Expect(data).To(Equal([]byte("xyz")))
 					})
 				})
 
@@ -720,9 +720,9 @@ var _ = Describe("Proxy", func() {
 						Eventually(targetChannel.SendRequestCallCount).Should(Equal(1))
 
 						reqType, wantReply, payload := targetChannel.SendRequestArgsForCall(0)
-						Ω(reqType).Should(Equal("test"))
-						Ω(wantReply).Should(BeFalse())
-						Ω(payload).Should(Equal([]byte("test-data")))
+						Expect(reqType).To(Equal("test"))
+						Expect(wantReply).To(BeFalse())
+						Expect(payload).To(Equal([]byte("test-data")))
 					})
 				})
 
@@ -736,9 +736,9 @@ var _ = Describe("Proxy", func() {
 						Eventually(sourceChannel.SendRequestCallCount).Should(Equal(1))
 
 						reqType, wantReply, payload := sourceChannel.SendRequestArgsForCall(0)
-						Ω(reqType).Should(Equal("test"))
-						Ω(wantReply).Should(BeFalse())
-						Ω(payload).Should(Equal([]byte("test-data")))
+						Expect(reqType).To(Equal("test"))
+						Expect(wantReply).To(BeFalse())
+						Expect(payload).To(Equal([]byte("test-data")))
 					})
 				})
 			})
@@ -756,8 +756,8 @@ var _ = Describe("Proxy", func() {
 					Eventually(newChan.RejectCallCount).Should(Equal(1))
 
 					reason, message := newChan.RejectArgsForCall(0)
-					Ω(reason).Should(Equal(ssh.Prohibited))
-					Ω(message).Should(Equal("go away"))
+					Expect(reason).To(Equal(ssh.Prohibited))
+					Expect(message).To(Equal("go away"))
 				})
 
 				It("continues processing new channel requests", func() {
@@ -775,8 +775,8 @@ var _ = Describe("Proxy", func() {
 					Eventually(newChan.RejectCallCount).Should(Equal(1))
 
 					reason, message := newChan.RejectArgsForCall(0)
-					Ω(reason).Should(Equal(ssh.ConnectionFailed))
-					Ω(message).Should(Equal("woops"))
+					Expect(reason).To(Equal(ssh.ConnectionFailed))
+					Expect(message).To(Equal("woops"))
 				})
 
 				It("continues processing new channel requests", func() {
@@ -835,14 +835,14 @@ var _ = Describe("Proxy", func() {
 				Consistently(channel.SendRequestCallCount).Should(Equal(2))
 
 				reqType, wantReply, payload := channel.SendRequestArgsForCall(0)
-				Ω(reqType).Should(Equal("test"))
-				Ω(wantReply).Should(BeFalse())
-				Ω(payload).Should(Equal([]byte("test-data")))
+				Expect(reqType).To(Equal("test"))
+				Expect(wantReply).To(BeFalse())
+				Expect(payload).To(Equal([]byte("test-data")))
 
 				reqType, wantReply, payload = channel.SendRequestArgsForCall(1)
-				Ω(reqType).Should(Equal("test"))
-				Ω(wantReply).Should(BeFalse())
-				Ω(payload).Should(Equal([]byte("test-data")))
+				Expect(reqType).To(Equal("test"))
+				Expect(wantReply).To(BeFalse())
+				Expect(payload).To(Equal([]byte("test-data")))
 			})
 		})
 
@@ -910,7 +910,7 @@ var _ = Describe("Proxy", func() {
 			daemonSSHConfig.AddHostKey(TestHostKey)
 
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			sshdListener = listener
 		})
@@ -934,7 +934,7 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(newClientConnErr).Should(HaveOccurred())
+				Expect(newClientConnErr).To(HaveOccurred())
 			})
 
 			It("logs the failure", func() {
@@ -948,7 +948,7 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(newClientConnErr).Should(HaveOccurred())
+				Expect(newClientConnErr).To(HaveOccurred())
 			})
 
 			It("logs the failure", func() {
@@ -962,7 +962,7 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(newClientConnErr).Should(HaveOccurred())
+				Expect(newClientConnErr).To(HaveOccurred())
 			})
 
 			It("logs the failure", func() {
@@ -976,7 +976,7 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(newClientConnErr).Should(HaveOccurred())
+				Expect(newClientConnErr).To(HaveOccurred())
 			})
 
 			It("logs the failure", func() {
@@ -990,7 +990,7 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("returns an error", func() {
-				Ω(newClientConnErr).Should(HaveOccurred())
+				Expect(newClientConnErr).To(HaveOccurred())
 			})
 
 			It("logs the failure", func() {
@@ -1007,7 +1007,7 @@ var _ = Describe("Proxy", func() {
 					User:     "my-user",
 					Password: "my-password",
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				permissions = &ssh.Permissions{
 					CriticalOptions: map[string]string{
@@ -1020,11 +1020,11 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("uses the user and password for authentication", func() {
-				Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				Expect(passwordAuthenticator.AuthenticateCallCount()).To(Equal(1))
 
 				metadata, password := passwordAuthenticator.AuthenticateArgsForCall(0)
-				Ω(metadata.User()).Should(Equal("my-user"))
-				Ω(string(password)).Should(Equal("my-password"))
+				Expect(metadata.User()).To(Equal("my-user"))
+				Expect(string(password)).To(Equal("my-password"))
 			})
 		})
 
@@ -1036,7 +1036,7 @@ var _ = Describe("Proxy", func() {
 					Address:    sshdListener.Addr().String(),
 					PrivateKey: TestPrivatePem,
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				permissions = &ssh.Permissions{
 					CriticalOptions: map[string]string{
@@ -1051,12 +1051,12 @@ var _ = Describe("Proxy", func() {
 
 			It("will use the public key for authentication", func() {
 				expectedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(TestPublicAuthorizedKey))
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				Expect(publicKeyAuthenticator.AuthenticateCallCount()).To(Equal(1))
 
 				_, actualKey := publicKeyAuthenticator.AuthenticateArgsForCall(0)
-				Ω(actualKey.Marshal()).Should(Equal(expectedKey.Marshal()))
+				Expect(actualKey.Marshal()).To(Equal(expectedKey.Marshal()))
 			})
 		})
 
@@ -1069,7 +1069,7 @@ var _ = Describe("Proxy", func() {
 					User:       "my-user",
 					PrivateKey: TestPrivatePem,
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				permissions = &ssh.Permissions{
 					CriticalOptions: map[string]string{
@@ -1084,13 +1084,13 @@ var _ = Describe("Proxy", func() {
 
 			It("will use the user and public key for authentication", func() {
 				expectedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(TestPublicAuthorizedKey))
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+				Expect(publicKeyAuthenticator.AuthenticateCallCount()).To(Equal(1))
 
 				metadata, actualKey := publicKeyAuthenticator.AuthenticateArgsForCall(0)
-				Ω(metadata.User()).Should(Equal("my-user"))
-				Ω(actualKey.Marshal()).Should(Equal(expectedKey.Marshal()))
+				Expect(metadata.User()).To(Equal("my-user"))
+				Expect(actualKey.Marshal()).To(Equal(expectedKey.Marshal()))
 			})
 		})
 
@@ -1105,7 +1105,7 @@ var _ = Describe("Proxy", func() {
 					Password:   "my-password",
 					PrivateKey: TestPrivatePem,
 				})
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				permissions = &ssh.Permissions{
 					CriticalOptions: map[string]string{
@@ -1122,8 +1122,8 @@ var _ = Describe("Proxy", func() {
 			})
 
 			It("will attempt to use the public key for authentication before the password", func() {
-				Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
-				Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(0))
+				Expect(publicKeyAuthenticator.AuthenticateCallCount()).To(Equal(1))
+				Expect(passwordAuthenticator.AuthenticateCallCount()).To(Equal(0))
 			})
 
 			Context("when public key authentication fails", func() {
@@ -1133,8 +1133,8 @@ var _ = Describe("Proxy", func() {
 				})
 
 				It("will fall back to password authentication", func() {
-					Ω(publicKeyAuthenticator.AuthenticateCallCount()).Should(Equal(1))
-					Ω(passwordAuthenticator.AuthenticateCallCount()).Should(Equal(1))
+					Expect(publicKeyAuthenticator.AuthenticateCallCount()).To(Equal(1))
+					Expect(passwordAuthenticator.AuthenticateCallCount()).To(Equal(1))
 				})
 			})
 		})

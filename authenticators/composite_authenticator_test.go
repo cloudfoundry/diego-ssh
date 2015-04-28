@@ -33,7 +33,7 @@ var _ = Describe("CompositeAuthenticator", func() {
 		Context("when no authenticators are specified", func() {
 			It("fails to authenticate", func() {
 				_, err := authenticator.Authenticate(metadata, password)
-				Ω(err).Should(MatchError("Invalid credentials"))
+				Expect(err).To(MatchError("Invalid credentials"))
 			})
 		})
 
@@ -66,17 +66,17 @@ var _ = Describe("CompositeAuthenticator", func() {
 					It("succeeds to authenticate", func() {
 						perms, err := authenticator.Authenticate(metadata, password)
 
-						Ω(err).ShouldNot(HaveOccurred())
-						Ω(perms).Should(Equal(permissions))
+						Expect(err).NotTo(HaveOccurred())
+						Expect(perms).To(Equal(permissions))
 					})
 
 					It("should provide the metadata to the authenticator", func() {
 						_, err := authenticator.Authenticate(metadata, password)
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 						m, p := authenticatorOne.AuthenticateArgsForCall(0)
 
-						Ω(m).Should(Equal(metadata))
-						Ω(p).Should(Equal(password))
+						Expect(m).To(Equal(metadata))
+						Expect(p).To(Equal(password))
 					})
 				})
 
@@ -87,13 +87,13 @@ var _ = Describe("CompositeAuthenticator", func() {
 
 					It("fails to authenticate", func() {
 						_, err := authenticator.Authenticate(metadata, password)
-						Ω(err).Should(MatchError("boom"))
+						Expect(err).To(MatchError("boom"))
 					})
 				})
 
 				It("does not attempt to authenticate with any other authenticators", func() {
 					authenticator.Authenticate(metadata, password)
-					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
+					Expect(authenticatorTwo.AuthenticateCallCount()).To(Equal(0))
 				})
 			})
 
@@ -105,9 +105,9 @@ var _ = Describe("CompositeAuthenticator", func() {
 				It("fails to authenticate", func() {
 					_, err := authenticator.Authenticate(metadata, password)
 
-					Ω(err).Should(MatchError("Invalid credentials"))
-					Ω(authenticatorOne.AuthenticateCallCount()).Should(Equal(0))
-					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
+					Expect(err).To(MatchError("Invalid credentials"))
+					Expect(authenticatorOne.AuthenticateCallCount()).To(Equal(0))
+					Expect(authenticatorTwo.AuthenticateCallCount()).To(Equal(0))
 				})
 			})
 
@@ -119,9 +119,9 @@ var _ = Describe("CompositeAuthenticator", func() {
 				It("fails to authenticate", func() {
 					_, err := authenticator.Authenticate(metadata, password)
 
-					Ω(err).Should(MatchError("Invalid credentials"))
-					Ω(authenticatorOne.AuthenticateCallCount()).Should(Equal(0))
-					Ω(authenticatorTwo.AuthenticateCallCount()).Should(Equal(0))
+					Expect(err).To(MatchError("Invalid credentials"))
+					Expect(authenticatorOne.AuthenticateCallCount()).To(Equal(0))
+					Expect(authenticatorTwo.AuthenticateCallCount()).To(Equal(0))
 				})
 			})
 		})

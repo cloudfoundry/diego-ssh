@@ -12,31 +12,31 @@ type FakeKeyPair struct {
 	PrivateKeyStub        func() ssh.Signer
 	privateKeyMutex       sync.RWMutex
 	privateKeyArgsForCall []struct{}
-	privateKeyReturns struct {
+	privateKeyReturns     struct {
 		result1 ssh.Signer
 	}
 	PEMEncodedPrivateKeyStub        func() string
 	pEMEncodedPrivateKeyMutex       sync.RWMutex
 	pEMEncodedPrivateKeyArgsForCall []struct{}
-	pEMEncodedPrivateKeyReturns struct {
+	pEMEncodedPrivateKeyReturns     struct {
 		result1 string
 	}
 	PublicKeyStub        func() ssh.PublicKey
 	publicKeyMutex       sync.RWMutex
 	publicKeyArgsForCall []struct{}
-	publicKeyReturns struct {
+	publicKeyReturns     struct {
 		result1 ssh.PublicKey
 	}
 	FingerprintStub        func() string
 	fingerprintMutex       sync.RWMutex
 	fingerprintArgsForCall []struct{}
-	fingerprintReturns struct {
+	fingerprintReturns     struct {
 		result1 string
 	}
 	AuthorizedKeyStub        func() string
 	authorizedKeyMutex       sync.RWMutex
 	authorizedKeyArgsForCall []struct{}
-	authorizedKeyReturns struct {
+	authorizedKeyReturns     struct {
 		result1 string
 	}
 }

@@ -68,8 +68,8 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("reports and dies", func() {
-				Ω(runner).Should(gbytes.Say("failed-to-parse-host-key"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("failed-to-parse-host-key"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -79,8 +79,8 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("reports and dies", func() {
-				Ω(runner).Should(gbytes.Say(`configure-failed.*ssh: no key found`))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say(`configure-failed.*ssh: no key found`))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -95,8 +95,8 @@ var _ = Describe("SSH daemon", func() {
 				})
 
 				It("reports and dies", func() {
-					Ω(runner).Should(gbytes.Say("authorized-key-required"))
-					Ω(runner).ShouldNot(gexec.Exit(0))
+					Expect(runner).To(gbytes.Say("authorized-key-required"))
+					Expect(runner).NotTo(gexec.Exit(0))
 				})
 			})
 
@@ -106,7 +106,7 @@ var _ = Describe("SSH daemon", func() {
 				})
 
 				It("starts normally", func() {
-					Ω(process).ShouldNot(BeNil())
+					Expect(process).NotTo(BeNil())
 				})
 			})
 		})
@@ -120,7 +120,7 @@ var _ = Describe("SSH daemon", func() {
 		)
 
 		JustBeforeEach(func() {
-			Ω(process).ShouldNot(BeNil())
+			Expect(process).NotTo(BeNil())
 			client, dialErr = ssh.Dial("tcp", address, clientConfig)
 		})
 
@@ -138,10 +138,10 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("generates one internally", func() {
-				Ω(process).ShouldNot(BeNil())
+				Expect(process).NotTo(BeNil())
 
-				Ω(client).ShouldNot(BeNil())
-				Ω(dialErr).ShouldNot(HaveOccurred())
+				Expect(client).NotTo(BeNil())
+				Expect(dialErr).NotTo(HaveOccurred())
 			})
 		})
 
@@ -160,10 +160,10 @@ var _ = Describe("SSH daemon", func() {
 
 			It("uses the host key provided on the command line", func() {
 				sshHostKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				sshPublicHostKey := sshHostKey.PublicKey()
-				Ω(sshPublicHostKey.Marshal()).Should(Equal(handshakeHostKey.Marshal()))
+				Expect(sshPublicHostKey.Marshal()).To(Equal(handshakeHostKey.Marshal()))
 			})
 		})
 
@@ -173,17 +173,17 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("starts the daemon", func() {
-				Ω(process).ShouldNot(BeNil())
+				Expect(process).NotTo(BeNil())
 			})
 
 			It("rejects the client handshake", func() {
-				Ω(dialErr).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+				Expect(dialErr).To(MatchError(ContainSubstring("ssh: handshake failed")))
 			})
 
 			Context("and client has a valid private key", func() {
 				BeforeEach(func() {
 					key, err := ssh.ParsePrivateKey([]byte(privateKey))
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					clientConfig = &ssh.ClientConfig{
 						User: os.Getenv("USER"),
@@ -194,8 +194,8 @@ var _ = Describe("SSH daemon", func() {
 				})
 
 				It("can complete a handshake with the daemon", func() {
-					Ω(dialErr).ShouldNot(HaveOccurred())
-					Ω(client).ShouldNot(BeNil())
+					Expect(dialErr).NotTo(HaveOccurred())
+					Expect(client).NotTo(BeNil())
 				})
 			})
 		})
@@ -207,12 +207,12 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("starts the daemon", func() {
-				Ω(process).ShouldNot(BeNil())
+				Expect(process).NotTo(BeNil())
 			})
 
 			It("allows a client without credentials to complete a handshake", func() {
-				Ω(dialErr).ShouldNot(HaveOccurred())
-				Ω(client).ShouldNot(BeNil())
+				Expect(dialErr).NotTo(HaveOccurred())
+				Expect(client).NotTo(BeNil())
 			})
 
 		})
@@ -228,11 +228,11 @@ var _ = Describe("SSH daemon", func() {
 		})
 
 		JustBeforeEach(func() {
-			Ω(process).ShouldNot(BeNil())
+			Expect(process).NotTo(BeNil())
 
 			var dialErr error
 			client, dialErr = ssh.Dial("tcp", address, clientConfig)
-			Ω(dialErr).ShouldNot(HaveOccurred())
+			Expect(dialErr).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -242,19 +242,19 @@ var _ = Describe("SSH daemon", func() {
 		Context("when a client requests the execution of a command", func() {
 			It("runs the command", func() {
 				session, err := client.NewSession()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				result, err := session.Output("/bin/echo -n 'Hello there!'")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(string(result)).Should(Equal("Hello there!"))
+				Expect(string(result)).To(Equal("Hello there!"))
 			})
 		})
 
 		Context("when a client requests a shell", func() {
 			It("creates a shell environment", func() {
 				session, err := client.NewSession()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				stdout := &bytes.Buffer{}
 
@@ -263,12 +263,12 @@ var _ = Describe("SSH daemon", func() {
 
 				session.Setenv("ENV_VAR", "env_var_value")
 				err = session.Shell()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				err = session.Wait()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(stdout.String()).Should(ContainSubstring("env_var_value"))
+				Expect(stdout.String()).To(ContainSubstring("env_var_value"))
 			})
 		})
 
@@ -286,7 +286,7 @@ var _ = Describe("SSH daemon", func() {
 
 			It("forwards the local port to the target from the server side", func() {
 				lconn, err := client.Dial("tcp", server.Addr())
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				transport := &http.Transport{
 					Dial: func(network, addr string) (net.Conn, error) {
@@ -296,13 +296,13 @@ var _ = Describe("SSH daemon", func() {
 				client := &http.Client{Transport: transport}
 
 				resp, err := client.Get("http://127.0.0.1/")
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(resp.StatusCode).Should(Equal(http.StatusOK))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 				reader := bufio.NewReader(resp.Body)
 				line, err := reader.ReadString('\n')
-				Ω(err).ShouldNot(HaveOccurred())
-				Ω(line).Should(ContainSubstring("hi from jim"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(line).To(ContainSubstring("hi from jim"))
 			})
 		})
 	})

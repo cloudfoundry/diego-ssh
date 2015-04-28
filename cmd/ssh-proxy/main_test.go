@@ -45,7 +45,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKey = hostKeyPem
 
 		privateKey, err := ssh.ParsePrivateKey([]byte(hostKey))
-		Ω(err).ShouldNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		hostKeyFingerprint = helpers.MD5Fingerprint(privateKey.PublicKey())
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
@@ -79,8 +79,8 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("reports the problem and terminates", func() {
-				Ω(runner).Should(gbytes.Say("hostKey is required"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("hostKey is required"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -90,8 +90,8 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("reports the problem and terminates", func() {
-				Ω(runner).Should(gbytes.Say("failed-to-parse-host-key"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("failed-to-parse-host-key"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -101,8 +101,8 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("reports the problem and terminates", func() {
-				Ω(runner).Should(gbytes.Say("diegoAPIURL is required"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("diegoAPIURL is required"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -112,8 +112,8 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("reports the problem and terminates", func() {
-				Ω(runner).Should(gbytes.Say("failed-to-parse-diego-api-url"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("failed-to-parse-diego-api-url"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 
@@ -123,8 +123,8 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("reports the problem and terminates", func() {
-				Ω(runner).Should(gbytes.Say("failed-to-parse-cc-api-url"))
-				Ω(runner).ShouldNot(gexec.Exit(0))
+				Expect(runner).To(gbytes.Say("failed-to-parse-cc-api-url"))
+				Expect(runner).NotTo(gexec.Exit(0))
 			})
 		})
 	})
@@ -151,7 +151,7 @@ var _ = Describe("SSH proxy", func() {
 			}
 
 			sshRoutePayload, err := json.Marshal(sshRoute)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			diegoSSHRouteMessage := json.RawMessage(sshRoutePayload)
 
@@ -187,7 +187,7 @@ var _ = Describe("SSH proxy", func() {
 				),
 			)
 
-			Ω(process).ShouldNot(BeNil())
+			Expect(process).NotTo(BeNil())
 		})
 
 		Context("when the client attempts to verify the host key", func() {
@@ -202,13 +202,13 @@ var _ = Describe("SSH proxy", func() {
 
 			It("receives the correct host key", func() {
 				_, err := ssh.Dial("tcp", address, clientConfig)
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 
 				proxyHostKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				proxyPublicHostKey := proxyHostKey.PublicKey()
-				Ω(proxyPublicHostKey.Marshal()).Should(Equal(handshakeHostKey.Marshal()))
+				Expect(proxyPublicHostKey.Marshal()).To(Equal(handshakeHostKey.Marshal()))
 			})
 		})
 
@@ -249,24 +249,24 @@ var _ = Describe("SSH proxy", func() {
 			Context("when the client authenticates with the right data", func() {
 				It("acquires the lrp info from the receptor", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					client.Close()
 
-					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
 				})
 
 				It("connects to the target daemon", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					session, err := client.NewSession()
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					output, err := session.Output("echo -n hello")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
-					Ω(string(output)).Should(Equal("hello"))
+					Expect(string(output)).To(Equal("hello"))
 				})
 			})
 
@@ -285,12 +285,12 @@ var _ = Describe("SSH proxy", func() {
 
 				It("attempts to acquire the app info from cc", func() {
 					ssh.Dial("tcp", address, clientConfig)
-					Ω(fakeCC.ReceivedRequests()).Should(HaveLen(1))
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
@@ -327,12 +327,12 @@ var _ = Describe("SSH proxy", func() {
 
 				It("attempts to acquire the app info from receptor", func() {
 					ssh.Dial("tcp", address, clientConfig)
-					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(1))
 				})
 
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
@@ -343,7 +343,7 @@ var _ = Describe("SSH proxy", func() {
 
 				It("fails authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 
 				It("does not attempt to grab the app info from cc", func() {
@@ -364,24 +364,24 @@ var _ = Describe("SSH proxy", func() {
 			Context("when the client authenticates with the right data", func() {
 				It("acquires the lrp info from the receptor", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					client.Close()
 
-					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(2))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
 				})
 
 				It("connects to the target daemon", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					session, err := client.NewSession()
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					output, err := session.Output("echo -n hello")
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
-					Ω(string(output)).Should(Equal("hello"))
+					Expect(string(output)).To(Equal("hello"))
 				})
 			})
 
@@ -392,7 +392,7 @@ var _ = Describe("SSH proxy", func() {
 
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
@@ -410,12 +410,12 @@ var _ = Describe("SSH proxy", func() {
 
 				It("attempts to acquire the lrp info from the receptor", func() {
 					ssh.Dial("tcp", address, clientConfig)
-					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(1))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(1))
 				})
 
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
@@ -426,8 +426,8 @@ var _ = Describe("SSH proxy", func() {
 
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Ω(err).Should(MatchError(ContainSubstring("ssh: handshake failed")))
-					Ω(fakeReceptor.ReceivedRequests()).Should(HaveLen(0))
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 		})

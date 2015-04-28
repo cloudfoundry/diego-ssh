@@ -46,7 +46,7 @@ var _ = Describe("Daemon", func() {
 
 			It("closes the connection", func() {
 				sshd.HandleConnection(fakeConn)
-				Ω(fakeConn.CloseCallCount()).Should(BeNumerically(">=", 1))
+				Expect(fakeConn.CloseCallCount()).To(BeNumerically(">=", 1))
 			})
 		})
 
@@ -81,7 +81,7 @@ var _ = Describe("Daemon", func() {
 				go sshd.HandleConnection(serverNetConn)
 
 				clientConn, clientChannels, clientRequests, clientConnErr = ssh.NewClientConn(clientNetConn, "0.0.0.0", clientConfig)
-				Ω(clientConnErr).ShouldNot(HaveOccurred())
+				Expect(clientConnErr).NotTo(HaveOccurred())
 
 				client = ssh.NewClient(clientConn, clientChannels, clientRequests)
 			})
@@ -93,7 +93,7 @@ var _ = Describe("Daemon", func() {
 			})
 
 			It("performs a handshake", func() {
-				Ω(clientConnErr).ShouldNot(HaveOccurred())
+				Expect(clientConnErr).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -152,8 +152,8 @@ var _ = Describe("Daemon", func() {
 				})
 
 				It("does not reject the request as unknown", func() {
-					Ω(requestErr).ShouldNot(HaveOccurred())
-					Ω(accepted).Should(BeTrue())
+					Expect(requestErr).NotTo(HaveOccurred())
+					Expect(accepted).To(BeTrue())
 				})
 			})
 
@@ -165,8 +165,8 @@ var _ = Describe("Daemon", func() {
 					})
 
 					It("rejects the request", func() {
-						Ω(requestErr).ShouldNot(HaveOccurred())
-						Ω(accepted).Should(BeFalse())
+						Expect(requestErr).NotTo(HaveOccurred())
+						Expect(accepted).To(BeFalse())
 					})
 				})
 			})
@@ -215,19 +215,19 @@ var _ = Describe("Daemon", func() {
 
 					fakeHandler.HandleNewChannelStub = func(logger lager.Logger, newChannel ssh.NewChannel) {
 						ch, _, err := newChannel.Accept()
-						Ω(err).ShouldNot(HaveOccurred())
+						Expect(err).NotTo(HaveOccurred())
 						ch.Close()
 					}
 				})
 
 				It("calls the handler to process the new channel request", func() {
-					Ω(fakeHandler.HandleNewChannelCallCount()).Should(Equal(1))
+					Expect(fakeHandler.HandleNewChannelCallCount()).To(Equal(1))
 
 					logger, actualChannel := fakeHandler.HandleNewChannelArgsForCall(0)
-					Ω(logger).ShouldNot(BeNil())
+					Expect(logger).NotTo(BeNil())
 
-					Ω(actualChannel.ChannelType()).Should(Equal("known-channel-type"))
-					Ω(actualChannel.ExtraData()).Should(Equal([]byte("extra-data")))
+					Expect(actualChannel.ChannelType()).To(Equal("known-channel-type"))
+					Expect(actualChannel.ExtraData()).To(Equal([]byte("extra-data")))
 				})
 			})
 
@@ -237,13 +237,13 @@ var _ = Describe("Daemon", func() {
 				})
 
 				It("rejects the new channel request", func() {
-					Ω(openError).To(HaveOccurred())
+					Expect(openError).To(HaveOccurred())
 
 					channelError, ok := openError.(*ssh.OpenChannelError)
-					Ω(ok).Should(BeTrue())
+					Expect(ok).To(BeTrue())
 
-					Ω(channelError.Reason).Should(Equal(ssh.UnknownChannelType))
-					Ω(channelError.Message).Should(Equal("unknown-channel-type"))
+					Expect(channelError.Reason).To(Equal(ssh.UnknownChannelType))
+					Expect(channelError.Message).To(Equal("unknown-channel-type"))
 				})
 			})
 		})

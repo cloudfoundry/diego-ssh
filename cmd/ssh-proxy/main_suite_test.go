@@ -36,16 +36,16 @@ func TestSSHProxy(t *testing.T) {
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	sshProxy, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy", "-race")
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	sshd, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd", "-race")
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	privateKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	payload, err := json.Marshal(map[string]string{
 		"ssh-proxy":      sshProxy,
@@ -55,14 +55,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		"authorized-key": privateKey.AuthorizedKey(),
 	})
 
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	return payload
 }, func(payload []byte) {
 	context := map[string]string{}
 
 	err := json.Unmarshal(payload, &context)
-	Ω(err).ShouldNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]

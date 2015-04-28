@@ -50,18 +50,18 @@ var _ = Describe("Server", func() {
 
 		It("accepts connections on the specified address", func() {
 			_, err := net.Dial("tcp", address)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("when a second client connects", func() {
 			JustBeforeEach(func() {
 				_, err := net.Dial("tcp", address)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("accepts the new connection", func() {
 				_, err := net.Dial("tcp", address)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -80,7 +80,7 @@ var _ = Describe("Server", func() {
 			It("returns an error", func() {
 				listener := &fake_net.FakeListener{}
 				err := srv.SetListener(listener)
-				Ω(err).Should(MatchError("Listener has already been set"))
+				Expect(err).To(MatchError("Listener has already been set"))
 			})
 		})
 	})
@@ -114,12 +114,12 @@ var _ = Describe("Server", func() {
 		})
 
 		It("accepts inbound connections", func() {
-			Ω(fakeListener.AcceptCallCount()).Should(Equal(2))
+			Expect(fakeListener.AcceptCallCount()).To(Equal(2))
 		})
 
 		It("passes the connection to the connection handler", func() {
 			Eventually(handler.HandleConnectionCallCount).Should(Equal(1))
-			Ω(handler.HandleConnectionArgsForCall(0)).Should(Equal(fakeConn))
+			Expect(handler.HandleConnectionArgsForCall(0)).To(Equal(fakeConn))
 		})
 
 		Context("when accept returns a permanent error", func() {
@@ -128,7 +128,7 @@ var _ = Describe("Server", func() {
 			})
 
 			It("closes the listener", func() {
-				Ω(fakeListener.CloseCallCount()).Should(Equal(1))
+				Expect(fakeListener.CloseCallCount()).To(Equal(1))
 			})
 		})
 
@@ -151,15 +151,15 @@ var _ = Describe("Server", func() {
 			})
 
 			It("retries the accept after a short delay", func() {
-				Ω(timeCh).Should(HaveLen(3))
+				Expect(timeCh).To(HaveLen(3))
 
 				times := make([]time.Time, 0)
 				for t := range timeCh {
 					times = append(times, t)
 				}
 
-				Ω(times[1]).Should(BeTemporally("~", times[0].Add(100*time.Millisecond), 20*time.Millisecond))
-				Ω(times[2]).Should(BeTemporally("~", times[1].Add(100*time.Millisecond), 20*time.Millisecond))
+				Expect(times[1]).To(BeTemporally("~", times[0].Add(100*time.Millisecond), 20*time.Millisecond))
+				Expect(times[2]).To(BeTemporally("~", times[1].Add(100*time.Millisecond), 20*time.Millisecond))
 			})
 		})
 	})
@@ -180,11 +180,11 @@ var _ = Describe("Server", func() {
 			})
 
 			It("closes the listener", func() {
-				Ω(fakeListener.CloseCallCount()).Should(Equal(1))
+				Expect(fakeListener.CloseCallCount()).To(Equal(1))
 			})
 
 			It("marks the server as stopping", func() {
-				Ω(srv.IsStopping()).Should(BeTrue())
+				Expect(srv.IsStopping()).To(BeTrue())
 			})
 
 			It("does not log an accept failure", func() {
@@ -207,22 +207,22 @@ var _ = Describe("Server", func() {
 			BeforeEach(func() {
 				var err error
 				listener, err = net.Listen("tcp", "127.0.0.1:0")
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				srv = server.NewServer(logger, address, handler)
 				err = srv.SetListener(listener)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("returns the address reported by the listener", func() {
-				Ω(srv.ListenAddr()).Should(Equal(listener.Addr()))
+				Expect(srv.ListenAddr()).To(Equal(listener.Addr()))
 			})
 		})
 
 		Context("when the server does not have a listener", func() {
 			It("returns an error", func() {
 				_, err := srv.ListenAddr()
-				Ω(err).Should(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})

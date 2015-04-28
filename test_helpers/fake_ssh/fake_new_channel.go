@@ -11,7 +11,7 @@ type FakeNewChannel struct {
 	AcceptStub        func() (ssh.Channel, <-chan *ssh.Request, error)
 	acceptMutex       sync.RWMutex
 	acceptArgsForCall []struct{}
-	acceptReturns struct {
+	acceptReturns     struct {
 		result1 ssh.Channel
 		result2 <-chan *ssh.Request
 		result3 error
@@ -28,13 +28,13 @@ type FakeNewChannel struct {
 	ChannelTypeStub        func() string
 	channelTypeMutex       sync.RWMutex
 	channelTypeArgsForCall []struct{}
-	channelTypeReturns struct {
+	channelTypeReturns     struct {
 		result1 string
 	}
 	ExtraDataStub        func() []byte
 	extraDataMutex       sync.RWMutex
 	extraDataArgsForCall []struct{}
-	extraDataReturns struct {
+	extraDataReturns     struct {
 		result1 []byte
 	}
 }

@@ -10,20 +10,20 @@ type FakeListener struct {
 	AcceptStub        func() (c net.Conn, err error)
 	acceptMutex       sync.RWMutex
 	acceptArgsForCall []struct{}
-	acceptReturns struct {
+	acceptReturns     struct {
 		result1 net.Conn
 		result2 error
 	}
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 	AddrStub        func() net.Addr
 	addrMutex       sync.RWMutex
 	addrArgsForCall []struct{}
-	addrReturns struct {
+	addrReturns     struct {
 		result1 net.Addr
 	}
 }

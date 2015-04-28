@@ -11,7 +11,7 @@ type FakeShellLocator struct {
 	ShellPathStub        func() string
 	shellPathMutex       sync.RWMutex
 	shellPathArgsForCall []struct{}
-	shellPathReturns struct {
+	shellPathReturns     struct {
 		result1 string
 	}
 }

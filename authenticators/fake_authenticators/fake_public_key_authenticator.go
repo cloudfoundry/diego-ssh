@@ -22,7 +22,7 @@ type FakePublicKeyAuthenticator struct {
 	PublicKeyStub        func() ssh.PublicKey
 	publicKeyMutex       sync.RWMutex
 	publicKeyArgsForCall []struct{}
-	publicKeyReturns struct {
+	publicKeyReturns     struct {
 		result1 ssh.PublicKey
 	}
 }
