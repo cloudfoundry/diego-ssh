@@ -3,7 +3,6 @@ package authenticators
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -24,10 +23,6 @@ type DiegoProxyAuthenticator struct {
 }
 
 var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(DIEGO_REALM + `:(.*)/(\d+)`)
-
-var InvalidDomainErr error = errors.New("Invalid authentication domain")
-var InvalidCredentialsErr error = errors.New("Invalid credentials")
-var RouteNotFoundErr error = errors.New("SSH routing info not found")
 
 func NewDiegoProxyAuthenticator(
 	logger lager.Logger,

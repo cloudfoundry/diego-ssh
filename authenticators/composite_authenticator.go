@@ -1,13 +1,10 @@
 package authenticators
 
 import (
-	"errors"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
-
-var InvalidCredentialsError error = errors.New("Invalid credentials")
 
 type CompositeAuthenticator struct {
 	authenticatorMap map[string]PasswordAuthenticator
@@ -24,5 +21,5 @@ func (a *CompositeAuthenticator) Authenticate(metadata ssh.ConnMetadata, passwor
 			return authenticator.Authenticate(metadata, password)
 		}
 	}
-	return nil, InvalidCredentialsError
+	return nil, InvalidCredentialsErr
 }

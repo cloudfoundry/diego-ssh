@@ -2,7 +2,6 @@ package authenticators
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -25,12 +24,6 @@ type CFAuthenticator struct {
 
 var CFPrincipalRegex *regexp.Regexp = regexp.MustCompile(`(.*)/(\d+)`)
 var CFRealmRegex *regexp.Regexp = regexp.MustCompile(CF_REALM + `:(.*)`)
-
-var SSHDisabledErr = errors.New("SSH Disabled")
-var NotDiegoErr = errors.New("Diego Not Enabled")
-var FetchAppFailedErr = errors.New("Fetching App Failed")
-var InvalidRequestErr = errors.New("CloudController URL Invalid")
-var InvalidCCResponse = errors.New("CloudController Response Invalid")
 
 func NewCFAuthenticator(
 	logger lager.Logger,

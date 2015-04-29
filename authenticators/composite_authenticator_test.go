@@ -33,7 +33,7 @@ var _ = Describe("CompositeAuthenticator", func() {
 		Context("when no authenticators are specified", func() {
 			It("fails to authenticate", func() {
 				_, err := authenticator.Authenticate(metadata, password)
-				Expect(err).To(MatchError("Invalid credentials"))
+				Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
 			})
 		})
 
@@ -105,7 +105,7 @@ var _ = Describe("CompositeAuthenticator", func() {
 				It("fails to authenticate", func() {
 					_, err := authenticator.Authenticate(metadata, password)
 
-					Expect(err).To(MatchError("Invalid credentials"))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
 					Expect(authenticatorOne.AuthenticateCallCount()).To(Equal(0))
 					Expect(authenticatorTwo.AuthenticateCallCount()).To(Equal(0))
 				})
@@ -119,7 +119,7 @@ var _ = Describe("CompositeAuthenticator", func() {
 				It("fails to authenticate", func() {
 					_, err := authenticator.Authenticate(metadata, password)
 
-					Expect(err).To(MatchError("Invalid credentials"))
+					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
 					Expect(authenticatorOne.AuthenticateCallCount()).To(Equal(0))
 					Expect(authenticatorTwo.AuthenticateCallCount()).To(Equal(0))
 				})
