@@ -13,6 +13,7 @@ type Args struct {
 	HostKey                     string
 	AuthorizedKey               string
 	AllowUnauthenticatedClients bool
+	PassDaemonEnv               bool
 }
 
 func (args Args) ArgSlice() []string {
@@ -21,6 +22,7 @@ func (args Args) ArgSlice() []string {
 		"-hostKey=" + args.HostKey,
 		"-authorizedKey=" + args.AuthorizedKey,
 		"-allowUnauthenticatedClients=" + strconv.FormatBool(args.AllowUnauthenticatedClients),
+		"-passDaemonEnv=" + strconv.FormatBool(args.PassDaemonEnv),
 	}
 }
 

@@ -61,12 +61,14 @@ func (shellLocator) ShellPath() string {
 type SessionChannelHandler struct {
 	runner       Runner
 	shellLocator ShellLocator
+	defaultEnv   map[string]string
 }
 
-func NewSessionChannelHandler(runner Runner, shellLocator ShellLocator) *SessionChannelHandler {
+func NewSessionChannelHandler(runner Runner, shellLocator ShellLocator, defaultEnv map[string]string) *SessionChannelHandler {
 	return &SessionChannelHandler{
 		runner:       runner,
 		shellLocator: shellLocator,
+		defaultEnv:   defaultEnv,
 	}
 }
 
@@ -114,7 +116,7 @@ func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ss
 		runner:    handler.runner,
 		shellPath: handler.shellLocator.ShellPath(),
 		channel:   channel,
-		env:       map[string]string{},
+		env:       handler.defaultEnv,
 	}
 }
 

@@ -45,6 +45,12 @@ var allowUnauthenticatedClients = flag.Bool(
 	"Allow access to unauthenticated clients",
 )
 
+var passDaemonEnv = flag.Bool(
+	"passDaemonEnv",
+	false,
+	"Pass daemon's environment",
+)
+
 func main() {
 	cf_debug_server.AddFlags(flag.CommandLine)
 	cf_lager.AddFlags(flag.CommandLine)
@@ -67,7 +73,7 @@ func main() {
 		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
-			"session":      handlers.NewSessionChannelHandler(runner, shellLocator),
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment()),
 			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
 		},
 	)
@@ -96,6 +102,21 @@ func main() {
 
 	logger.Info("exited")
 	os.Exit(0)
+}
+
+func getDaemonEnvironment() map[string]string {
+	dameonEnv := map[string]string{}
+
+	if *passDaemonEnv {
+		envs := os.Environ()
+		for _, env := range envs {
+			nvp := strings.SplitN(env, "=", 2)
+			if len(nvp) == 2 && nvp[0] != "PATH" {
+				dameonEnv[nvp[0]] = nvp[1]
+			}
+		}
+	}
+	return dameonEnv
 }
 
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {

@@ -33,6 +33,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		sessionChannelHandler *handlers.SessionChannelHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
+		defaultEnv         map[string]string
 	)
 
 	BeforeEach(func() {
@@ -50,7 +51,10 @@ var _ = Describe("SessionChannelHandler", func() {
 		shellLocator = &fakes.FakeShellLocator{}
 		shellLocator.ShellPathReturns("/bin/sh")
 
-		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator)
+		defaultEnv = map[string]string{}
+		defaultEnv["TEST"] = "FOO"
+
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
@@ -213,12 +217,13 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(result).NotTo(ContainSubstring("DAEMON_ENV=daemon_env_value"))
 			})
 
-			It("includes a default environment", func() {
+			It("includes a default environment excluding PATH", func() {
 				result, err := session.Output("/usr/bin/env")
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result).To(ContainSubstring(fmt.Sprintf("PATH=/bin:/usr/bin")))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("LANG=en_US.UTF8")))
+				Expect(result).To(ContainSubstring(fmt.Sprintf("TEST=FOO")))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("USER=%s", os.Getenv("USER"))))
 			})
@@ -279,6 +284,16 @@ var _ = Describe("SessionChannelHandler", func() {
 
 					Expect(result).To(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
 					Expect(result).To(ContainSubstring(fmt.Sprintf("USER=%s", os.Getenv("USER"))))
+				})
+
+				It("can override default env variables", func() {
+					err := session.Setenv("TEST", "BAR")
+					Expect(err).NotTo(HaveOccurred())
+
+					result, err := session.Output("/usr/bin/env")
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(result).To(ContainSubstring("TEST=BAR"))
 				})
 			})
 

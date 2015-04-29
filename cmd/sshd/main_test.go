@@ -33,6 +33,7 @@ var _ = Describe("SSH daemon", func() {
 		authorizedKey string
 
 		allowUnauthenticatedClients bool
+		passDaemonEnv               bool
 	)
 
 	BeforeEach(func() {
@@ -41,6 +42,7 @@ var _ = Describe("SSH daemon", func() {
 		authorizedKey = publicAuthorizedKey
 
 		allowUnauthenticatedClients = false
+		passDaemonEnv = false
 		address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	})
 
@@ -51,6 +53,7 @@ var _ = Describe("SSH daemon", func() {
 			AuthorizedKey: string(authorizedKey),
 
 			AllowUnauthenticatedClients: allowUnauthenticatedClients,
+			PassDaemonEnv:               passDaemonEnv,
 		}
 
 		runner = testrunner.New(sshdPath, args)
@@ -252,23 +255,110 @@ var _ = Describe("SSH daemon", func() {
 		})
 
 		Context("when a client requests a shell", func() {
-			It("creates a shell environment", func() {
-				session, err := client.NewSession()
-				Expect(err).NotTo(HaveOccurred())
+			Context("when pass daemon env is enabled", func() {
+				BeforeEach(func() {
+					passDaemonEnv = true
+					os.Setenv("TEST", "FOO")
+					os.Setenv("PATH", "$PATH:/tmp")
+				})
 
-				stdout := &bytes.Buffer{}
+				It("creates a shell environment", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
 
-				session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
-				session.Stdout = stdout
+					stdout := &bytes.Buffer{}
 
-				session.Setenv("ENV_VAR", "env_var_value")
-				err = session.Shell()
-				Expect(err).NotTo(HaveOccurred())
+					session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
+					session.Stdout = stdout
 
-				err = session.Wait()
-				Expect(err).NotTo(HaveOccurred())
+					session.Setenv("ENV_VAR", "env_var_value")
+					err = session.Shell()
+					Expect(err).NotTo(HaveOccurred())
 
-				Expect(stdout.String()).To(ContainSubstring("env_var_value"))
+					err = session.Wait()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(stdout.String()).To(ContainSubstring("env_var_value"))
+				})
+
+				It("inherits daemon's environment excluding PATH", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+
+					stdout := &bytes.Buffer{}
+
+					session.Stdin = strings.NewReader("/bin/echo -n $TEST")
+					session.Stdout = stdout
+
+					err = session.Shell()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = session.Wait()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(stdout.String()).To(ContainSubstring("FOO"))
+				})
+
+				It("does not inherit the daemon's PATH", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+
+					stdout := &bytes.Buffer{}
+
+					session.Stdin = strings.NewReader("/bin/echo -n $PATH")
+					session.Stdout = stdout
+
+					err = session.Shell()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = session.Wait()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stdout.String()).NotTo(ContainSubstring("/tmp"))
+				})
+			})
+
+			Context("when pass daemon env is disabled", func() {
+				BeforeEach(func() {
+					passDaemonEnv = false
+					os.Setenv("TEST", "FOO")
+				})
+
+				It("creates a shell environment", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+
+					stdout := &bytes.Buffer{}
+
+					session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
+					session.Stdout = stdout
+
+					session.Setenv("ENV_VAR", "env_var_value")
+					err = session.Shell()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = session.Wait()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(stdout.String()).To(ContainSubstring("env_var_value"))
+				})
+
+				It("does not inherits daemon's environment", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+
+					stdout := &bytes.Buffer{}
+
+					session.Stdin = strings.NewReader("/bin/echo -n $TEST")
+					session.Stdout = stdout
+
+					err = session.Shell()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = session.Wait()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(stdout.String()).NotTo(ContainSubstring("FOO"))
+				})
 			})
 		})
 
