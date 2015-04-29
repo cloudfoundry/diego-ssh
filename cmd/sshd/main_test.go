@@ -33,7 +33,7 @@ var _ = Describe("SSH daemon", func() {
 		authorizedKey string
 
 		allowUnauthenticatedClients bool
-		passDaemonEnv               bool
+		inheritDaemonEnv            bool
 	)
 
 	BeforeEach(func() {
@@ -42,7 +42,7 @@ var _ = Describe("SSH daemon", func() {
 		authorizedKey = publicAuthorizedKey
 
 		allowUnauthenticatedClients = false
-		passDaemonEnv = false
+		inheritDaemonEnv = false
 		address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	})
 
@@ -53,7 +53,7 @@ var _ = Describe("SSH daemon", func() {
 			AuthorizedKey: string(authorizedKey),
 
 			AllowUnauthenticatedClients: allowUnauthenticatedClients,
-			PassDaemonEnv:               passDaemonEnv,
+			InheritDaemonEnv:            inheritDaemonEnv,
 		}
 
 		runner = testrunner.New(sshdPath, args)
@@ -255,9 +255,9 @@ var _ = Describe("SSH daemon", func() {
 		})
 
 		Context("when a client requests a shell", func() {
-			Context("when pass daemon env is enabled", func() {
+			Context("when inherit daemon env is enabled", func() {
 				BeforeEach(func() {
-					passDaemonEnv = true
+					inheritDaemonEnv = true
 					os.Setenv("TEST", "FOO")
 					os.Setenv("PATH", "$PATH:/tmp")
 				})
@@ -317,9 +317,9 @@ var _ = Describe("SSH daemon", func() {
 				})
 			})
 
-			Context("when pass daemon env is disabled", func() {
+			Context("when inherit daemon env is disabled", func() {
 				BeforeEach(func() {
-					passDaemonEnv = false
+					inheritDaemonEnv = false
 					os.Setenv("TEST", "FOO")
 				})
 

@@ -45,10 +45,10 @@ var allowUnauthenticatedClients = flag.Bool(
 	"Allow access to unauthenticated clients",
 )
 
-var passDaemonEnv = flag.Bool(
-	"passDaemonEnv",
+var inheritDaemonEnv = flag.Bool(
+	"inheritDaemonEnv",
 	false,
-	"Pass daemon's environment",
+	"Inherit daemon's environment",
 )
 
 func main() {
@@ -107,7 +107,7 @@ func main() {
 func getDaemonEnvironment() map[string]string {
 	dameonEnv := map[string]string{}
 
-	if *passDaemonEnv {
+	if *inheritDaemonEnv {
 		envs := os.Environ()
 		for _, env := range envs {
 			nvp := strings.SplitN(env, "=", 2)
