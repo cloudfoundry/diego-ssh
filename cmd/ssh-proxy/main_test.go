@@ -226,20 +226,13 @@ var _ = Describe("SSH proxy", func() {
 				fakeCC = ghttp.NewServer()
 				ccAPIURL = fakeCC.URL()
 
-				ccAppResponse := authenticators.AppResponse{
-					Entity: authenticators.AppEntity{
-						Version:  "app-version",
-						AllowSSH: true,
-						Diego:    true,
-					},
-					Metadata: authenticators.AppMetadata{
-						Guid: "app-guid",
-					},
+				ccAppResponse := authenticators.AppSSHResponse{
+					ProcessGuid: "app-guid-app-version",
 				}
 
-				fakeCC.RouteToHandler("GET", "/v2/apps/app-guid",
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
 					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/apps/app-guid"),
+						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
 						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 						ghttp.RespondWithJSONEncoded(http.StatusOK, ccAppResponse),
 					),
@@ -276,7 +269,7 @@ var _ = Describe("SSH proxy", func() {
 
 					fakeCC.AppendHandlers(
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/apps/bad-app-guid"),
+							ghttp.VerifyRequest("GET", "/internal/apps/bad-app-guid/ssh_access"),
 							ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
 						),
@@ -298,20 +291,13 @@ var _ = Describe("SSH proxy", func() {
 				BeforeEach(func() {
 					clientConfig.User = "cf:bad-app-guid/0"
 
-					ccAppResponse := authenticators.AppResponse{
-						Entity: authenticators.AppEntity{
-							Version:  "app-version",
-							AllowSSH: true,
-							Diego:    true,
-						},
-						Metadata: authenticators.AppMetadata{
-							Guid: "bad-app-guid",
-						},
+					ccAppResponse := authenticators.AppSSHResponse{
+						ProcessGuid: "bad-app-guid-app-version",
 					}
 
 					fakeCC.AppendHandlers(
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v2/apps/bad-app-guid"),
+							ghttp.VerifyRequest("GET", "/internal/apps/bad-app-guid/ssh_access"),
 							ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 							ghttp.RespondWithJSONEncoded(http.StatusOK, ccAppResponse),
 						),

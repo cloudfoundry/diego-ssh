@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
@@ -43,29 +42,14 @@ func (cfa *CFAuthenticator) Realm() string {
 	return CF_REALM
 }
 
-type AppMetadata struct {
-	Guid string `json:"guid"`
-}
-
-type AppEntity struct {
-	AllowSSH bool   `json:"allow_ssh"`
-	Diego    bool   `json:"diego"`
-	Version  string `json:"version"`
-}
-
-type AppResponse struct {
-	Metadata AppMetadata `json:"metadata"`
-	Entity   AppEntity   `json:"entity"`
+type AppSSHResponse struct {
+	ProcessGuid string `json:"process_guid"`
 }
 
 func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	logger := cfa.logger.Session("authenticate")
 	if !CFRealmRegex.Match([]byte(metadata.User())) {
 		return nil, InvalidDomainErr
-	}
-
-	if !isBearerToken(password) {
-		return nil, InvalidCredentialsErr
 	}
 
 	principal := CFRealmRegex.FindStringSubmatch(metadata.User())[1]
@@ -82,7 +66,7 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	}
 
 	appGuid := guidAndIndex[1]
-	path := fmt.Sprintf("%s/v2/apps/%s", cfa.ccURL, appGuid)
+	path := fmt.Sprintf("%s/internal/apps/%s/ssh_access", cfa.ccURL, appGuid)
 
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
@@ -105,39 +89,17 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, FetchAppFailedErr
 	}
 
-	var app AppResponse
+	var app AppSSHResponse
 	err = json.NewDecoder(resp.Body).Decode(&app)
 	if err != nil {
 		logger.Error("invalid-cc-response", err)
 		return nil, InvalidCCResponse
 	}
 
-	if !app.Entity.Diego {
-		return nil, NotDiegoErr
-	}
-
-	if !app.Entity.AllowSSH {
-		return nil, SSHDisabledErr
-	}
-
-	processGuid := app.Metadata.Guid + "-" + app.Entity.Version
-
-	permissions, err := sshPermissionsFromProcess(processGuid, index, cfa.receptorClient)
+	permissions, err := sshPermissionsFromProcess(app.ProcessGuid, index, cfa.receptorClient)
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}
 
 	return permissions, err
-}
-
-func isBearerToken(cred []byte) bool {
-	if len(cred) < len("bearer ")+1 {
-		return false
-	}
-
-	if strings.ToLower(string(cred)[0:len("bearer ")]) == "bearer " {
-		return true
-	}
-
-	return false
 }

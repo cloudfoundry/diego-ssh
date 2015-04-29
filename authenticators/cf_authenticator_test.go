@@ -57,7 +57,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 	Describe("Authenticate", func() {
 		var (
-			expectedResponse   *authenticators.AppResponse
+			expectedResponse   *authenticators.AppSSHResponse
 			responseCode       int
 			expectedRoute      routes.SSHRoute
 			desiredLRPResponse receptor.DesiredLRPResponse
@@ -68,21 +68,14 @@ var _ = Describe("CFAuthenticator", func() {
 			metadata.UserReturns("cf:app-guid/1")
 			password = []byte("bearer token")
 
-			expectedResponse = &authenticators.AppResponse{
-				Metadata: authenticators.AppMetadata{
-					Guid: "app-guid",
-				},
-				Entity: authenticators.AppEntity{
-					AllowSSH: true,
-					Diego:    true,
-					Version:  "app-version",
-				},
+			expectedResponse = &authenticators.AppSSHResponse{
+				ProcessGuid: "app-guid-app-version",
 			}
 			responseCode = http.StatusOK
 
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v2/apps/app-guid"),
+					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 					ghttp.RespondWithJSONEncodedPtr(&responseCode, expectedResponse),
 				),
@@ -131,17 +124,6 @@ var _ = Describe("CFAuthenticator", func() {
 
 				It("fails to authenticate", func() {
 					Expect(err).To(Equal(authenticators.InvalidRequestErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("and the password is not a bearer token", func() {
-				BeforeEach(func() {
-					password = []byte("bearer")
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
 					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
@@ -223,10 +205,10 @@ var _ = Describe("CFAuthenticator", func() {
 				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
 			})
 
-			Context("and fetching the app from cc returns a non-200 status code", func() {
+			Context("and fetching the ssh_access from cc returns a non-200 status code", func() {
 				BeforeEach(func() {
 					responseCode = http.StatusInternalServerError
-					expectedResponse = &authenticators.AppResponse{}
+					expectedResponse = &authenticators.AppSSHResponse{}
 				})
 
 				It("fails to authenticate", func() {
@@ -235,32 +217,10 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 			})
 
-			Context("and the application is not a Diego application", func() {
-				BeforeEach(func() {
-					expectedResponse.Entity.Diego = false
-				})
-
-				It("fails authentication", func() {
-					Expect(err).To(Equal(authenticators.NotDiegoErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-				})
-			})
-
-			Context("and allow_ssh is false", func() {
-				BeforeEach(func() {
-					expectedResponse.Entity.AllowSSH = false
-				})
-
-				It("fails authentication", func() {
-					Expect(err).To(Equal(authenticators.SSHDisabledErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-				})
-			})
-
 			Context("and the response cannot be parsed", func() {
 				BeforeEach(func() {
 					fakeCC.SetHandler(0, ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/v2/apps/app-guid"),
+						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
 						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 						ghttp.RespondWith(http.StatusOK, "{{"),
 					))
@@ -272,10 +232,11 @@ var _ = Describe("CFAuthenticator", func() {
 				})
 			})
 
-			Context("and fetching the app from cc times out", func() {
+			Context("and fetching the ssh_access from cc times out", func() {
 				BeforeEach(func() {
+					ccTempClientTimeout := ccClientTimeout
 					fakeCC.SetHandler(0, func(w http.ResponseWriter, req *http.Request) {
-						time.Sleep(ccClientTimeout * 2)
+						time.Sleep(ccTempClientTimeout * 2)
 						w.Write([]byte(`[]`))
 					})
 				})
