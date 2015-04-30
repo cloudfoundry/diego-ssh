@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -64,14 +66,19 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	permissions, err := sshPermissionsFromProcess(processGuid, index, dpa.receptorClient)
+	permissions, err := sshPermissionsFromProcess(processGuid, index, dpa.receptorClient, metadata.RemoteAddr())
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}
 	return permissions, err
 }
 
-func sshPermissionsFromProcess(processGuid string, index int, receptorClient receptor.Client) (*ssh.Permissions, error) {
+func sshPermissionsFromProcess(
+	processGuid string,
+	index int,
+	receptorClient receptor.Client,
+	remoteAddr net.Addr,
+) (*ssh.Permissions, error) {
 	actual, err := receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
 	if err != nil {
 		return nil, err
@@ -86,6 +93,9 @@ func sshPermissionsFromProcess(processGuid string, index int, receptorClient rec
 	if err != nil {
 		return nil, err
 	}
+
+	logMessage := fmt.Sprintf("Successful remote access by %s", remoteAddr.String())
+	emitLogMessage(desired.LogGuid, logMessage, index)
 
 	return createPermissions(sshRoute, &actual)
 }
@@ -123,6 +133,10 @@ func createPermissions(
 			"proxy-target-config": string(targetConfigJson),
 		},
 	}, nil
+}
+
+func emitLogMessage(logGuid string, message string, index int) error {
+	return logs.SendAppLog(logGuid, message, "SSH", strconv.Itoa(index))
 }
 
 func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*routes.SSHRoute, error) {

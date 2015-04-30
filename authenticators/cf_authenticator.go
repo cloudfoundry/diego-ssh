@@ -96,7 +96,7 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, InvalidCCResponse
 	}
 
-	permissions, err := sshPermissionsFromProcess(app.ProcessGuid, index, cfa.receptorClient)
+	permissions, err := sshPermissionsFromProcess(app.ProcessGuid, index, cfa.receptorClient, metadata.RemoteAddr())
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}

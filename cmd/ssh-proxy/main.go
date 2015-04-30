@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry/dropsonde"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -57,12 +58,19 @@ var cfOnly = flag.Bool(
 	"Only allow authentication with cf",
 )
 
+const (
+	dropsondeDestination = "localhost:3457"
+	dropsondeOrigin      = "ssh-proxy"
+)
+
 func main() {
 	cf_debug_server.AddFlags(flag.CommandLine)
 	cf_lager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	logger, reconfigurableSink := cf_lager.New("ssh-proxy")
+
+	initializeDropsonde(logger)
 
 	proxyConfig, err := configure(logger)
 	if err != nil {
@@ -96,6 +104,13 @@ func main() {
 
 	logger.Info("exited")
 	os.Exit(0)
+}
+
+func initializeDropsonde(logger lager.Logger) {
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
+	if err != nil {
+		logger.Error("failed to initialize dropsonde: %v", err)
+	}
 }
 
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
