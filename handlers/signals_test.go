@@ -8,7 +8,6 @@ import (
 )
 
 var _ = Describe("Signals", func() {
-
 	Describe("Signal Mapping", func() {
 		It("should have the same length map", func() {
 			Expect(handlers.SyscallSignals).To(HaveLen(len(handlers.SSHSignals)))
@@ -24,5 +23,4 @@ var _ = Describe("Signals", func() {
 			}
 		})
 	})
-
 })

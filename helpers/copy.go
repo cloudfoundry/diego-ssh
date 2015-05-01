@@ -18,7 +18,6 @@ func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader
 	if wg != nil {
 		wg.Done()
 	}
-
 }
 
 func CopyAndClose(logger lager.Logger, wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {

@@ -21,6 +21,7 @@ import (
 type Runner interface {
 	Start(cmd *exec.Cmd) error
 	Wait(cmd *exec.Cmd) error
+	Signal(cmd *exec.Cmd, signal syscall.Signal) error
 }
 
 type commandRunner struct{}
@@ -35,6 +36,10 @@ func (commandRunner) Start(cmd *exec.Cmd) error {
 
 func (commandRunner) Wait(cmd *exec.Cmd) error {
 	return cmd.Wait()
+}
+
+func (commandRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
+	return cmd.Process.Signal(signal)
 }
 
 //go:generate counterfeiter -o fakes/fake_shell_locator.go . ShellLocator
@@ -199,7 +204,7 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 
 	if cmd != nil {
 		signal := SyscallSignals[ssh.Signal(signalMessage.Signal)]
-		err := cmd.Process.Signal(signal)
+		err := sess.runner.Signal(cmd, signal)
 		if err != nil {
 			logger.Error("process-signal-failed", err)
 		}
@@ -552,13 +557,13 @@ func (sess *session) destroy() {
 		return
 	}
 
+	sess.wg.Wait()
+
 	sess.complete = true
 
 	if sess.channel != nil {
 		sess.channel.Close()
 	}
-
-	sess.wg.Wait()
 
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()

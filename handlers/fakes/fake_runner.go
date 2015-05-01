@@ -4,6 +4,7 @@ package fakes
 import (
 	"os/exec"
 	"sync"
+	"syscall"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 )
@@ -23,6 +24,15 @@ type FakeRunner struct {
 		cmd *exec.Cmd
 	}
 	waitReturns struct {
+		result1 error
+	}
+	SignalStub        func(cmd *exec.Cmd, signal syscall.Signal) error
+	signalMutex       sync.RWMutex
+	signalArgsForCall []struct {
+		cmd    *exec.Cmd
+		signal syscall.Signal
+	}
+	signalReturns struct {
 		result1 error
 	}
 }
@@ -87,6 +97,39 @@ func (fake *FakeRunner) WaitArgsForCall(i int) *exec.Cmd {
 func (fake *FakeRunner) WaitReturns(result1 error) {
 	fake.WaitStub = nil
 	fake.waitReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
+	fake.signalMutex.Lock()
+	fake.signalArgsForCall = append(fake.signalArgsForCall, struct {
+		cmd    *exec.Cmd
+		signal syscall.Signal
+	}{cmd, signal})
+	fake.signalMutex.Unlock()
+	if fake.SignalStub != nil {
+		return fake.SignalStub(cmd, signal)
+	} else {
+		return fake.signalReturns.result1
+	}
+}
+
+func (fake *FakeRunner) SignalCallCount() int {
+	fake.signalMutex.RLock()
+	defer fake.signalMutex.RUnlock()
+	return len(fake.signalArgsForCall)
+}
+
+func (fake *FakeRunner) SignalArgsForCall(i int) (*exec.Cmd, syscall.Signal) {
+	fake.signalMutex.RLock()
+	defer fake.signalMutex.RUnlock()
+	return fake.signalArgsForCall[i].cmd, fake.signalArgsForCall[i].signal
+}
+
+func (fake *FakeRunner) SignalReturns(result1 error) {
+	fake.SignalStub = nil
+	fake.signalReturns = struct {
 		result1 error
 	}{result1}
 }

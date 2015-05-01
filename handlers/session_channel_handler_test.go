@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
@@ -34,6 +33,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
 		defaultEnv         map[string]string
+		connectionFinished chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -47,6 +47,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		realRunner := handlers.NewCommandRunner()
 		runner.StartStub = realRunner.Start
 		runner.WaitStub = realRunner.Wait
+		runner.SignalStub = realRunner.Signal
 
 		shellLocator = &fakes.FakeShellLocator{}
 		shellLocator.ShellPathReturns("/bin/sh")
@@ -63,13 +64,19 @@ var _ = Describe("SessionChannelHandler", func() {
 		serverNetConn, clientNetConn := test_helpers.Pipe()
 
 		sshd = daemon.New(logger, serverSSHConfig, nil, newChannelHandlers)
-		go sshd.HandleConnection(serverNetConn)
+		connectionFinished = make(chan struct{})
+		go func() {
+			sshd.HandleConnection(serverNetConn)
+			close(connectionFinished)
+		}()
 
 		client = test_helpers.NewClient(clientNetConn, nil)
 	})
 
 	AfterEach(func() {
-		client.Close()
+		err := client.Close()
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(connectionFinished).Should(BeClosed())
 	})
 
 	Context("when a session is opened", func() {
@@ -80,10 +87,6 @@ var _ = Describe("SessionChannelHandler", func() {
 			session, sessionErr = client.NewSession()
 
 			Expect(sessionErr).NotTo(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			session.Close()
 		})
 
 		It("can use the session to execute a command with stdout and stderr", func() {
@@ -179,6 +182,8 @@ var _ = Describe("SessionChannelHandler", func() {
 					err := session.Signal(ssh.SIGUSR1)
 					Expect(err).NotTo(HaveOccurred())
 
+					Eventually(runner.SignalCallCount).Should(Equal(1))
+
 					err = stdin.Close()
 					Expect(err).NotTo(HaveOccurred())
 
@@ -193,6 +198,8 @@ var _ = Describe("SessionChannelHandler", func() {
 				It("exits with an exit-signal response", func() {
 					err := session.Signal(ssh.SIGUSR2)
 					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(runner.SignalCallCount).Should(Equal(1))
 
 					err = stdin.Close()
 					Expect(err).NotTo(HaveOccurred())
@@ -398,55 +405,53 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			// Looks like there are some issues with terminal attributes on Linux.
 			// These need further investigation there.
-			if runtime.GOOS == "darwin" {
-				Context("when local modes are specified in TerminalModes", func() {
-					BeforeEach(func() {
-						terminalModes[ssh.IEXTEN] = 0
-						terminalModes[ssh.ECHOCTL] = 1
-					})
-
-					It("honors the local mode changes", func() {
-						result, err := session.Output("stty -a")
-						Expect(err).NotTo(HaveOccurred())
-
-						Expect(string(result)).To(ContainSubstring(" -iexten"))
-						Expect(string(result)).To(ContainSubstring(" echoctl"))
-					})
+			Context("when local modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					terminalModes[ssh.IEXTEN] = 0
+					terminalModes[ssh.ECHOCTL] = 1
 				})
 
-				Context("when output modes are specified in TerminalModes", func() {
-					BeforeEach(func() {
-						terminalModes[ssh.ONLCR] = 0
-						terminalModes[ssh.ONLRET] = 1
-					})
+				It("honors the local mode changes", func() {
+					result, err := session.Output("stty -a")
+					Expect(err).NotTo(HaveOccurred())
 
-					It("honors the output mode changes", func() {
-						result, err := session.Output("stty -a")
-						Expect(err).NotTo(HaveOccurred())
+					Expect(string(result)).To(ContainSubstring(" -iexten"))
+					Expect(string(result)).To(ContainSubstring(" echoctl"))
+				})
+			})
 
-						Expect(string(result)).To(ContainSubstring(" -onlcr"))
-						Expect(string(result)).To(ContainSubstring(" -onlret"))
-					})
+			Context("when output modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					terminalModes[ssh.ONLCR] = 0
+					terminalModes[ssh.ONLRET] = 1
 				})
 
-				Context("when control character modes are specified in TerminalModes", func() {
-					BeforeEach(func() {
-						// Set to E71
-						terminalModes[ssh.PARODD] = 0
-						terminalModes[ssh.CS7] = 1
-						terminalModes[ssh.PARENB] = 1
-					})
+				It("honors the output mode changes", func() {
+					result, err := session.Output("stty -a")
+					Expect(err).NotTo(HaveOccurred())
 
-					It("honors the control mode changes", func() {
-						result, err := session.Output("stty -a")
-						Expect(err).NotTo(HaveOccurred())
-
-						Expect(string(result)).To(ContainSubstring(" -parodd"))
-						Expect(string(result)).To(ContainSubstring(" cs7"))
-						Expect(string(result)).To(ContainSubstring(" parenb"))
-					})
+					Expect(string(result)).To(ContainSubstring(" -onlcr"))
+					Expect(string(result)).To(ContainSubstring(" -onlret"))
 				})
-			}
+			})
+
+			Context("when control character modes are specified in TerminalModes", func() {
+				BeforeEach(func() {
+					// Set to E71
+					terminalModes[ssh.PARODD] = 0
+					terminalModes[ssh.CS7] = 1
+					terminalModes[ssh.PARENB] = 1
+				})
+
+				It("honors the control mode changes", func() {
+					result, err := session.Output("stty -a")
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(string(result)).To(ContainSubstring(" -parodd"))
+					Expect(string(result)).To(ContainSubstring(" cs7"))
+					Expect(string(result)).To(ContainSubstring(" parenb"))
+				})
+			})
 
 			Context("when an interactive command is executed", func() {
 				var stdin io.WriteCloser
@@ -462,6 +467,9 @@ var _ = Describe("SessionChannelHandler", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					_, err = stdin.Write([]byte("exit\n"))
+					Expect(err).NotTo(HaveOccurred())
+
+					err = stdin.Close()
 					Expect(err).NotTo(HaveOccurred())
 
 					err = session.Wait()
@@ -551,10 +559,6 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			AfterEach(func() {
-				session.Close()
-			})
-
 			It("starts the shell with the runner", func() {
 				Eventually(runner.StartCallCount).Should(Equal(1))
 
@@ -565,6 +569,9 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("terminates the session when the shell exits", func() {
 				_, err := stdin.Write([]byte("exit\n"))
+				Expect(err).NotTo(HaveOccurred())
+
+				err = stdin.Close()
 				Expect(err).NotTo(HaveOccurred())
 
 				err = session.Wait()
