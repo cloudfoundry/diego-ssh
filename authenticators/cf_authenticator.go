@@ -80,6 +80,7 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		logger.Error("fetching-app-failed", err)
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("fetching-app-failed", FetchAppFailedErr, lager.Data{
