@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
@@ -416,14 +417,13 @@ var _ = Describe("SessionChannelHandler", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(string(result)).To(ContainSubstring(" -iexten"))
-					Expect(string(result)).To(ContainSubstring(" echoctl"))
+					Expect(string(result)).To(MatchRegexp("[^-]echoctl"))
 				})
 			})
 
 			Context("when output modes are specified in TerminalModes", func() {
 				BeforeEach(func() {
 					terminalModes[ssh.ONLCR] = 0
-					terminalModes[ssh.ONLRET] = 1
 				})
 
 				It("honors the output mode changes", func() {
@@ -431,16 +431,28 @@ var _ = Describe("SessionChannelHandler", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(string(result)).To(ContainSubstring(" -onlcr"))
-					Expect(string(result)).To(ContainSubstring(" -onlret"))
 				})
+
+				if runtime.GOOS == "linux" {
+					Context("on linux", func() {
+						BeforeEach(func() {
+							terminalModes[ssh.ONLRET] = 0
+						})
+
+						It("honors the output mode changes", func() {
+							result, err := session.Output("stty -a")
+							Expect(err).NotTo(HaveOccurred())
+
+							Expect(string(result)).To(ContainSubstring(" onlret"))
+						})
+					})
+				}
 			})
 
 			Context("when control character modes are specified in TerminalModes", func() {
 				BeforeEach(func() {
 					// Set to E71
 					terminalModes[ssh.PARODD] = 0
-					terminalModes[ssh.CS7] = 1
-					terminalModes[ssh.PARENB] = 1
 				})
 
 				It("honors the control mode changes", func() {
@@ -448,8 +460,6 @@ var _ = Describe("SessionChannelHandler", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(string(result)).To(ContainSubstring(" -parodd"))
-					Expect(string(result)).To(ContainSubstring(" cs7"))
-					Expect(string(result)).To(ContainSubstring(" parenb"))
 				})
 			})
 
