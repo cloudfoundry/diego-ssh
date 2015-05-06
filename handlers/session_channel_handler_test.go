@@ -436,7 +436,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				if runtime.GOOS == "linux" {
 					Context("on linux", func() {
 						BeforeEach(func() {
-							terminalModes[ssh.ONLRET] = 0
+							terminalModes[ssh.ONLRET] = 1
 						})
 
 						It("honors the output mode changes", func() {
