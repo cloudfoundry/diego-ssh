@@ -505,8 +505,7 @@ func (sess *session) run(command *exec.Cmd) error {
 		return err
 	}
 
-	sess.wg.Add(1)
-	go helpers.CopyAndClose(logger.Session("to-stdin"), &sess.wg, stdin, sess.channel)
+	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel)
 
 	return sess.runner.Start(command)
 }
@@ -535,9 +534,12 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 	setTerminalAttributes(logger, ptyMaster, sess.ptyRequest.Modelist)
 	setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 
-	sess.wg.Add(2)
-	go helpers.Copy(logger.Session("to-pty"), &sess.wg, ptyMaster, sess.channel)
-	go helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
+	sess.wg.Add(1)
+	go helpers.Copy(logger.Session("to-pty"), nil, ptyMaster, sess.channel)
+	go func() {
+		helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
+		sess.channel.CloseWrite()
+	}()
 
 	return sess.runner.Start(command)
 }
@@ -558,7 +560,6 @@ func (sess *session) destroy() {
 	}
 
 	sess.wg.Wait()
-
 	sess.complete = true
 
 	if sess.channel != nil {

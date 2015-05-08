@@ -109,6 +109,16 @@ var _ = Describe("SessionChannelHandler", func() {
 			Expect(stderrBytes).To(Equal([]byte("Goodbye")))
 		})
 
+		It("returns when the process exits", func() {
+			stdin, err := session.StdinPipe()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = session.Run("ls")
+			Expect(err).NotTo(HaveOccurred())
+
+			stdin.Close()
+		})
+
 		Describe("the shell locator", func() {
 			BeforeEach(func() {
 				err := session.Run("true")
@@ -355,6 +365,16 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result).NotTo(ContainSubstring("not a tty"))
+			})
+
+			It("returns when the process exits", func() {
+				stdin, err := session.StdinPipe()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = session.Run("ls")
+				Expect(err).NotTo(HaveOccurred())
+
+				stdin.Close()
 			})
 
 			It("should set the terminal type", func() {
