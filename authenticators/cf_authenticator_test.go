@@ -49,7 +49,7 @@ var _ = Describe("CFAuthenticator", func() {
 		logs.Initialize(fakeLogSender)
 
 		logger = lagertest.NewTestLogger("test")
-		ccClientTimeout = 100 * time.Millisecond
+		ccClientTimeout = time.Second
 		ccClient = &http.Client{Timeout: ccClientTimeout}
 		receptorClient = new(fake_receptor.FakeClient)
 
