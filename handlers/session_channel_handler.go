@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 	"syscall"
 
@@ -17,11 +18,18 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var scpRegex = regexp.MustCompile(`^\s*scp($|\s+)`)
+
 //go:generate counterfeiter -o fakes/fake_runner.go . Runner
 type Runner interface {
 	Start(cmd *exec.Cmd) error
 	Wait(cmd *exec.Cmd) error
 	Signal(cmd *exec.Cmd, signal syscall.Signal) error
+}
+
+//go:generate counterfeiter -o fakes/fake_scp_handler.go . SCPHandler
+type SCPHandler interface {
+	HandleSCPRequest(channel ssh.Channel, request *ssh.Request, cmd string) error
 }
 
 type commandRunner struct{}
@@ -66,13 +74,20 @@ func (shellLocator) ShellPath() string {
 type SessionChannelHandler struct {
 	runner       Runner
 	shellLocator ShellLocator
+	scpHandler   SCPHandler
 	defaultEnv   map[string]string
 }
 
-func NewSessionChannelHandler(runner Runner, shellLocator ShellLocator, defaultEnv map[string]string) *SessionChannelHandler {
+func NewSessionChannelHandler(
+	runner Runner,
+	shellLocator ShellLocator,
+	scpHandler SCPHandler,
+	defaultEnv map[string]string,
+) *SessionChannelHandler {
 	return &SessionChannelHandler{
 		runner:       runner,
 		shellLocator: shellLocator,
+		scpHandler:   scpHandler,
 		defaultEnv:   defaultEnv,
 	}
 }
@@ -104,6 +119,8 @@ type session struct {
 	runner    Runner
 	channel   ssh.Channel
 
+	scpHandler SCPHandler
+
 	sync.Mutex
 	env     map[string]string
 	command *exec.Cmd
@@ -117,11 +134,12 @@ type session struct {
 
 func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel) *session {
 	return &session{
-		logger:    logger.Session("session-channel"),
-		runner:    handler.runner,
-		shellPath: handler.shellLocator.ShellPath(),
-		channel:   channel,
-		env:       handler.defaultEnv,
+		logger:     logger.Session("session-channel"),
+		runner:     handler.runner,
+		shellPath:  handler.shellLocator.ShellPath(),
+		channel:    channel,
+		env:        handler.defaultEnv,
+		scpHandler: handler.scpHandler,
 	}
 }
 
@@ -296,6 +314,10 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 			request.Reply(false, nil)
 		}
 		return
+	}
+
+	if scpRegex.MatchString(execMessage.Command) {
+		sess.scpHandler.HandleSCPRequest(request, execMessage.Command)
 	}
 
 	sess.executeShell(request, "-c", execMessage.Command)

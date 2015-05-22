@@ -31,6 +31,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner                *fakes.FakeRunner
 		shellLocator          *fakes.FakeShellLocator
 		sessionChannelHandler *handlers.SessionChannelHandler
+		scpHandler            *fakes.FakeSCPHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
 		defaultEnv         map[string]string
@@ -56,7 +57,8 @@ var _ = Describe("SessionChannelHandler", func() {
 		defaultEnv = map[string]string{}
 		defaultEnv["TEST"] = "FOO"
 
-		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv)
+		scpHandler = &fakes.FakeSCPHandler{}
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, scpHandler, defaultEnv)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
@@ -117,6 +119,24 @@ var _ = Describe("SessionChannelHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			stdin.Close()
+		})
+
+		Describe("scp", func() {
+			Context("when the command is scp", func() {
+				It("intercepts the command and sends it to the scp session handler", func() {
+					err := session.Run("scp -v -t /tmp/foo")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(1))
+				})
+			})
+
+			Context("when the command is not scp", func() {
+				It("does not send the command to the scp session handler", func() {
+					err := session.Run("scp-nope -v -t /tmp/foo || true")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(0))
+				})
+			})
 		})
 
 		Describe("the shell locator", func() {
