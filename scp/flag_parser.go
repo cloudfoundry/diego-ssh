@@ -28,19 +28,19 @@ import (
 //
 // The verbose flag is always propagated.
 
-type SCPOptions struct {
-	SourceMode        bool
-	TargetMode        bool
-	TargetIsDirectory bool
-	Verbose           bool
-	PreserveTimes     bool
-	Recursive         bool
+type Options struct {
+	SourceMode           bool
+	TargetMode           bool
+	TargetIsDirectory    bool
+	Verbose              bool
+	PreserveTimesAndMode bool
+	Recursive            bool
 
 	Sources []string
 	Target  string
 }
 
-func ParseFlags(args []string) (*SCPOptions, error) {
+func ParseFlags(args []string) (*Options, error) {
 	cmd := args[0]
 
 	// don't allow commands that are not diego-scp
@@ -68,7 +68,7 @@ func ParseFlags(args []string) (*SCPOptions, error) {
 	opts.Lookup('v').SetOptional()
 
 	// preserve times option is optional
-	preserveTimes := opts.Bool('p', "", "Indicates that scp should preserve timestamps of files/directories transferred")
+	preserveTimesAndMode := opts.Bool('p', "", "Indicates that scp should preserve timestamps and mode of files/directories transferred")
 	opts.Lookup('p').SetOptional()
 
 	// recursive option is optional
@@ -107,14 +107,14 @@ func ParseFlags(args []string) (*SCPOptions, error) {
 		target = opts.Args()[0]
 	}
 
-	return &SCPOptions{
-		TargetMode:        *targetMode,
-		SourceMode:        *sourceMode,
-		TargetIsDirectory: *targetIsDirectory,
-		Verbose:           *verbose,
-		PreserveTimes:     *preserveTimes,
-		Recursive:         *recursive,
-		Sources:           sources,
-		Target:            target,
+	return &Options{
+		TargetMode:           *targetMode,
+		SourceMode:           *sourceMode,
+		TargetIsDirectory:    *targetIsDirectory,
+		Verbose:              *verbose,
+		PreserveTimesAndMode: *preserveTimesAndMode,
+		Recursive:            *recursive,
+		Sources:              sources,
+		Target:               target,
 	}, nil
 }

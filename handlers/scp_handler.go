@@ -13,6 +13,10 @@ func NewSCPHandler() SCPHandler {
 }
 
 func (handler *scpHandler) HandleSCPRequest(channel ssh.Channel, request *ssh.Request, cmd string) error {
-	scp.New(cmd, channel, channel, channel.Stderr())
-	return nil
+	copier, err := scp.New(cmd, channel, channel, channel.Stderr())
+	if err != nil {
+		return err
+	}
+
+	return copier.Copy()
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -31,7 +32,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner                *fakes.FakeRunner
 		shellLocator          *fakes.FakeShellLocator
 		sessionChannelHandler *handlers.SessionChannelHandler
-		scpHandler            *fakes.FakeSCPHandler
+		scpHandler            handlers.SCPHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
 		defaultEnv         map[string]string
@@ -57,7 +58,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		defaultEnv = map[string]string{}
 		defaultEnv["TEST"] = "FOO"
 
-		scpHandler = &fakes.FakeSCPHandler{}
+		scpHandler = handlers.NewSCPHandler()
 		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, scpHandler, defaultEnv)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
@@ -123,20 +124,102 @@ var _ = Describe("SessionChannelHandler", func() {
 
 		Describe("scp", func() {
 			Context("when the command is scp", func() {
-				It("intercepts the command and sends it to the scp session handler", func() {
-					err := session.Run("scp -v -t /tmp/foo")
+				var (
+					sourceDir, generatedTextFile, targetDir string
+					err                                     error
+					stdin                                   io.WriteCloser
+					stdout                                  io.Reader
+					fileContents                            []byte
+				)
+
+				BeforeEach(func() {
+					stdin, err = session.StdinPipe()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(1))
+
+					stdout, err = session.StdoutPipe()
+					Expect(err).NotTo(HaveOccurred())
+
+					sourceDir, err = ioutil.TempDir("", "scp-source")
+					Expect(err).NotTo(HaveOccurred())
+
+					fileContents = []byte("---\nthis is a simple file\n\n")
+					generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
+
+					err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
+					Expect(err).NotTo(HaveOccurred())
+
+					targetDir, err = ioutil.TempDir("", "scp-target")
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				// It("intercepts the command and sends it to the scp session handler", func() {
+				// 	err := session.Run("scp -v -t /tmp/foo")
+				// 	Expect(err).NotTo(HaveOccurred())
+				// 	Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(1))
+				// })
+
+				FIt("properly copies using the secure copier", func() {
+					done := make(chan struct{})
+					go func() {
+						defer GinkgoRecover()
+						err := session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
+						Expect(err).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					confirmation := make([]byte, 1)
+					_, err = stdout.Read(confirmation)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(confirmation).To(Equal([]byte{0}))
+
+					expectedFileInfo, err := os.Stat(generatedTextFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = stdin.Write([]byte(fmt.Sprintf("C0664 %d textfile.txt\n", expectedFileInfo.Size())))
+					Expect(err).NotTo(HaveOccurred())
+
+					confirmation = make([]byte, 1)
+					_, err = stdout.Read(confirmation)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(confirmation).To(Equal([]byte{0}))
+
+					_, err = stdin.Write(fileContents)
+					Expect(err).NotTo(HaveOccurred())
+
+					confirmation = make([]byte, 1)
+					_, err = stdout.Read(confirmation)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(confirmation).To(Equal([]byte{0}))
+
+					err = stdin.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					actualFilePath := filepath.Join(targetDir, filepath.Base(generatedTextFile))
+					actualFileInfo, err := os.Stat(actualFilePath)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+					Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
+
+					actualContents, err := ioutil.ReadFile(actualFilePath)
+					Expect(err).NotTo(HaveOccurred())
+
+					expectedContents, err := ioutil.ReadFile(generatedTextFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(actualContents).To(Equal(expectedContents))
+
+					Eventually(done).Should(BeClosed())
 				})
 			})
 
-			Context("when the command is not scp", func() {
-				It("does not send the command to the scp session handler", func() {
-					err := session.Run("scp-nope -v -t /tmp/foo || true")
-					Expect(err).NotTo(HaveOccurred())
-					Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(0))
-				})
-			})
+			// Context("when the command is not scp", func() {
+			// 	It("does not send the command to the scp session handler", func() {
+			// 		err := session.Run("scp-nope -v -t /tmp/foo || true")
+			// 		Expect(err).NotTo(HaveOccurred())
+			// 		Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(0))
+			// 	})
+			// })
 		})
 
 		Describe("the shell locator", func() {

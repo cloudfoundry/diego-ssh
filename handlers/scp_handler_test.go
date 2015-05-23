@@ -6,7 +6,9 @@ import (
 )
 
 var _ = Describe("SCPHandler", func() {
-	It("does something", func() {
-		Expect(true).To(Equal(true))
+	Describe("HandleSCPRequest", func() {
+		It("does something", func() {
+			Expect(true).To(Equal(true))
+		})
 	})
 })

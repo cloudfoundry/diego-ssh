@@ -2,647 +2,558 @@ package scp_test
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
+	"github.com/cloudfoundry-incubator/diego-ssh/scp/atime"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Scp", func() {
+var _ = Describe("scp", func() {
 	var (
-		stdout, stderr *bytes.Buffer
+		stdin, stdoutSource io.ReadCloser
+		stdinSource, stdout io.WriteCloser
+		stderr              io.Writer
+
+		sourceDir               string
+		targetDir               string
+		nestedTempDir           string
+		generatedTextFile       string
+		generatedNestedTextFile string
+		generatedBinaryFile     string
+
+		secureCopier scp.SecureCopier
 	)
 
 	BeforeEach(func() {
-		stdout = &bytes.Buffer{}
-		stderr = &bytes.Buffer{}
+		stdin, stdinSource = io.Pipe()
+		stdoutSource, stdout = io.Pipe()
+		stderr = ioutil.Discard
+
+		var err error
+		sourceDir, err = ioutil.TempDir("", "scp-source")
+		Expect(err).NotTo(HaveOccurred())
+
+		fileContents := []byte("---\nthis is a simple file\n\n")
+		generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
+
+		err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
+		Expect(err).NotTo(HaveOccurred())
+
+		fileContents = make([]byte, 1024)
+		generatedBinaryFile = filepath.Join(sourceDir, "binary.dat")
+
+		_, err = rand.Read(fileContents)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = ioutil.WriteFile(generatedBinaryFile, fileContents, 0400)
+		Expect(err).NotTo(HaveOccurred())
+
+		nestedTempDir, err = ioutil.TempDir(sourceDir, "nested")
+		Expect(err).NotTo(HaveOccurred())
+
+		nestedFileContents := []byte("---\nthis is a simple nested file\n\n")
+		generatedNestedTextFile = filepath.Join(nestedTempDir, "nested-textfile.txt")
+
+		err = ioutil.WriteFile(generatedNestedTextFile, nestedFileContents, 0664)
+		Expect(err).NotTo(HaveOccurred())
+
+		targetDir, err = ioutil.TempDir("", "scp-target")
+		Expect(err).NotTo(HaveOccurred())
+
+		secureCopier = nil
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(sourceDir)
+		os.RemoveAll(targetDir)
 	})
 
 	Context("source mode", func() {
-		var tempDir string
-		var nestedTempDir string
-		var generatedTextFile string
-		var generatedNestedTextFile string
-		var generatedBinaryFile string
-
-		BeforeEach(func() {
-			var err error
-			tempDir, err = ioutil.TempDir("", "scp")
-			Expect(err).NotTo(HaveOccurred())
-
-			fileContents := []byte("---\nthis is a simple file\n\n")
-			generatedTextFile = filepath.Join(tempDir, "textfile.txt")
-
-			err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
-			Expect(err).NotTo(HaveOccurred())
-
-			fileContents = make([]byte, 1024)
-			generatedBinaryFile = filepath.Join(tempDir, "binary.dat")
-
-			_, err = rand.Read(fileContents)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = ioutil.WriteFile(generatedBinaryFile, fileContents, 0400)
-			Expect(err).NotTo(HaveOccurred())
-
-			nestedTempDir, err = ioutil.TempDir(tempDir, "nested")
-			Expect(err).NotTo(HaveOccurred())
-
-			nestedFileContents := []byte("---\nthis is a simple nested file\n\n")
-			generatedNestedTextFile = filepath.Join(nestedTempDir, "nested-textfile.txt")
-
-			err = ioutil.WriteFile(generatedNestedTextFile, nestedFileContents, 0664)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			os.RemoveAll(tempDir)
-		})
-
 		Context("when no files are requested", func() {
 			It("fails construct the copier", func() {
-				stdin := &bytes.Buffer{}
 				_, err := scp.New("scp -f", stdin, stdout, stderr)
 				Expect(err).To(HaveOccurred())
 			})
 		})
 
-		Context("message confirmation", func() {
+		Context("when files are requested", func() {
+			var (
+				sourceFileInfo     os.FileInfo
+				preserveTimestamps bool
+			)
+
 			BeforeEach(func() {
-				Expect(os.Remove(generatedNestedTextFile)).NotTo(HaveOccurred())
-				Expect(os.RemoveAll(nestedTempDir)).NotTo(HaveOccurred())
-				Expect(os.Remove(generatedBinaryFile)).NotTo(HaveOccurred())
+				preserveTimestamps = false
 			})
 
-			It("does not send a message until it receives a confirmation", func() {
-				stdin, stdinSource := io.Pipe()
-				stdoutSource, stdout := io.Pipe()
-				stdoutReader := bufio.NewReader(stdoutSource)
-				copier, err := scp.New(fmt.Sprintf("scp -prf %s", tempDir), stdin, stdout, stderr)
+			JustBeforeEach(func() {
+				var err error
+
+				command := fmt.Sprintf("scp -f %s", generatedTextFile)
+				if preserveTimestamps {
+					command = fmt.Sprintf("scp -fp %s", generatedTextFile)
+				}
+
+				secureCopier, err = scp.New(command, stdin, stdout, stderr)
 				Expect(err).NotTo(HaveOccurred())
 
+				done := make(chan struct{})
 				go func() {
-					defer GinkgoRecover()
-					err := copier.Copy()
+					err := secureCopier.Copy()
 					Expect(err).NotTo(HaveOccurred())
-					stdout.Close()
+					close(done)
 				}()
 
-				expectedDirMessage := dirMessageFromDir(tempDir, true)
-				expectedFileMessage := expectedDirMessage.contents[0].(*FileMessage)
+				_, err = stdinSource.Write([]byte{0})
+				Expect(err).NotTo(HaveOccurred())
 
-				receivedMessages := make(chan []byte)
+				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
 
-				By("Acknowledging the connection it sends the directory timestamp message")
-				go readLine(receivedMessages, stdoutReader)
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(BeEquivalentTo(expectedDirMessage.timeMessage.messageHeader())))
-
-				By("Acknowledging the directory timestamp message it sends the directory message")
-				go readLine(receivedMessages, stdoutReader)
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(BeEquivalentTo(expectedDirMessage.messageHeader())))
-
-				By("Acknowledging the directory message it sends the file timestamp message")
-				go readLine(receivedMessages, stdoutReader)
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(BeEquivalentTo(expectedFileMessage.timeMessage.messageHeader())))
-
-				By("Acknowledging the file timestamp message it sends the file message")
-				go readLine(receivedMessages, stdoutReader)
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(BeEquivalentTo(expectedFileMessage.messageHeader())))
-
-				By("Acknowledging the file message it sends the file contents")
-				go readBytes(receivedMessages, stdoutReader, len(expectedFileMessage.contents))
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(Equal(expectedFileMessage.contents)))
-
-				By("Acknowledging the file contents it sends the directory end message")
-				go readLine(receivedMessages, stdoutReader)
-				Consistently(receivedMessages).ShouldNot(Receive())
-				stdinSource.Write([]byte{0})
-				Eventually(receivedMessages).Should(Receive(BeEquivalentTo("E\n")))
-
-				By("Acknowledging the directory end message")
-				stdinSource.Write([]byte{0})
-
-				_, err = stdoutReader.ReadByte()
-				Expect(err).Should(Equal(io.EOF))
-			})
-
-			Context("when the sink sends an error", func() {
-				var (
-					stdoutReader             *bufio.Reader
-					stdin, stdoutSource      *io.PipeReader
-					stdinSource, stdout      *io.PipeWriter
-					errChan                  chan error
-					copier                   scp.SecureCopier
-					err                      error
-					expectedFileMessage      *FileMessage
-					expectedDirectoryMessage *DirMessage
-				)
-
-				BeforeEach(func() {
-					expectedFileMessage = fileMessageFromFile(generatedTextFile, true)
-					expectedDirectoryMessage = dirMessageFromDir(tempDir, true)
-
-					stdin, stdinSource = io.Pipe()
-					stdoutSource, stdout = io.Pipe()
-					stdoutReader = bufio.NewReader(stdoutSource)
-					copier, err = scp.New(fmt.Sprintf("scp -prf %s", tempDir), stdin, stdout, stderr)
+				timestampMessage := &scp.TimeMessage{}
+				if preserveTimestamps {
+					err = timestampMessage.Receive(session)
 					Expect(err).NotTo(HaveOccurred())
+				}
 
-					errChan = make(chan error)
-					ready := make(chan struct{})
-					go func() {
-						defer GinkgoRecover()
-						ready <- struct{}{}
-						err := copier.Copy()
-						errChan <- err
-					}()
+				err = scp.ReceiveFile(session, targetDir, true, timestampMessage)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(done).Should(BeClosed())
 
-					<-ready
-				})
-
-				It("returns an error when acknowledging the connection fails", func() {
-					By("Fail to acknowledge the connection")
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack conn\n"))
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack conn")))
-				})
-
-				It("returns an error when acknowledging the timestamp message fails", func() {
-					By("Succeed to acknowledge the connection")
-					stdinSource.Write([]byte{0})
-
-					By("Fail to acknowledge the timestamp directory message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack timestamp\n"))
-
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack timestamp")))
-				})
-
-				It("returns an error when acknowledging the directory message fails", func() {
-					By("Succeed to acknowledge the connection")
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Fail to acknowledge the directory message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack directory\n"))
-
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack directory")))
-				})
-
-				It("returns an error when acknowledging the file message fails", func() {
-					By("Succeed to acknowledge the connection")
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Fail to acknowledge the file message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack file\n"))
-
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack file")))
-				})
-
-				It("returns an error when acknowledging the file contents fails", func() {
-					By("Succeed to acknowledge the connection")
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Fail to acknowledge the file contents")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack file contents\n"))
-
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack file contents")))
-				})
-
-				It("returns an error when acknowledging the directory end message fails", func() {
-					By("Succeed to acknowledge the connection")
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the directory message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file timestamp message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file message")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{0})
-
-					By("Succeed to acknowledge the file contents")
-					readBytes(nil, stdoutReader, len(expectedFileMessage.contents))
-					stdinSource.Write([]byte{0})
-
-					By("Fail to acknowledge the directory end")
-					readLine(nil, stdoutReader)
-					stdinSource.Write([]byte{2})
-					stdinSource.Write([]byte("Failed to ack file directory end\n"))
-
-					Eventually(errChan).Should(Receive(MatchError("Failed to ack file directory end")))
-				})
+				sourceFileInfo, err = os.Stat(generatedTextFile)
+				Expect(err).NotTo(HaveOccurred())
 			})
-		})
 
-		Context("when files are requested", func() {
 			It("sends the files", func() {
-				stdin := bytes.NewBuffer([]byte{0, 0, 0, 0, 0, 0, 0})
-				copier, err := scp.New(fmt.Sprintf("scp -f %s %s", generatedTextFile, generatedBinaryFile), stdin, stdout, stderr)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = copier.Copy()
-				Expect(err).NotTo(HaveOccurred())
-
-				expectedTextFileMessage := fileMessageFromFile(generatedTextFile, false)
-				actualTextMessage := readNextMessage(stdout)
-				Expect(actualTextMessage).To(Equal(expectedTextFileMessage))
-
-				expectedBinaryFileMessage := fileMessageFromFile(generatedBinaryFile, false)
-				actualBinaryMessage := readNextMessage(stdout)
-				Expect(actualBinaryMessage).To(Equal(expectedBinaryFileMessage))
-
-				_, err = stdout.ReadByte()
-				Expect(err).Should(Equal(io.EOF))
-
-				_, err = stdin.ReadByte()
-				Expect(err).Should(Equal(io.EOF))
+				compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
 			})
 
 			Context("when -p (preserve times) is specified", func() {
+				BeforeEach(func() {
+					preserveTimestamps = true
+				})
+
 				It("sends the timestamp information before the file", func() {
-					stdin := bytes.NewBuffer([]byte{0, 0, 0, 0, 0, 0, 0})
-					copier, err := scp.New(fmt.Sprintf("scp -fp %s %s", generatedTextFile, generatedBinaryFile), stdin, stdout, stderr)
-					Expect(err).NotTo(HaveOccurred())
-
-					err = copier.Copy()
-					Expect(err).NotTo(HaveOccurred())
-
-					expectedTextFileMessage := fileMessageFromFile(generatedTextFile, true)
-					actualTextMessage := readNextMessage(stdout)
-					Expect(actualTextMessage).To(Equal(expectedTextFileMessage))
-
-					expectedBinaryFileMessage := fileMessageFromFile(generatedBinaryFile, true)
-					actualBinaryMessage := readNextMessage(stdout)
-					Expect(actualBinaryMessage).To(Equal(expectedBinaryFileMessage))
-
-					_, err = stdout.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
-
-					_, err = stdin.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
+					compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
 				})
 			})
 		})
 
 		Context("when a directory is requested", func() {
 			Context("when the -r (recursive) flag is not specified", func() {
+				BeforeEach(func() {
+					var err error
+					command := fmt.Sprintf("scp -f %s", sourceDir)
+					secureCopier, err = scp.New(command, stdin, stdout, stderr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
 				It("returns an error", func() {
-					stdin := bytes.NewBuffer([]byte{0})
-					copier, err := scp.New(fmt.Sprintf("scp -f %s", tempDir), stdin, stdout, stderr)
+					errCh := make(chan error)
+					go func() {
+						errCh <- secureCopier.Copy()
+					}()
+
+					_, err := stdinSource.Write([]byte{0})
 					Expect(err).NotTo(HaveOccurred())
 
-					err = copier.Copy()
-					Expect(err).To(MatchError(fmt.Sprintf("%s: not a regular file", filepath.Base(tempDir))))
+					stdoutReader := bufio.NewReader(stdoutSource)
 
-					_, err = stdout.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
+					errCode, err := stdoutReader.ReadByte()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errCode).To(BeEquivalentTo(2))
 
-					_, err = stdin.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
+					errMessage, err := stdoutReader.ReadString('\n')
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessage).To(ContainSubstring("not a regular file"))
+
+					Eventually(errCh).Should(Receive())
 				})
 			})
 
 			Context("when the -r (recursive) flag is specified", func() {
+				var (
+					sourceDirInfo      os.FileInfo
+					preserveTimestamps bool
+				)
+
+				BeforeEach(func() {
+					preserveTimestamps = false
+				})
+
+				JustBeforeEach(func() {
+					var err error
+
+					command := fmt.Sprintf("scp -rf %s", sourceDir)
+					if preserveTimestamps {
+						command = fmt.Sprintf("scp -rfp %s", sourceDir)
+					}
+
+					secureCopier, err = scp.New(command, stdin, stdout, stderr)
+					Expect(err).NotTo(HaveOccurred())
+
+					done := make(chan struct{})
+					go func() {
+						err := secureCopier.Copy()
+						Expect(err).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					_, err = stdinSource.Write([]byte{0})
+					Expect(err).NotTo(HaveOccurred())
+
+					session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+
+					timestampMessage := &scp.TimeMessage{}
+					if preserveTimestamps {
+						err = timestampMessage.Receive(session)
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					err = scp.ReceiveDirectory(session, targetDir, timestampMessage)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(done).Should(BeClosed())
+
+					sourceDirInfo, err = os.Stat(sourceDir)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
 				It("sends the directory and all the files", func() {
-					stdin := bytes.NewBuffer([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-					copier, err := scp.New(fmt.Sprintf("scp -rf %s", tempDir), stdin, stdout, stderr)
-					Expect(err).NotTo(HaveOccurred())
-
-					err = copier.Copy()
-					Expect(err).NotTo(HaveOccurred())
-
-					expectedDirectoryMessage := dirMessageFromDir(tempDir, false)
-					actualMessage := readNextMessage(stdout)
-					Expect(actualMessage).To(Equal(expectedDirectoryMessage))
-
-					_, err = stdout.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
-
-					_, err = stdin.ReadByte()
-					Expect(err).Should(Equal(io.EOF))
+					compareDir(filepath.Join(targetDir, sourceDirInfo.Name()), sourceDir, preserveTimestamps)
 				})
 
 				Context("when the -p is specified", func() {
+					BeforeEach(func() {
+						preserveTimestamps = true
+					})
+
 					It("sends timestamp information before files and directories", func() {
-						stdin := bytes.NewBuffer([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-						copier, err := scp.New(fmt.Sprintf("scp -rfp %s", tempDir), stdin, stdout, stderr)
-						Expect(err).NotTo(HaveOccurred())
-
-						err = copier.Copy()
-						Expect(err).NotTo(HaveOccurred())
-
-						expectedDirectoryMessage := dirMessageFromDir(tempDir, true)
-						actualMessage := readNextMessage(stdout)
-						Expect(actualMessage).To(Equal(expectedDirectoryMessage))
-
-						_, err = stdout.ReadByte()
-						Expect(err).Should(Equal(io.EOF))
-
-						_, err = stdin.ReadByte()
-						Expect(err).Should(Equal(io.EOF))
+						compareDir(filepath.Join(targetDir, sourceDirInfo.Name()), sourceDir, preserveTimestamps)
 					})
 				})
 			})
 		})
 	})
+
+	Context("target mode", func() {
+		Context("when no target is specified", func() {
+			It("fails construct the copier", func() {
+				_, err := scp.New("scp -t", stdin, stdout, stderr)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when multiple targets are specified", func() {
+			It("fails construct the copier", func() {
+				_, err := scp.New("scp -t a b", stdin, stdout, stderr)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when the target is not a directory", func() {
+			Context("and the target is specified as a directory", func() {
+				It("fails when the target does not exist", func() {
+					secureCopier, err := scp.New("scp -td bogus", stdin, stdout, stderr)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = secureCopier.Copy()
+					Expect(err).To(HaveOccurred())
+				})
+
+				It("fails when the target is not a directory", func() {
+					tempFile, err := ioutil.TempFile(targetDir, "target")
+					Expect(err).NotTo(HaveOccurred())
+
+					secureCopier, err := scp.New("scp -td "+tempFile.Name(), stdin, stdout, stderr)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = secureCopier.Copy()
+					Expect(err).To(HaveOccurred())
+				})
+			})
+		})
+
+		Context("when a file is specified as the target", func() {
+			var (
+				targetFile         string
+				targetFileInfo     os.FileInfo
+				preserveTimestamps bool
+			)
+
+			BeforeEach(func() {
+				preserveTimestamps = false
+			})
+
+			BeforeEach(func() {
+				targetFile = filepath.Join(targetDir, "targetFile")
+			})
+
+			JustBeforeEach(func() {
+				var err error
+
+				args := "-t"
+				if preserveTimestamps {
+					args += "p"
+				}
+				command := fmt.Sprintf("scp %s %s", args, targetFile)
+
+				secureCopier, err = scp.New(command, stdin, stdout, stderr)
+				Expect(err).NotTo(HaveOccurred())
+
+				done := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					err := secureCopier.Copy()
+					Expect(err).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				bytes := make([]byte, 1)
+				_, err = stdoutSource.Read(bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+
+				textFile, err := os.Open(generatedTextFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				textFileInfo, err := textFile.Stat()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = scp.SendFile(session, textFile, textFileInfo)
+				Expect(err).NotTo(HaveOccurred())
+				stdinSource.Close()
+				Eventually(done).Should(BeClosed())
+
+				targetFileInfo, err = os.Stat(targetFile)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("allows a file to be sent", func() {
+				compareFile(targetFile, generatedTextFile, preserveTimestamps)
+			})
+
+			Context("when preserving timestamps and mode", func() {
+				BeforeEach(func() {
+					preserveTimestamps = true
+				})
+
+				It("sets the mode and timestamp", func() {
+					compareFile(targetFile, generatedTextFile, preserveTimestamps)
+				})
+
+				Context("when the target file exists", func() {
+					BeforeEach(func() {
+						err := ioutil.WriteFile(targetFile, []byte{'a'}, 0640)
+						Expect(err).NotTo(HaveOccurred())
+
+						modificationTime := time.Unix(123456789, 12345678)
+						accessTime := time.Unix(987654321, 987654321)
+						err = os.Chtimes(targetFile, accessTime, modificationTime)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("sets the mode and timestamp", func() {
+						compareFile(targetFile, generatedTextFile, preserveTimestamps)
+					})
+				})
+			})
+		})
+
+		Context("when a directory is specified as the target", func() {
+			var (
+				dir                string
+				preserveTimestamps bool
+				targetIsDirectory  bool
+				session            *scp.Session
+				done               chan struct{}
+			)
+
+			BeforeEach(func() {
+				dir = targetDir
+				preserveTimestamps = false
+				targetIsDirectory = false
+			})
+
+			JustBeforeEach(func() {
+				var err error
+
+				args := "-t"
+				if preserveTimestamps {
+					args += "p"
+				}
+				if targetIsDirectory {
+					args += "d"
+				}
+				command := fmt.Sprintf("scp %s %s", args, dir)
+
+				secureCopier, err = scp.New(command, stdin, stdout, stderr)
+				Expect(err).NotTo(HaveOccurred())
+
+				done = make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					err := secureCopier.Copy()
+					Expect(err).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				bytes := make([]byte, 1)
+				_, err = stdoutSource.Read(bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				session = scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+			})
+
+			Context("and a file is sent", func() {
+				var file *os.File
+				var err error
+
+				JustBeforeEach(func() {
+					file, err = os.Open(generatedTextFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					fileInfo, err := file.Stat()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = scp.SendFile(session, file, fileInfo)
+					Expect(err).NotTo(HaveOccurred())
+
+					stdinSource.Close()
+					Eventually(done).Should(BeClosed())
+				})
+
+				It("copies the file and its contents into the target", func() {
+					compareFile(filepath.Join(dir, filepath.Base(file.Name())), generatedTextFile, preserveTimestamps)
+				})
+			})
+
+			Context("and a directory is sent", func() {
+				JustBeforeEach(func() {
+					sourceDirInfo, err := os.Stat(sourceDir)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = scp.SendDirectory(session, sourceDir, sourceDirInfo)
+					Expect(err).NotTo(HaveOccurred())
+					stdinSource.Close()
+					Eventually(done).Should(BeClosed())
+				})
+
+				It("receives the directory and its content", func() {
+					compareDir(filepath.Join(dir, filepath.Base(sourceDir)), sourceDir, preserveTimestamps)
+				})
+
+				Context("when the target directory does not exist but its parent directory does", func() {
+					BeforeEach(func() {
+						dir = filepath.Join(targetDir, "newdir")
+					})
+
+					It("makes the target directory and populates with the source directories contents", func() {
+						compareDir(dir, sourceDir, preserveTimestamps)
+					})
+				})
+			})
+		})
+
+		Context("when an unknown message type is sent", func() {
+			It("returns an error", func() {
+				secureCopier, err := scp.New("scp -t /tmp/foo", stdin, stdout, stderr)
+				Expect(err).NotTo(HaveOccurred())
+
+				errCh := make(chan error)
+				go func() {
+					defer GinkgoRecover()
+					errCh <- secureCopier.Copy()
+				}()
+
+				bytes := make([]byte, 1)
+				_, err = stdoutSource.Read(bytes)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = stdinSource.Write([]byte("F this protocol message does not exist"))
+				Expect(err).NotTo(HaveOccurred())
+
+				stdoutReader := bufio.NewReader(stdoutSource)
+
+				errCode, err := stdoutReader.ReadByte()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errCode).To(BeEquivalentTo(2))
+
+				errMessage, err := stdoutReader.ReadString('\n')
+				Expect(err).NotTo(HaveOccurred())
+				Expect(errMessage).To(ContainSubstring("unexpected message type: F"))
+
+				Eventually(errCh).Should(Receive())
+			})
+		})
+	})
 })
 
-// Helper Objects
-
-type SCPMessage interface {
-}
-
-type TimeMessage struct {
-	modificationTime time.Time
-	accessTime       time.Time
-}
-
-func (t *TimeMessage) messageHeader() string {
-	return fmt.Sprintf("T%d 0 %d 0\n", t.modificationTime.Unix(), t.accessTime.Unix())
-}
-
-type FileMessage struct {
-	timeMessage *TimeMessage
-
-	name     string
-	mode     os.FileMode
-	contents []byte
-}
-
-func (f *FileMessage) messageHeader() string {
-	return fmt.Sprintf("C%.4o %d %s\n", f.mode, len(f.contents), f.name)
-}
-
-func fileMessageFromFile(filename string, withTimestamps bool) *FileMessage {
-	var timeMessage *TimeMessage
-
-	file, err := os.Open(filename)
-	Expect(err).NotTo(HaveOccurred())
-	defer file.Close()
-
-	fileInfo, err := file.Stat()
+func compareDir(actualDir, expectedDir string, compareTimestamps bool) {
+	actualDirInfo, err := os.Stat(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	if withTimestamps {
-		mtime := fileInfo.ModTime()
-		stat := fileInfo.Sys().(*syscall.Stat_t)
-		atime := time.Unix(int64(stat.Atimespec.Sec), int64(stat.Atimespec.Nsec))
+	expectedDirInfo, err := os.Stat(expectedDir)
+	Expect(err).NotTo(HaveOccurred())
 
-		timeMessage = &TimeMessage{modificationTime: mtime, accessTime: atime}
+	Expect(actualDirInfo.Mode()).To(Equal(expectedDirInfo.Mode()))
+	if compareTimestamps {
+		compareTimestampsFromInfo(actualDirInfo, expectedDirInfo)
 	}
 
-	contents, err := ioutil.ReadAll(file)
+	actualFiles, err := ioutil.ReadDir(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	return &FileMessage{
-		name:        fileInfo.Name(),
-		mode:        fileInfo.Mode(),
-		contents:    contents,
-		timeMessage: timeMessage,
-	}
-}
-
-type DirMessage struct {
-	timeMessage *TimeMessage
-
-	name     string
-	mode     os.FileMode
-	contents []SCPMessage
-}
-
-func (d *DirMessage) messageHeader() string {
-	return fmt.Sprintf("D%.4o 0 %s\n", d.mode&07777, d.name)
-}
-
-func dirMessageFromDir(dirname string, withTimestamps bool) *DirMessage {
-	var timeMessage *TimeMessage
-
-	dir, err := os.Open(dirname)
-	Expect(err).NotTo(HaveOccurred())
-	defer dir.Close()
-
-	dirInfo, err := dir.Stat()
+	expectedFiles, err := ioutil.ReadDir(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	if withTimestamps {
-		mtime := dirInfo.ModTime()
-		stat := dirInfo.Sys().(*syscall.Stat_t)
-		atime := time.Unix(int64(stat.Atimespec.Sec), int64(stat.Atimespec.Nsec))
-
-		timeMessage = &TimeMessage{modificationTime: mtime, accessTime: atime}
-	}
-
-	fileInfos, err := dir.Readdir(0)
-	Expect(err).NotTo(HaveOccurred())
-
-	contents := []SCPMessage{}
-	for _, fileInfo := range fileInfos {
-		file := filepath.Join(dir.Name(), fileInfo.Name())
-		if fileInfo.IsDir() {
-			contents = append(contents, dirMessageFromDir(file, withTimestamps))
+	Expect(len(actualFiles)).To(Equal(len(expectedFiles)))
+	for i, actualFile := range actualFiles {
+		expectedFile := expectedFiles[i]
+		if actualFile.IsDir() {
+			compareDir(filepath.Join(actualDir, actualFile.Name()), filepath.Join(expectedDir, expectedFile.Name()), compareTimestamps)
 		} else {
-			contents = append(contents, fileMessageFromFile(file, withTimestamps))
+			compareFile(filepath.Join(actualDir, actualFile.Name()), filepath.Join(expectedDir, expectedFile.Name()), compareTimestamps)
 		}
 	}
-
-	return &DirMessage{
-		name:        dirInfo.Name(),
-		mode:        dirInfo.Mode(),
-		contents:    contents,
-		timeMessage: timeMessage,
-	}
 }
 
-// Helper Functions
-
-func readNextMessage(buffer *bytes.Buffer) SCPMessage {
-	var timeMessage *TimeMessage
-	messageType, err := buffer.ReadByte()
+func compareFile(actualFile, expectedFile string, compareTimestamps bool) {
+	actualFileInfo, err := os.Stat(actualFile)
 	Expect(err).NotTo(HaveOccurred())
 
-	if messageType == 'T' {
-		timeMessage = &TimeMessage{}
-		modTimeValue, err := buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
+	expectedFileInfo, err := os.Stat(expectedFile)
+	Expect(err).NotTo(HaveOccurred())
 
-		modTimeValue = strings.TrimSpace(modTimeValue)
-		timeValue, err := strconv.ParseInt(modTimeValue, 10, 64)
-		Expect(err).NotTo(HaveOccurred())
-
-		timeMessage.modificationTime = time.Unix(timeValue, 0)
-
-		_, err = buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
-
-		accessTimeValue, err := buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
-
-		accessTimeValue = strings.TrimSpace(accessTimeValue)
-		timeValue, err = strconv.ParseInt(accessTimeValue, 10, 64)
-		Expect(err).NotTo(HaveOccurred())
-
-		timeMessage.accessTime = time.Unix(timeValue, 0)
-
-		_, err = buffer.ReadString('\n')
-		Expect(err).NotTo(HaveOccurred())
-
-		messageType, err = buffer.ReadByte()
-		Expect(err).NotTo(HaveOccurred())
+	Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+	Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
+	if compareTimestamps {
+		compareTimestampsFromInfo(actualFileInfo, expectedFileInfo)
 	}
 
-	if messageType == 'C' {
-		fileMessage := &FileMessage{timeMessage: timeMessage}
+	actualContents, err := ioutil.ReadFile(actualFile)
+	Expect(err).NotTo(HaveOccurred())
 
-		mode, err := buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
+	expectedContents, err := ioutil.ReadFile(expectedFile)
+	Expect(err).NotTo(HaveOccurred())
 
-		mode = strings.TrimSpace(mode)
-		fm, err := strconv.ParseInt(mode, 8, 32)
-		fileMessage.mode = os.FileMode(fm)
-
-		length, err := buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
-
-		contentLength, err := strconv.Atoi(strings.TrimSpace(length))
-
-		fileName, err := buffer.ReadString('\n')
-		Expect(err).NotTo(HaveOccurred())
-
-		fileMessage.name = strings.TrimSpace(fileName)
-
-		content := make([]byte, contentLength)
-
-		bytesRead, err := buffer.Read(content)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(bytesRead).To(Equal(contentLength))
-
-		fileMessage.contents = content
-
-		return fileMessage
-	} else if messageType == 'D' {
-		dirMessage := &DirMessage{timeMessage: timeMessage}
-		mode, err := buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
-
-		mode = strings.TrimSpace(mode)
-		dm, err := strconv.ParseInt(mode, 8, 32)
-		dirMessage.mode = os.ModeDir | os.FileMode(dm)
-
-		_, err = buffer.ReadString(' ')
-		Expect(err).NotTo(HaveOccurred())
-
-		dirName, err := buffer.ReadString('\n')
-		Expect(err).NotTo(HaveOccurred())
-
-		dirMessage.name = strings.TrimSpace(dirName)
-
-		messageType, err = buffer.ReadByte()
-		Expect(err).NotTo(HaveOccurred())
-
-		dirMessage.contents = []SCPMessage{}
-
-		for messageType != 'E' {
-			err = buffer.UnreadByte()
-			Expect(err).NotTo(HaveOccurred())
-
-			message := readNextMessage(buffer)
-			dirMessage.contents = append(dirMessage.contents, message)
-
-			messageType, err = buffer.ReadByte()
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		_, err = buffer.ReadString('\n')
-		Expect(err).NotTo(HaveOccurred())
-
-		return dirMessage
-	} else {
-		return nil
-	}
+	Expect(actualContents).To(Equal(expectedContents))
 }
 
-func readLine(receivedMessages chan<- []byte, reader *bufio.Reader) {
-	message, err := reader.ReadBytes('\n')
+func compareTimestampsFromInfo(actualInfo, expectedInfo os.FileInfo) {
+	actualAccessTime, err := atime.AccessTime(actualInfo)
 	Expect(err).NotTo(HaveOccurred())
-	if receivedMessages != nil {
-		receivedMessages <- message
-	}
-}
 
-func readBytes(receivedMessages chan<- []byte, reader *bufio.Reader, length int) {
-	message := make([]byte, length)
-	n, err := reader.Read(message)
+	expectedAccessTime, err := atime.AccessTime(expectedInfo)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(n).To(Equal(len(message)))
-	if receivedMessages != nil {
-		receivedMessages <- message
-	}
+
+	Expect(actualInfo.ModTime()).To(Equal(expectedInfo.ModTime()))
+	Expect(actualAccessTime).To(Equal(expectedAccessTime))
 }

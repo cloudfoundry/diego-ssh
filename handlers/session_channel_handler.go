@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/cloudfoundry-incubator/diego-ssh/scp"
 	"github.com/creack/termios/win"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
@@ -317,7 +318,17 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 	}
 
 	if scpRegex.MatchString(execMessage.Command) {
-		sess.scpHandler.HandleSCPRequest(request, execMessage.Command)
+		copier, _ := scp.New(execMessage.Command, sess.channel, sess.channel, sess.channel.Stderr())
+
+		if request.WantReply {
+			request.Reply(true, nil)
+		}
+
+		err = copier.Copy()
+
+		sess.sendExitMessage(err)
+		sess.destroy()
+		return
 	}
 
 	sess.executeShell(request, "-c", execMessage.Command)
