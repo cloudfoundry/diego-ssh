@@ -9,9 +9,10 @@ import (
 )
 
 type FakeSCPHandler struct {
-	HandleSCPRequestStub        func(request *ssh.Request, cmd string) error
+	HandleSCPRequestStub        func(channel ssh.Channel, request *ssh.Request, cmd string) error
 	handleSCPRequestMutex       sync.RWMutex
 	handleSCPRequestArgsForCall []struct {
+		channel ssh.Channel
 		request *ssh.Request
 		cmd     string
 	}
@@ -20,15 +21,16 @@ type FakeSCPHandler struct {
 	}
 }
 
-func (fake *FakeSCPHandler) HandleSCPRequest(request *ssh.Request, cmd string) error {
+func (fake *FakeSCPHandler) HandleSCPRequest(channel ssh.Channel, request *ssh.Request, cmd string) error {
 	fake.handleSCPRequestMutex.Lock()
 	fake.handleSCPRequestArgsForCall = append(fake.handleSCPRequestArgsForCall, struct {
+		channel ssh.Channel
 		request *ssh.Request
 		cmd     string
-	}{request, cmd})
+	}{channel, request, cmd})
 	fake.handleSCPRequestMutex.Unlock()
 	if fake.HandleSCPRequestStub != nil {
-		return fake.HandleSCPRequestStub(request, cmd)
+		return fake.HandleSCPRequestStub(channel, request, cmd)
 	} else {
 		return fake.handleSCPRequestReturns.result1
 	}
@@ -40,10 +42,10 @@ func (fake *FakeSCPHandler) HandleSCPRequestCallCount() int {
 	return len(fake.handleSCPRequestArgsForCall)
 }
 
-func (fake *FakeSCPHandler) HandleSCPRequestArgsForCall(i int) (*ssh.Request, string) {
+func (fake *FakeSCPHandler) HandleSCPRequestArgsForCall(i int) (ssh.Channel, *ssh.Request, string) {
 	fake.handleSCPRequestMutex.RLock()
 	defer fake.handleSCPRequestMutex.RUnlock()
-	return fake.handleSCPRequestArgsForCall[i].request, fake.handleSCPRequestArgsForCall[i].cmd
+	return fake.handleSCPRequestArgsForCall[i].channel, fake.handleSCPRequestArgsForCall[i].request, fake.handleSCPRequestArgsForCall[i].cmd
 }
 
 func (fake *FakeSCPHandler) HandleSCPRequestReturns(result1 error) {
