@@ -82,7 +82,7 @@ public key.
 {
   "process_guid": "ssh-process-guid",
   "domain": "ssh-experiments",
-  "rootfs": "preloaded:lucid64",
+  "rootfs": "preloaded:cflinuxfs2",
   "instances": 1,
   "start_timeout": 30,
   "setup": {
@@ -117,7 +117,7 @@ public key.
 ##### Dependencies
 If you wish to use `scp` to copy files in and out of the containers, the
 container root file system must include `/usr/bin/scp`. The Cloud Foundry root
-file systems [cflinuxfs2][cflinuxfs2] and [lucid64][lucid64] already contain
+file system [cflinuxfs2][cflinuxfs2] already contain
 the binaries but custom root file systems or docker images may not.
 
 scp example:
@@ -125,6 +125,5 @@ scp example:
 scp -oUser='diego:ssh-process-guid/0' -P 2222 my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
 ```
 
-[lucid64]: https://github.com/cloudfoundry/stacks/tree/master/lucid64
 [cflinuxfs2]: https://github.com/cloudfoundry/stacks/tree/master/cflinuxfs2
 
