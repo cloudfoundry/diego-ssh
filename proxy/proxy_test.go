@@ -17,16 +17,22 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
+	fake_logs "github.com/cloudfoundry/dropsonde/log_sender/fake"
+	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Proxy", func() {
-	var logger lager.Logger
+	var (
+		logger        lager.Logger
+		fakeLogSender *fake_logs.FakeLogSender
+	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
@@ -56,6 +62,9 @@ var _ = Describe("Proxy", func() {
 		)
 
 		BeforeEach(func() {
+			fakeLogSender = fake_logs.NewFakeLogSender()
+			logs.Initialize(fakeLogSender)
+
 			proxyAuthenticator = &fake_authenticators.FakePasswordAuthenticator{}
 
 			proxySSHConfig = &ssh.ServerConfig{}
@@ -90,9 +99,17 @@ var _ = Describe("Proxy", func() {
 			targetConfigJson, err := json.Marshal(daemonTargetConfig)
 			Expect(err).NotTo(HaveOccurred())
 
+			logMessageJson, err := json.Marshal(proxy.LogMessage{
+				Guid:    "a-guid",
+				Message: "a-message",
+				Index:   1,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
 			permissions := &ssh.Permissions{
 				CriticalOptions: map[string]string{
 					"proxy-target-config": string(targetConfigJson),
+					"log-message":         string(logMessageJson),
 				},
 			}
 			proxyAuthenticator.AuthenticateReturns(permissions, nil)
@@ -169,6 +186,15 @@ var _ = Describe("Proxy", func() {
 					metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
 					Expect(metadata.User()).To(Equal("some-user"))
 					Expect(string(password)).To(Equal("some-password"))
+				})
+
+				It("emits a successful log message on behalf of the lrp", func() {
+					Eventually(fakeLogSender.GetLogs).Should(HaveLen(1))
+					logMessage := fakeLogSender.GetLogs()[0]
+					Expect(logMessage.AppId).To(Equal("a-guid"))
+					Expect(logMessage.SourceType).To(Equal("SSH"))
+					Expect(logMessage.SourceInstance).To(Equal("1"))
+					Expect(logMessage.Message).To(Equal("a-message"))
 				})
 
 				Context("when the target contains a host fingerprint", func() {

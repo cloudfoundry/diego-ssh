@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strconv"
 	"sync"
 	"unicode/utf8"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -22,6 +24,12 @@ type TargetConfig struct {
 	User            string `json:"user,omitempty"`
 	Password        string `json:"password,omitempty"`
 	PrivateKey      string `json:"private_key,omitempty"`
+}
+
+type LogMessage struct {
+	Guid    string `json:"guid"`
+	Message string `json:"message"`
+	Index   int    `json:"index"`
 }
 
 type Proxy struct {
@@ -59,6 +67,8 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	}
 	defer clientConn.Close()
 
+	emitLogMessage(logger, serverConn.Permissions)
+
 	go ProxyGlobalRequests(logger, clientConn, serverRequests)
 	go ProxyGlobalRequests(logger, serverConn, clientRequests)
 
@@ -66,6 +76,22 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	go ProxyChannels(logger, serverConn, clientChannels)
 
 	Wait(logger, serverConn, clientConn)
+}
+
+func emitLogMessage(logger lager.Logger, perms *ssh.Permissions) {
+	logMessageJson := perms.CriticalOptions["log-message"]
+	if logMessageJson == "" {
+		return
+	}
+
+	logMessage := &LogMessage{}
+	err := json.Unmarshal([]byte(logMessageJson), logMessage)
+	if err != nil {
+		logger.Error("json-unmarshal-failed", err)
+		return
+	}
+
+	logs.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
 }
 
 func ProxyGlobalRequests(logger lager.Logger, conn ssh.Conn, reqs <-chan *ssh.Request) {

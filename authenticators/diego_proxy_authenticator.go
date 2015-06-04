@@ -11,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -95,14 +94,16 @@ func sshPermissionsFromProcess(
 	}
 
 	logMessage := fmt.Sprintf("Successful remote access by %s", remoteAddr.String())
-	emitLogMessage(desired.LogGuid, logMessage, index)
 
-	return createPermissions(sshRoute, &actual)
+	return createPermissions(sshRoute, &actual, desired.LogGuid, logMessage, index)
 }
 
 func createPermissions(
 	sshRoute *routes.SSHRoute,
 	actual *receptor.ActualLRPResponse,
+	logGuid string,
+	logMessage string,
+	index int,
 ) (*ssh.Permissions, error) {
 	var targetConfig *proxy.TargetConfig
 
@@ -128,15 +129,21 @@ func createPermissions(
 		return nil, err
 	}
 
+	logMessageJson, err := json.Marshal(proxy.LogMessage{
+		Guid:    logGuid,
+		Message: logMessage,
+		Index:   index,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &ssh.Permissions{
 		CriticalOptions: map[string]string{
 			"proxy-target-config": string(targetConfigJson),
+			"log-message":         string(logMessageJson),
 		},
 	}, nil
-}
-
-func emitLogMessage(logGuid string, message string, index int) error {
-	return logs.SendAppLog(logGuid, message, "SSH", strconv.Itoa(index))
 }
 
 func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*routes.SSHRoute, error) {

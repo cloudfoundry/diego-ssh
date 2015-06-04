@@ -2,7 +2,6 @@ package authenticators_test
 
 import (
 	"encoding/json"
-	"errors"
 	"math"
 	"net"
 	"net/http"
@@ -15,8 +14,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	fake_logs "github.com/cloudfoundry/dropsonde/log_sender/fake"
-	"github.com/cloudfoundry/dropsonde/logs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
@@ -40,14 +37,9 @@ var _ = Describe("CFAuthenticator", func() {
 
 		fakeCC *ghttp.Server
 		ccURL  string
-
-		fakeLogSender *fake_logs.FakeLogSender
 	)
 
 	BeforeEach(func() {
-		fakeLogSender = fake_logs.NewFakeLogSender()
-		logs.Initialize(fakeLogSender)
-
 		logger = lagertest.NewTestLogger("test")
 		ccClientTimeout = time.Second
 		ccClient = &http.Client{Timeout: ccClientTimeout}
@@ -220,24 +212,16 @@ var _ = Describe("CFAuthenticator", func() {
 				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
 			})
 
-			It("emits a successful log message on behalf of the lrp", func() {
-				logMessages := fakeLogSender.GetLogs()
-				Expect(logMessages).To(HaveLen(1))
-				logMessage := logMessages[0]
-				Expect(logMessage.AppId).To(Equal(desiredLRPResponse.LogGuid))
-				Expect(logMessage.SourceType).To(Equal("SSH"))
-				Expect(logMessage.SourceInstance).To(Equal("1"))
-				Expect(logMessage.Message).To(Equal("Successful remote access by 1.1.1.1"))
-			})
+			It("saves log message information in the critical options of the permissions", func() {
+				expectedConfig := `{
+								"guid": "log-guid",
+								"message": "Successful remote access by 1.1.1.1",
+								"index": 1
+							}`
 
-			Context("when emittimg the log message fails", func() {
-				BeforeEach(func() {
-					fakeLogSender.ReturnError = errors.New("Boom this blew up")
-				})
-
-				It("succeeds to authenticate", func() {
-					Expect(err).NotTo(HaveOccurred())
-				})
+				Expect(permissions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions["log-message"]).To(MatchJSON(expectedConfig))
 			})
 
 			Context("and fetching the ssh_access from cc returns a non-200 status code", func() {
