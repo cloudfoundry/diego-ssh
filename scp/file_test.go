@@ -149,7 +149,7 @@ var _ = Describe("File Message", func() {
 			Consistently(errCh).ShouldNot(Receive())
 
 			pw.Write([]byte{0})
-			Eventually(errCh).Should(Receive())
+			Eventually(errCh).Should(Receive(BeNil()))
 		})
 
 		Context("when preserving time stamps", func() {
@@ -443,7 +443,7 @@ var _ = Describe("File Message", func() {
 			Consistently(errCh).ShouldNot(Receive())
 
 			pw.Write([]byte{0})
-			Eventually(errCh).Should(Receive())
+			Eventually(errCh).Should(Receive(BeNil()))
 		})
 
 		Context("when preserving time stamps and mode", func() {

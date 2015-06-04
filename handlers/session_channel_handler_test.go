@@ -176,6 +176,9 @@ var _ = Describe("SessionChannelHandler", func() {
 				_, err = stdin.Write(fileContents)
 				Expect(err).NotTo(HaveOccurred())
 
+				_, err = stdin.Write([]byte{0})
+				Expect(err).NotTo(HaveOccurred())
+
 				_, err = stdout.Read(confirmation)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(confirmation).To(Equal([]byte{0}))
@@ -218,7 +221,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 				_, err = stdout.Read(confirmation)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(confirmation).To(Equal([]byte{2}))
+				Expect(confirmation).To(Equal([]byte{1}))
 
 				err = <-errCh
 				exitErr, ok := err.(*ssh.ExitError)

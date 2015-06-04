@@ -119,7 +119,7 @@ var _ = Describe("Directory Message", func() {
 			Consistently(errCh).ShouldNot(Receive())
 
 			pw.Write([]byte{0})
-			Eventually(errCh).Should(Receive())
+			Eventually(errCh).Should(Receive(BeNil()))
 		})
 
 		Context("when the directory cannot be opened", func() {
@@ -232,6 +232,42 @@ var _ = Describe("Directory Message", func() {
 			Expect(stdout.ReadString('\n')).To(Equal("temporary-file-contents\n"))
 			Expect(stdout.ReadByte()).To(BeEquivalentTo(0))
 			Expect(stdout.ReadString('\n')).To(Equal("E\n"))
+		})
+
+		Context("when sending a file fails", func() {
+			var subdirFile2 string
+
+			BeforeEach(func() {
+				subdirFile2 = filepath.Join(subdir, "tempfile.txt")
+				err := ioutil.WriteFile(subdirFile2, []byte("temporary-file-contents\n"), os.FileMode(0200))
+				Expect(err).NotTo(HaveOccurred())
+
+				err = os.Chmod(subdirFile, 0200)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("continues to send the other files", func() {
+				stdin := bytes.NewReader(bytes.Repeat([]byte{0}, 10))
+				stdout := &bytes.Buffer{}
+				stderr := &bytes.Buffer{}
+
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
+
+				subdirInfo, err := os.Stat(subdir)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = scp.SendDirectory(session, subdir, subdirInfo)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(stdout.ReadString('\n')).To(Equal("D0700 0 subdir\n"))
+
+				Expect(stdout.ReadByte()).To(BeEquivalentTo(1))
+				Expect(stdout.ReadString('\n')).To(ContainSubstring("permission denied"))
+				Expect(stdout.ReadByte()).To(BeEquivalentTo(1))
+				Expect(stdout.ReadString('\n')).To(ContainSubstring("permission denied"))
+
+				Expect(stdout.ReadString('\n')).To(Equal("E\n"))
+			})
 		})
 	})
 

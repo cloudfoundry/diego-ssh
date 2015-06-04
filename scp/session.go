@@ -55,12 +55,12 @@ func (sess *Session) sendWarning(message string) error {
 }
 
 func (sess *Session) sendError(message string) error {
-	_, err := sess.stdout.Write([]byte{2})
+	_, err := sess.stdout.Write([]byte{1})
 	if err != nil {
 		return err
 	}
 
-	_, err = fmt.Fprintf(sess.stdout, "%s\n", message)
+	_, err = fmt.Fprintf(sess.stdout, "scp: %s\n", message)
 	if err != nil {
 		return err
 	}

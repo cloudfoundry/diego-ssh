@@ -55,10 +55,21 @@ func (s *secureCopy) Copy() error {
 		for _, source := range s.options.Sources {
 			logger.Info("sending-source", lager.Data{"Source": source})
 
-			err := s.send(source)
+			sourceInfo, err := os.Stat(source)
+			if err != nil {
+				s.session.sendError(err.Error())
+				return err
+			}
+
+			if sourceInfo.IsDir() && !s.options.Recursive {
+				err = errors.New(fmt.Sprintf("%s: not a regular file", sourceInfo.Name()))
+				s.session.sendError(err.Error())
+				return err
+			}
+
+			err = send(source, s.session)
 			if err != nil {
 				logger.Error("failed-sending-source", err, lager.Data{"Source": source})
-				s.session.sendError(err.Error())
 				return err
 			}
 			logger.Info("sent-source", lager.Data{"Source": source})
@@ -126,8 +137,14 @@ func (s *secureCopy) Copy() error {
 	return nil
 }
 
-func (s *secureCopy) send(source string) error {
+func send(source string, session *Session) error {
 	var err error
+
+	defer func() {
+		if err != nil {
+			session.sendError(err.Error())
+		}
+	}()
 
 	file, err := os.Open(source)
 	if err != nil {
@@ -141,11 +158,9 @@ func (s *secureCopy) send(source string) error {
 	}
 
 	if !fileInfo.IsDir() {
-		err = SendFile(s.session, file, fileInfo)
-	} else if fileInfo.IsDir() && s.options.Recursive {
-		err = SendDirectory(s.session, file.Name(), fileInfo)
+		err = SendFile(session, file, fileInfo)
 	} else {
-		err = fmt.Errorf("%s: not a regular file", fileInfo.Name())
+		err = SendDirectory(session, file.Name(), fileInfo)
 	}
 
 	if err != nil {
