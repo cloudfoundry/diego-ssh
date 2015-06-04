@@ -162,16 +162,9 @@ func sendDirectory(session *Session, dirname string, directoryInfo os.FileInfo) 
 
 	for _, fileInfo := range fileInfos {
 		source := filepath.Join(dirname, fileInfo.Name())
-		if fileInfo.IsDir() {
-			err := sendDirectory(session, source, fileInfo)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := sendFile(session, source, fileInfo)
-			if err != nil {
-				return err
-			}
+		err := send(source, session)
+		if err != nil {
+			// Ignore error, probably log
 		}
 	}
 
@@ -181,21 +174,6 @@ func sendDirectory(session *Session, dirname string, directoryInfo os.FileInfo) 
 	}
 
 	err = session.awaitConfirmation()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func sendFile(session *Session, source string, fileInfo os.FileInfo) error {
-	file, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	err = SendFile(session, file, fileInfo)
 	if err != nil {
 		return err
 	}

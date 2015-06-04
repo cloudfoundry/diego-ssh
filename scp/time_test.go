@@ -135,7 +135,7 @@ var _ = Describe("TimeMessage", func() {
 				errCh <- timeMessage.Send(session)
 			}()
 
-			Consistently(errCh).ShouldNot(Receive())
+			Consistently(errCh).ShouldNot(Receive(HaveOccurred()))
 
 			n, err := pw.Write([]byte{0})
 			Expect(err).NotTo(HaveOccurred())

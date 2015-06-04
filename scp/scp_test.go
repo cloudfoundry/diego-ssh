@@ -98,54 +98,88 @@ var _ = Describe("scp", func() {
 				preserveTimestamps = false
 			})
 
-			JustBeforeEach(func() {
-				var err error
+			Context("when the requested file exists", func() {
+				JustBeforeEach(func() {
+					var err error
 
-				command := fmt.Sprintf("scp -f %s", generatedTextFile)
-				if preserveTimestamps {
-					command = fmt.Sprintf("scp -fp %s", generatedTextFile)
-				}
+					command := fmt.Sprintf("scp -f %s", generatedTextFile)
+					if preserveTimestamps {
+						command = fmt.Sprintf("scp -fp %s", generatedTextFile)
+					}
 
-				secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
-				Expect(err).NotTo(HaveOccurred())
-
-				done := make(chan struct{})
-				go func() {
-					err := secureCopier.Copy()
+					secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
-					close(done)
-				}()
 
-				_, err = stdinSource.Write([]byte{0})
-				Expect(err).NotTo(HaveOccurred())
+					done := make(chan struct{})
+					go func() {
+						err := secureCopier.Copy()
+						Expect(err).NotTo(HaveOccurred())
+						close(done)
+					}()
 
-				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
-
-				timestampMessage := &scp.TimeMessage{}
-				if preserveTimestamps {
-					err = timestampMessage.Receive(session)
+					_, err = stdinSource.Write([]byte{0})
 					Expect(err).NotTo(HaveOccurred())
-				}
 
-				err = scp.ReceiveFile(session, targetDir, true, timestampMessage)
-				Expect(err).NotTo(HaveOccurred())
-				Eventually(done).Should(BeClosed())
+					session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 
-				sourceFileInfo, err = os.Stat(generatedTextFile)
-				Expect(err).NotTo(HaveOccurred())
-			})
+					timestampMessage := &scp.TimeMessage{}
+					if preserveTimestamps {
+						err = timestampMessage.Receive(session)
+						Expect(err).NotTo(HaveOccurred())
+					}
 
-			It("sends the files", func() {
-				compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
-			})
+					err = scp.ReceiveFile(session, targetDir, true, timestampMessage)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(done).Should(BeClosed())
 
-			Context("when -p (preserve times) is specified", func() {
-				BeforeEach(func() {
-					preserveTimestamps = true
+					sourceFileInfo, err = os.Stat(generatedTextFile)
+					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("sends the timestamp information before the file", func() {
+				It("sends the files", func() {
 					compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
+				})
+
+				Context("when -p (preserve times) is specified", func() {
+					BeforeEach(func() {
+						preserveTimestamps = true
+					})
+
+					It("sends the timestamp information before the file", func() {
+						compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
+					})
+				})
+			})
+
+			Context("when the requested file does not exist", func() {
+				BeforeEach(func() {
+					os.RemoveAll(sourceDir)
+				})
+
+				It("returns an error", func() {
+					command := fmt.Sprintf("scp -f %s", generatedTextFile)
+					secureCopier, err := scp.New(command, stdin, stdout, stderr, logger)
+					Expect(err).NotTo(HaveOccurred())
+
+					errCh := make(chan error)
+					go func() {
+						errCh <- secureCopier.Copy()
+					}()
+
+					_, err = stdinSource.Write([]byte{0})
+					Expect(err).NotTo(HaveOccurred())
+
+					stdoutReader := bufio.NewReader(stdoutSource)
+
+					errCode, err := stdoutReader.ReadByte()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errCode).To(BeEquivalentTo(1))
+
+					errMessage, err := stdoutReader.ReadString('\n')
+					Expect(err).NotTo(HaveOccurred())
+					Expect(errMessage).To(ContainSubstring("no such file or directory"))
+
+					Eventually(errCh).Should(Receive(HaveOccurred()))
 				})
 			})
 		})
@@ -172,13 +206,13 @@ var _ = Describe("scp", func() {
 
 					errCode, err := stdoutReader.ReadByte()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(errCode).To(BeEquivalentTo(2))
+					Expect(errCode).To(BeEquivalentTo(1))
 
 					errMessage, err := stdoutReader.ReadString('\n')
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessage).To(ContainSubstring("not a regular file"))
 
-					Eventually(errCh).Should(Receive())
+					Eventually(errCh).Should(Receive(HaveOccurred()))
 				})
 			})
 
@@ -488,13 +522,13 @@ var _ = Describe("scp", func() {
 
 				errCode, err := stdoutReader.ReadByte()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(errCode).To(BeEquivalentTo(2))
+				Expect(errCode).To(BeEquivalentTo(1))
 
 				errMessage, err := stdoutReader.ReadString('\n')
 				Expect(err).NotTo(HaveOccurred())
 				Expect(errMessage).To(ContainSubstring("unexpected message type: F"))
 
-				Eventually(errCh).Should(Receive())
+				Eventually(errCh).Should(Receive(HaveOccurred()))
 			})
 		})
 	})
