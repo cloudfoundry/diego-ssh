@@ -32,7 +32,6 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner                *fakes.FakeRunner
 		shellLocator          *fakes.FakeShellLocator
 		sessionChannelHandler *handlers.SessionChannelHandler
-		scpHandler            handlers.SCPHandler
 
 		newChannelHandlers map[string]handlers.NewChannelHandler
 		defaultEnv         map[string]string
@@ -58,8 +57,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		defaultEnv = map[string]string{}
 		defaultEnv["TEST"] = "FOO"
 
-		scpHandler = handlers.NewSCPHandler()
-		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, scpHandler, defaultEnv)
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
@@ -123,103 +121,119 @@ var _ = Describe("SessionChannelHandler", func() {
 		})
 
 		Describe("scp", func() {
-			Context("when the command is scp", func() {
-				var (
-					sourceDir, generatedTextFile, targetDir string
-					err                                     error
-					stdin                                   io.WriteCloser
-					stdout                                  io.Reader
-					fileContents                            []byte
-				)
+			var (
+				sourceDir, generatedTextFile, targetDir string
+				err                                     error
+				stdin                                   io.WriteCloser
+				stdout                                  io.Reader
+				fileContents                            []byte
+			)
 
-				BeforeEach(func() {
-					stdin, err = session.StdinPipe()
-					Expect(err).NotTo(HaveOccurred())
+			BeforeEach(func() {
+				stdin, err = session.StdinPipe()
+				Expect(err).NotTo(HaveOccurred())
 
-					stdout, err = session.StdoutPipe()
-					Expect(err).NotTo(HaveOccurred())
+				stdout, err = session.StdoutPipe()
+				Expect(err).NotTo(HaveOccurred())
 
-					sourceDir, err = ioutil.TempDir("", "scp-source")
-					Expect(err).NotTo(HaveOccurred())
+				sourceDir, err = ioutil.TempDir("", "scp-source")
+				Expect(err).NotTo(HaveOccurred())
 
-					fileContents = []byte("---\nthis is a simple file\n\n")
-					generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
+				fileContents = []byte("---\nthis is a simple file\n\n")
+				generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
 
-					err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
-					Expect(err).NotTo(HaveOccurred())
+				err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
+				Expect(err).NotTo(HaveOccurred())
 
-					targetDir, err = ioutil.TempDir("", "scp-target")
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				// It("intercepts the command and sends it to the scp session handler", func() {
-				// 	err := session.Run("scp -v -t /tmp/foo")
-				// 	Expect(err).NotTo(HaveOccurred())
-				// 	Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(1))
-				// })
-
-				FIt("properly copies using the secure copier", func() {
-					done := make(chan struct{})
-					go func() {
-						defer GinkgoRecover()
-						err := session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
-						Expect(err).NotTo(HaveOccurred())
-						close(done)
-					}()
-
-					confirmation := make([]byte, 1)
-					_, err = stdout.Read(confirmation)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(confirmation).To(Equal([]byte{0}))
-
-					expectedFileInfo, err := os.Stat(generatedTextFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					_, err = stdin.Write([]byte(fmt.Sprintf("C0664 %d textfile.txt\n", expectedFileInfo.Size())))
-					Expect(err).NotTo(HaveOccurred())
-
-					confirmation = make([]byte, 1)
-					_, err = stdout.Read(confirmation)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(confirmation).To(Equal([]byte{0}))
-
-					_, err = stdin.Write(fileContents)
-					Expect(err).NotTo(HaveOccurred())
-
-					confirmation = make([]byte, 1)
-					_, err = stdout.Read(confirmation)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(confirmation).To(Equal([]byte{0}))
-
-					err = stdin.Close()
-					Expect(err).NotTo(HaveOccurred())
-
-					actualFilePath := filepath.Join(targetDir, filepath.Base(generatedTextFile))
-					actualFileInfo, err := os.Stat(actualFilePath)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
-					Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
-
-					actualContents, err := ioutil.ReadFile(actualFilePath)
-					Expect(err).NotTo(HaveOccurred())
-
-					expectedContents, err := ioutil.ReadFile(generatedTextFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(actualContents).To(Equal(expectedContents))
-
-					Eventually(done).Should(BeClosed())
-				})
+				targetDir, err = ioutil.TempDir("", "scp-target")
+				Expect(err).NotTo(HaveOccurred())
 			})
 
-			// Context("when the command is not scp", func() {
-			// 	It("does not send the command to the scp session handler", func() {
-			// 		err := session.Run("scp-nope -v -t /tmp/foo || true")
-			// 		Expect(err).NotTo(HaveOccurred())
-			// 		Expect(scpHandler.HandleSCPRequestCallCount()).To(Equal(0))
-			// 	})
-			// })
+			It("properly copies using the secure copier", func() {
+				done := make(chan struct{})
+				go func() {
+					defer GinkgoRecover()
+					err := session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
+					Expect(err).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				confirmation := make([]byte, 1)
+				_, err = stdout.Read(confirmation)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(confirmation).To(Equal([]byte{0}))
+
+				expectedFileInfo, err := os.Stat(generatedTextFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = stdin.Write([]byte(fmt.Sprintf("C0664 %d textfile.txt\n", expectedFileInfo.Size())))
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = stdout.Read(confirmation)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(confirmation).To(Equal([]byte{0}))
+
+				_, err = stdin.Write(fileContents)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = stdout.Read(confirmation)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(confirmation).To(Equal([]byte{0}))
+
+				err = stdin.Close()
+				Expect(err).NotTo(HaveOccurred())
+
+				actualFilePath := filepath.Join(targetDir, filepath.Base(generatedTextFile))
+				actualFileInfo, err := os.Stat(actualFilePath)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+				Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
+
+				actualContents, err := ioutil.ReadFile(actualFilePath)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedContents, err := ioutil.ReadFile(generatedTextFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(actualContents).To(Equal(expectedContents))
+
+				Eventually(done).Should(BeClosed())
+			})
+
+			It("properly fails when secure copying fails", func() {
+				errCh := make(chan error)
+				go func() {
+					defer GinkgoRecover()
+					errCh <- session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
+				}()
+
+				confirmation := make([]byte, 1)
+				_, err = stdout.Read(confirmation)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(confirmation).To(Equal([]byte{0}))
+
+				_, err = stdin.Write([]byte("BOGUS PROTOCOL MESSAGE\n"))
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = stdout.Read(confirmation)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(confirmation).To(Equal([]byte{2}))
+
+				err = <-errCh
+				exitErr, ok := err.(*ssh.ExitError)
+				Expect(ok).To(BeTrue())
+				Expect(exitErr.ExitStatus()).To(Equal(1))
+			})
+
+			It("properly fails when incorrect arguments are supplied", func() {
+				err := session.Run(fmt.Sprintf("scp -v -t /tmp/foo /tmp/bar"))
+				Expect(err).To(HaveOccurred())
+
+				exitErr, ok := err.(*ssh.ExitError)
+				Expect(ok).To(BeTrue())
+				Expect(exitErr.ExitStatus()).To(Equal(1))
+			})
 		})
 
 		Describe("the shell locator", func() {
@@ -328,7 +342,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("when running a command without an explitict environemnt", func() {
+		Context("when running a command without an explicit environemnt", func() {
 			It("does not inherit daemon's environment", func() {
 				os.Setenv("DAEMON_ENV", "daemon_env_value")
 

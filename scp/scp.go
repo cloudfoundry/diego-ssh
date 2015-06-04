@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"regexp"
+
+	"github.com/pivotal-golang/lager"
 )
 
 var whitespace = regexp.MustCompile(`\s+`)
@@ -19,13 +21,13 @@ type secureCopy struct {
 	session *Session
 }
 
-func New(command string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (SecureCopier, error) {
+func New(command string, stdin io.Reader, stdout io.Writer, stderr io.Writer, logger lager.Logger) (SecureCopier, error) {
 	options, err := ParseFlags(parseCommand(command))
 	if err != nil {
 		return nil, err
 	}
 
-	session := NewSession(stdin, stdout, stderr, options.PreserveTimesAndMode)
+	session := NewSession(stdin, stdout, stderr, options.PreserveTimesAndMode, logger)
 
 	return &secureCopy{
 		options: options,
@@ -40,17 +42,26 @@ func parseCommand(command string) []string {
 
 func (s *secureCopy) Copy() error {
 	if s.options.SourceMode {
+		logger := s.session.logger.Session("source-mode")
+
+		logger.Info("awaiting-connection-confirmation")
 		err := s.session.awaitConfirmation()
 		if err != nil {
+			logger.Error("failed-confirmation", err)
 			return err
 		}
+		logger.Info("received-connection-confirmation")
 
 		for _, source := range s.options.Sources {
+			logger.Info("sending-source", lager.Data{"Source": source})
+
 			err := s.send(source)
 			if err != nil {
+				logger.Error("failed-sending-source", err, lager.Data{"Source": source})
 				s.session.sendError(err.Error())
 				return err
 			}
+			logger.Info("sent-source", lager.Data{"Source": source})
 		}
 	}
 

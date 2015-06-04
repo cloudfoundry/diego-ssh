@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/scp/atime"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/lager/lagertest"
 )
 
 var _ = Describe("scp", func() {
@@ -30,9 +31,12 @@ var _ = Describe("scp", func() {
 		generatedBinaryFile     string
 
 		secureCopier scp.SecureCopier
+		logger       *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
+		logger = lagertest.NewTestLogger("test")
+
 		stdin, stdinSource = io.Pipe()
 		stdoutSource, stdout = io.Pipe()
 		stderr = ioutil.Discard
@@ -79,7 +83,7 @@ var _ = Describe("scp", func() {
 	Context("source mode", func() {
 		Context("when no files are requested", func() {
 			It("fails construct the copier", func() {
-				_, err := scp.New("scp -f", stdin, stdout, stderr)
+				_, err := scp.New("scp -f", stdin, stdout, stderr, logger)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -102,7 +106,7 @@ var _ = Describe("scp", func() {
 					command = fmt.Sprintf("scp -fp %s", generatedTextFile)
 				}
 
-				secureCopier, err = scp.New(command, stdin, stdout, stderr)
+				secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 				Expect(err).NotTo(HaveOccurred())
 
 				done := make(chan struct{})
@@ -115,7 +119,7 @@ var _ = Describe("scp", func() {
 				_, err = stdinSource.Write([]byte{0})
 				Expect(err).NotTo(HaveOccurred())
 
-				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 
 				timestampMessage := &scp.TimeMessage{}
 				if preserveTimestamps {
@@ -151,7 +155,7 @@ var _ = Describe("scp", func() {
 				BeforeEach(func() {
 					var err error
 					command := fmt.Sprintf("scp -f %s", sourceDir)
-					secureCopier, err = scp.New(command, stdin, stdout, stderr)
+					secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -196,7 +200,7 @@ var _ = Describe("scp", func() {
 						command = fmt.Sprintf("scp -rfp %s", sourceDir)
 					}
 
-					secureCopier, err = scp.New(command, stdin, stdout, stderr)
+					secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 
 					done := make(chan struct{})
@@ -209,7 +213,7 @@ var _ = Describe("scp", func() {
 					_, err = stdinSource.Write([]byte{0})
 					Expect(err).NotTo(HaveOccurred())
 
-					session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+					session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 
 					timestampMessage := &scp.TimeMessage{}
 					if preserveTimestamps {
@@ -245,14 +249,14 @@ var _ = Describe("scp", func() {
 	Context("target mode", func() {
 		Context("when no target is specified", func() {
 			It("fails construct the copier", func() {
-				_, err := scp.New("scp -t", stdin, stdout, stderr)
+				_, err := scp.New("scp -t", stdin, stdout, stderr, logger)
 				Expect(err).To(HaveOccurred())
 			})
 		})
 
 		Context("when multiple targets are specified", func() {
 			It("fails construct the copier", func() {
-				_, err := scp.New("scp -t a b", stdin, stdout, stderr)
+				_, err := scp.New("scp -t a b", stdin, stdout, stderr, logger)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -260,7 +264,7 @@ var _ = Describe("scp", func() {
 		Context("when the target is not a directory", func() {
 			Context("and the target is specified as a directory", func() {
 				It("fails when the target does not exist", func() {
-					secureCopier, err := scp.New("scp -td bogus", stdin, stdout, stderr)
+					secureCopier, err := scp.New("scp -td bogus", stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 
 					err = secureCopier.Copy()
@@ -271,7 +275,7 @@ var _ = Describe("scp", func() {
 					tempFile, err := ioutil.TempFile(targetDir, "target")
 					Expect(err).NotTo(HaveOccurred())
 
-					secureCopier, err := scp.New("scp -td "+tempFile.Name(), stdin, stdout, stderr)
+					secureCopier, err := scp.New("scp -td "+tempFile.Name(), stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 
 					err = secureCopier.Copy()
@@ -304,7 +308,7 @@ var _ = Describe("scp", func() {
 				}
 				command := fmt.Sprintf("scp %s %s", args, targetFile)
 
-				secureCopier, err = scp.New(command, stdin, stdout, stderr)
+				secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 				Expect(err).NotTo(HaveOccurred())
 
 				done := make(chan struct{})
@@ -319,7 +323,7 @@ var _ = Describe("scp", func() {
 				_, err = stdoutSource.Read(bytes)
 				Expect(err).NotTo(HaveOccurred())
 
-				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+				session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 
 				textFile, err := os.Open(generatedTextFile)
 				Expect(err).NotTo(HaveOccurred())
@@ -394,7 +398,7 @@ var _ = Describe("scp", func() {
 				}
 				command := fmt.Sprintf("scp %s %s", args, dir)
 
-				secureCopier, err = scp.New(command, stdin, stdout, stderr)
+				secureCopier, err = scp.New(command, stdin, stdout, stderr, logger)
 				Expect(err).NotTo(HaveOccurred())
 
 				done = make(chan struct{})
@@ -409,7 +413,7 @@ var _ = Describe("scp", func() {
 				_, err = stdoutSource.Read(bytes)
 				Expect(err).NotTo(HaveOccurred())
 
-				session = scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps)
+				session = scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 			})
 
 			Context("and a file is sent", func() {
@@ -464,7 +468,7 @@ var _ = Describe("scp", func() {
 
 		Context("when an unknown message type is sent", func() {
 			It("returns an error", func() {
-				secureCopier, err := scp.New("scp -t /tmp/foo", stdin, stdout, stderr)
+				secureCopier, err := scp.New("scp -t /tmp/foo", stdin, stdout, stderr, logger)
 				Expect(err).NotTo(HaveOccurred())
 
 				errCh := make(chan error)

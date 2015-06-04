@@ -73,7 +73,7 @@ func main() {
 		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
-			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, handlers.NewSCPHandler(), getDaemonEnvironment()),
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment()),
 			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
 		},
 	)

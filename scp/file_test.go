@@ -3,6 +3,7 @@ package scp_test
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,15 +15,20 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/lager/lagertest"
 )
 
 var _ = Describe("File Message", func() {
 	var (
 		tempDir  string
 		tempFile string
+
+		logger *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
+		logger = lagertest.NewTestLogger("test")
+
 		var err error
 		tempDir, err = ioutil.TempDir("", "scp")
 		Expect(err).NotTo(HaveOccurred())
@@ -69,7 +75,7 @@ var _ = Describe("File Message", func() {
 			stdin := bytes.NewReader([]byte{0, 0})
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			err := scp.SendFile(session, file, fileInfo)
 			Expect(err).NotTo(HaveOccurred())
@@ -85,6 +91,12 @@ var _ = Describe("File Message", func() {
 			expectedContents, err := ioutil.ReadFile(tempFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(contents).To(Equal(expectedContents))
+
+			confirmation := make([]byte, 1)
+			bytesRead, err := stdout.Read(confirmation)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bytesRead).To(Equal(1))
+			Expect(confirmation).To(Equal([]byte{0}))
 		})
 
 		It("waits for confirmation before sending the file contents", func() {
@@ -92,7 +104,7 @@ var _ = Describe("File Message", func() {
 			stdout := &fake_io.FakeWriter{}
 			stdoutBuffer := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			stdout.WriteStub = stdoutBuffer.Write
 			stdin.ReadStub = func(buffer []byte) (int, error) {
@@ -124,7 +136,7 @@ var _ = Describe("File Message", func() {
 			stdin, pw := io.Pipe()
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			errCh := make(chan error, 1)
 			go func() {
@@ -145,7 +157,7 @@ var _ = Describe("File Message", func() {
 				stdin := bytes.NewReader([]byte{0, 0, 0})
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, true)
+				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				err := scp.SendFile(session, file, fileInfo)
 				Expect(err).NotTo(HaveOccurred())
@@ -172,7 +184,7 @@ var _ = Describe("File Message", func() {
 				stdin := bytes.NewReader([]byte{0, 0})
 				stdout := &fake_io.FakeWriter{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				stdout.WriteStub = func(buffer []byte) (int, error) {
 					f, err := os.OpenFile(tempFile, os.O_RDWR, 0640)
@@ -201,7 +213,7 @@ var _ = Describe("File Message", func() {
 				stdout = &bytes.Buffer{}
 				stderr = &bytes.Buffer{}
 
-				session = scp.NewSession(stdin, stdout, stderr, false)
+				session = scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				stdin.WriteByte(1)
 				stdin.WriteString("Danger!\n")
@@ -229,7 +241,7 @@ var _ = Describe("File Message", func() {
 				stdout = &bytes.Buffer{}
 				stderr = &bytes.Buffer{}
 
-				session = scp.NewSession(stdin, stdout, stderr, false)
+				session = scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				stdin.WriteByte(2)
 				stdin.WriteString("oops...\n")
@@ -252,7 +264,7 @@ var _ = Describe("File Message", func() {
 				stdout = &bytes.Buffer{}
 				stderr = &bytes.Buffer{}
 
-				session = scp.NewSession(stdin, stdout, stderr, false)
+				session = scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				stdin.WriteByte('a')
 			})
@@ -271,8 +283,28 @@ var _ = Describe("File Message", func() {
 				dirInfo, err := dir.Stat()
 				Expect(err).NotTo(HaveOccurred())
 
-				session := scp.NewSession(nil, nil, nil, false)
+				session := scp.NewSession(nil, nil, nil, false, logger)
 				Expect(scp.SendFile(session, dir, dirInfo)).To(HaveOccurred())
+			})
+		})
+
+		Context("when sending the confirmation fails", func() {
+			It("returns an error", func() {
+				stdin := bytes.NewReader([]byte{0, 0})
+				stdout := &fake_io.FakeWriter{}
+				stderr := &bytes.Buffer{}
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
+
+				stdout.WriteStub = func(buffer []byte) (int, error) {
+					if stdout.WriteCallCount() == 3 {
+						return 0, errors.New("BOOM")
+					} else {
+						return len(buffer), nil
+					}
+				}
+
+				err := scp.SendFile(session, file, fileInfo)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
@@ -285,8 +317,9 @@ var _ = Describe("File Message", func() {
 
 			stdin.WriteString("C0640 5 hello.txt\n")
 			stdin.WriteString("hello")
+			stdin.WriteByte(0)
 
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			err := scp.ReceiveFile(session, tempFile, false, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -316,6 +349,7 @@ var _ = Describe("File Message", func() {
 				if stdout.WriteCallCount() == 1 {
 					Expect(stdin.ReadCallCount()).To(BeNumerically(">", 0))
 					Expect(stdinBuffer.Len()).To(Equal(len("hello")))
+					stdinBuffer.WriteByte(0)
 
 					Expect(message).To(HaveLen(1))
 					Expect(message[0]).To(BeEquivalentTo(0))
@@ -329,7 +363,7 @@ var _ = Describe("File Message", func() {
 				return 1, nil
 			}
 
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			err := scp.ReceiveFile(session, tempFile, false, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -346,8 +380,9 @@ var _ = Describe("File Message", func() {
 
 			stdin.WriteString("C0444 5 hello.txt\n")
 			stdin.WriteString("hello")
+			stdin.WriteByte(0)
 
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			err := scp.ReceiveFile(session, tempDir, true, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -365,8 +400,9 @@ var _ = Describe("File Message", func() {
 
 			stdin.WriteString("C0444 5 hello.txt\n")
 			stdin.WriteString("hello")
+			stdin.WriteByte(0)
 
-			session := scp.NewSession(stdin, stdout, stderr, false)
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			tempFileInfo, err := os.Stat(tempFile)
 			Expect(err).NotTo(HaveOccurred())
@@ -390,6 +426,26 @@ var _ = Describe("File Message", func() {
 			Expect(fileAtime).To(Equal(tempAtime))
 		})
 
+		It("waits for a confirmation that the file has been sent", func() {
+			stdin, pw := io.Pipe()
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			session := scp.NewSession(stdin, stdout, stderr, false, logger)
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- scp.ReceiveFile(session, tempFile, false, nil)
+			}()
+
+			pw.Write([]byte("C0640 5 hello.txt\n"))
+			pw.Write([]byte("hello"))
+
+			Consistently(errCh).ShouldNot(Receive())
+
+			pw.Write([]byte{0})
+			Eventually(errCh).Should(Receive())
+		})
+
 		Context("when preserving time stamps and mode", func() {
 			It("restores the access time and modification time", func() {
 				stdin := &bytes.Buffer{}
@@ -398,8 +454,9 @@ var _ = Describe("File Message", func() {
 
 				stdin.WriteString("C0444 5 hello.txt\n")
 				stdin.WriteString("hello")
+				stdin.WriteByte(0)
 
-				session := scp.NewSession(stdin, stdout, stderr, true)
+				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				tempFileInfo, err := os.Stat(tempFile)
 				Expect(err).NotTo(HaveOccurred())
@@ -444,8 +501,9 @@ var _ = Describe("File Message", func() {
 
 				stdin.WriteString("C0640 5 hello.txt\n")
 				stdin.WriteString("hello")
+				stdin.WriteByte(0)
 
-				session := scp.NewSession(stdin, stdout, stderr, preserveTimestampsAndMode)
+				session := scp.NewSession(stdin, stdout, stderr, preserveTimestampsAndMode, logger)
 
 				err = scp.ReceiveFile(session, target, false, nil)
 				Expect(err).NotTo(HaveOccurred())
@@ -498,7 +556,7 @@ var _ = Describe("File Message", func() {
 				stdin.WriteString("C0640 5 hello.txt\n")
 				stdin.WriteString("hello")
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempFile, false, nil)
 				Expect(err).To(MatchError(MatchRegexp("permission denied")))
@@ -514,7 +572,7 @@ var _ = Describe("File Message", func() {
 				stdin.WriteString("c0640 5 hello.txt\n")
 				stdin.WriteString("hello")
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempFile, false, nil)
 				Expect(err).To(MatchError(`unexpected message type: c`))
@@ -530,7 +588,7 @@ var _ = Describe("File Message", func() {
 				stdin.WriteString("C0640 five hello.txt\n")
 				stdin.WriteString("hello")
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempFile, false, nil)
 				Expect(err).To(MatchError(`strconv.ParseInt: parsing "five": invalid syntax`))
@@ -546,7 +604,7 @@ var _ = Describe("File Message", func() {
 				stdin.WriteString("C0999 5 hello.txt\n")
 				stdin.WriteString("hello")
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempFile, false, nil)
 				Expect(err).To(MatchError(`strconv.ParseUint: parsing "0999": invalid syntax`))
@@ -568,7 +626,7 @@ var _ = Describe("File Message", func() {
 				stdin.WriteString("C0640 512 hello.txt\n")
 				stdin.WriteString("hello")
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempFile, false, nil)
 				Expect(err).To(Equal(io.EOF))
@@ -583,13 +641,31 @@ var _ = Describe("File Message", func() {
 
 				stdin.WriteString("C0640 5 hello.txt\n")
 				stdin.WriteString("hello")
+				stdin.WriteByte(0)
 
-				session := scp.NewSession(stdin, stdout, stderr, false)
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 				err := scp.ReceiveFile(session, tempDir, true, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(ioutil.ReadFile(filepath.Join(tempDir, "hello.txt"))).To(BeEquivalentTo("hello"))
+			})
+		})
+
+		Context("when the confirmation of the file fails", func() {
+			It("returns an error", func() {
+				stdin := &bytes.Buffer{}
+				stdout := &bytes.Buffer{}
+				stderr := &bytes.Buffer{}
+				session := scp.NewSession(stdin, stdout, stderr, false, logger)
+
+				stdin.Write([]byte("C0640 5 hello.txt\n"))
+				stdin.Write([]byte("hello"))
+				stdin.Write([]byte{2})
+				stdin.Write([]byte("BOOM\n"))
+
+				err := scp.ReceiveFile(session, tempFile, false, nil)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})
