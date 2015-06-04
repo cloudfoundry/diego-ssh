@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/pivotal-golang/lager"
 )
 
 const (
@@ -19,14 +21,17 @@ type Session struct {
 	stderr io.Writer
 
 	preserveTimesAndMode bool
+
+	logger lager.Logger
 }
 
-func NewSession(stdin io.Reader, stdout io.Writer, stderr io.Writer, preserveTimesAndMode bool) *Session {
+func NewSession(stdin io.Reader, stdout io.Writer, stderr io.Writer, preserveTimesAndMode bool, logger lager.Logger) *Session {
 	return &Session{
 		stdin:                bufio.NewReader(stdin),
 		stdout:               stdout,
 		stderr:               stderr,
 		preserveTimesAndMode: preserveTimesAndMode,
+		logger:               logger.Session("scp-session"),
 	}
 }
 

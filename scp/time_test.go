@@ -15,15 +15,20 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/lager/lagertest"
 )
 
 var _ = Describe("TimeMessage", func() {
 	var (
 		tempDir  string
 		tempFile string
+
+		logger *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
+		logger = lagertest.NewTestLogger("test")
+
 		var err error
 		tempDir, err = ioutil.TempDir("", "scp")
 		Expect(err).NotTo(HaveOccurred())
@@ -89,7 +94,7 @@ var _ = Describe("TimeMessage", func() {
 			stdin := bytes.NewReader([]byte{0})
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, true)
+			session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 			err := timeMessage.Send(session)
 			Expect(err).NotTo(HaveOccurred())
@@ -102,7 +107,7 @@ var _ = Describe("TimeMessage", func() {
 			stdout := &fake_io.FakeWriter{}
 			stdoutBuffer := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, true)
+			session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 			stdout.WriteStub = stdoutBuffer.Write
 			stdin.ReadStub = func(buffer []byte) (int, error) {
@@ -123,7 +128,7 @@ var _ = Describe("TimeMessage", func() {
 			stdin, pw := io.Pipe()
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, true)
+			session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 			errCh := make(chan error, 1)
 			go func() {
@@ -148,7 +153,7 @@ var _ = Describe("TimeMessage", func() {
 				stdout = &bytes.Buffer{}
 				stderr = &bytes.Buffer{}
 
-				session = scp.NewSession(stdin, stdout, stderr, true)
+				session = scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				stdin.WriteByte(1)
 				stdin.WriteString("Danger!\n")
@@ -176,7 +181,7 @@ var _ = Describe("TimeMessage", func() {
 				stdout = &bytes.Buffer{}
 				stderr = &bytes.Buffer{}
 
-				session = scp.NewSession(stdin, stdout, stderr, true)
+				session = scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				stdin.WriteByte(2)
 				stdin.WriteString("oops...\n")
@@ -200,7 +205,7 @@ var _ = Describe("TimeMessage", func() {
 			stdin := strings.NewReader("T123456789 0 987654321 0\n")
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, true)
+			session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 			err := timeMessage.Receive(session)
 			Expect(err).NotTo(HaveOccurred())
@@ -214,7 +219,7 @@ var _ = Describe("TimeMessage", func() {
 			stdin := &fake_io.FakeReader{}
 			stdout := &fake_io.FakeWriter{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, true)
+			session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 			stdin.ReadStub = reader.Read
 			stdout.WriteStub = func(message []byte) (int, error) {
@@ -239,7 +244,7 @@ var _ = Describe("TimeMessage", func() {
 				stdin := strings.NewReader("$123456789 0 987654321 0\n")
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, true)
+				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				err := timeMessage.Receive(session)
 				Expect(err).To(MatchError("unexpected message type: $"))
@@ -251,7 +256,7 @@ var _ = Describe("TimeMessage", func() {
 				stdin := strings.NewReader("Tmodification 0 987654321 0\n")
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, true)
+				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				err := timeMessage.Receive(session)
 				Expect(err).To(HaveOccurred())
@@ -263,7 +268,7 @@ var _ = Describe("TimeMessage", func() {
 				stdin := strings.NewReader("T123456789 0 access 0\n")
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, true)
+				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
 				err := timeMessage.Receive(session)
 				Expect(err).To(HaveOccurred())

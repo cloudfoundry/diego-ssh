@@ -28,11 +28,6 @@ type Runner interface {
 	Signal(cmd *exec.Cmd, signal syscall.Signal) error
 }
 
-//go:generate counterfeiter -o fakes/fake_scp_handler.go . SCPHandler
-type SCPHandler interface {
-	HandleSCPRequest(channel ssh.Channel, request *ssh.Request, cmd string) error
-}
-
 type commandRunner struct{}
 
 func NewCommandRunner() Runner {
@@ -75,20 +70,17 @@ func (shellLocator) ShellPath() string {
 type SessionChannelHandler struct {
 	runner       Runner
 	shellLocator ShellLocator
-	scpHandler   SCPHandler
 	defaultEnv   map[string]string
 }
 
 func NewSessionChannelHandler(
 	runner Runner,
 	shellLocator ShellLocator,
-	scpHandler SCPHandler,
 	defaultEnv map[string]string,
 ) *SessionChannelHandler {
 	return &SessionChannelHandler{
 		runner:       runner,
 		shellLocator: shellLocator,
-		scpHandler:   scpHandler,
 		defaultEnv:   defaultEnv,
 	}
 }
@@ -120,8 +112,6 @@ type session struct {
 	runner    Runner
 	channel   ssh.Channel
 
-	scpHandler SCPHandler
-
 	sync.Mutex
 	env     map[string]string
 	command *exec.Cmd
@@ -135,12 +125,11 @@ type session struct {
 
 func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel) *session {
 	return &session{
-		logger:     logger.Session("session-channel"),
-		runner:     handler.runner,
-		shellPath:  handler.shellLocator.ShellPath(),
-		channel:    channel,
-		env:        handler.defaultEnv,
-		scpHandler: handler.scpHandler,
+		logger:    logger.Session("session-channel"),
+		runner:    handler.runner,
+		shellPath: handler.shellLocator.ShellPath(),
+		channel:   channel,
+		env:       handler.defaultEnv,
 	}
 }
 
@@ -318,20 +307,10 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 	}
 
 	if scpRegex.MatchString(execMessage.Command) {
-		copier, _ := scp.New(execMessage.Command, sess.channel, sess.channel, sess.channel.Stderr())
-
-		if request.WantReply {
-			request.Reply(true, nil)
-		}
-
-		err = copier.Copy()
-
-		sess.sendExitMessage(err)
-		sess.destroy()
-		return
+		sess.executeSCP(execMessage.Command, request)
+	} else {
+		sess.executeShell(request, "-c", execMessage.Command)
 	}
-
-	sess.executeShell(request, "-c", execMessage.Command)
 }
 
 func (sess *session) handleShellRequest(request *ssh.Request) {
@@ -407,6 +386,17 @@ func (sess *session) environment() []string {
 	return env
 }
 
+type exitStatusMsg struct {
+	Status uint32
+}
+
+type exitSignalMsg struct {
+	Signal     string
+	CoreDumped bool
+	Error      string
+	Lang       string
+}
+
 func (sess *session) sendExitMessage(err error) {
 	logger := sess.logger.Session("send-exit-message")
 	logger.Info("started")
@@ -414,17 +404,6 @@ func (sess *session) sendExitMessage(err error) {
 
 	if err != nil {
 		logger.Error("building-exit-message-from-error", err)
-	}
-
-	type exitStatusMsg struct {
-		Status uint32
-	}
-
-	type exitSignalMsg struct {
-		Signal     string
-		CoreDumped bool
-		Error      string
-		Lang       string
 	}
 
 	if err == nil {
@@ -602,4 +581,42 @@ func (sess *session) destroy() {
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()
 	}
+}
+
+func (sess *session) executeSCP(command string, request *ssh.Request) {
+	if request.WantReply {
+		request.Reply(true, nil)
+	}
+
+	copier, err := scp.New(command, sess.channel, sess.channel, sess.channel.Stderr(), sess.logger)
+
+	if err != nil {
+		sess.sendSCPExitMessage(err)
+		sess.destroy()
+		return
+	}
+
+	err = copier.Copy()
+
+	sess.sendSCPExitMessage(err)
+	sess.destroy()
+	return
+}
+
+func (sess *session) sendSCPExitMessage(err error) {
+	logger := sess.logger.Session("send-scp-exit-message")
+	logger.Info("started")
+	defer logger.Info("finished")
+
+	var exitMessage exitStatusMsg
+	if err != nil {
+		logger.Error("building-scp-exit-message-from-error", err)
+		exitMessage = exitStatusMsg{Status: 1}
+	}
+
+	_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+	if sendErr != nil {
+		logger.Error("send-exit-status-failed", sendErr)
+	}
+	return
 }

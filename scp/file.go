@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/pivotal-golang/lager"
 )
 
 func SendFile(session *Session, file *os.File, fileInfo os.FileInfo) error {
+	logger := session.logger.Session("send-file")
 	if fileInfo.IsDir() {
 		return errors.New("cannot send a directory")
 	}
@@ -32,15 +35,23 @@ func SendFile(session *Session, file *os.File, fileInfo os.FileInfo) error {
 		return err
 	}
 
-	_, err = io.CopyN(session.stdout, file, fileInfo.Size())
+	bytesSent, err := io.CopyN(session.stdout, file, fileInfo.Size())
 	if err != nil {
 		return err
 	}
 
-	err = session.awaitConfirmation()
+	err = session.sendConfirmation()
 	if err != nil {
 		return err
 	}
+
+	logger.Info("awaiting-contents-confirmation", lager.Data{"File Size": fileInfo.Size(), "Bytes Sent": bytesSent})
+	err = session.awaitConfirmation()
+	if err != nil {
+		logger.Error("failed-contents-confirmation", err)
+		return err
+	}
+	logger.Info("recieved-contents-confirmation")
 
 	return nil
 }
@@ -114,6 +125,11 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 		if err != nil {
 			return err
 		}
+	}
+
+	err = session.awaitConfirmation()
+	if err != nil {
+		return err
 	}
 
 	err = session.sendConfirmation()
