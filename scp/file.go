@@ -11,42 +11,42 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-func SendFile(session *Session, file *os.File, fileInfo os.FileInfo) error {
-	logger := session.logger.Session("send-file")
+func (s *secureCopy) SendFile(file *os.File, fileInfo os.FileInfo) error {
+	logger := s.session.logger.Session("send-file")
 	if fileInfo.IsDir() {
 		return errors.New("cannot send a directory")
 	}
 
-	if session.preserveTimesAndMode {
+	if s.session.preserveTimesAndMode {
 		timeMessage := NewTimeMessage(fileInfo)
-		err := timeMessage.Send(session)
+		err := timeMessage.Send(s.session)
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err := fmt.Fprintf(session.stdout, "C%.4o %d %s\n", fileInfo.Mode()&07777, fileInfo.Size(), fileInfo.Name())
+	_, err := fmt.Fprintf(s.session.stdout, "C%.4o %d %s\n", fileInfo.Mode()&07777, fileInfo.Size(), fileInfo.Name())
 	if err != nil {
 		return err
 	}
 
-	err = session.awaitConfirmation()
+	err = s.session.awaitConfirmation()
 	if err != nil {
 		return err
 	}
 
-	bytesSent, err := io.CopyN(session.stdout, file, fileInfo.Size())
+	bytesSent, err := io.CopyN(s.session.stdout, file, fileInfo.Size())
 	if err != nil {
 		return err
 	}
 
-	err = session.sendConfirmation()
+	err = s.session.sendConfirmation()
 	if err != nil {
 		return err
 	}
 
 	logger.Info("awaiting-contents-confirmation", lager.Data{"File Size": fileInfo.Size(), "Bytes Sent": bytesSent})
-	err = session.awaitConfirmation()
+	err = s.session.awaitConfirmation()
 	if err != nil {
 		logger.Error("failed-contents-confirmation", err)
 		return err
@@ -56,8 +56,8 @@ func SendFile(session *Session, file *os.File, fileInfo os.FileInfo) error {
 	return nil
 }
 
-func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *TimeMessage) error {
-	messageType, err := session.readByte()
+func (s *secureCopy) ReceiveFile(path string, pathIsDir bool, timeMessage *TimeMessage) error {
+	messageType, err := s.session.readByte()
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 		return fmt.Errorf("unexpected message type: %c", messageType)
 	}
 
-	fileModeString, err := session.readString(SPACE)
+	fileModeString, err := s.session.readString(SPACE)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 		return err
 	}
 
-	lengthString, err := session.readString(SPACE)
+	lengthString, err := s.session.readString(SPACE)
 	if err != nil {
 		return err
 	}
@@ -86,12 +86,12 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 		return err
 	}
 
-	fileName, err := session.readString(NEWLINE)
+	fileName, err := s.session.readString(NEWLINE)
 	if err != nil {
 		return err
 	}
 
-	err = session.sendConfirmation()
+	err = s.session.sendConfirmation()
 	if err != nil {
 		return err
 	}
@@ -107,12 +107,12 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 	}
 	defer targetFile.Close()
 
-	_, err = io.CopyN(targetFile, session.stdin, length)
+	_, err = io.CopyN(targetFile, s.session.stdin, length)
 	if err != nil {
 		return err
 	}
 
-	if session.preserveTimesAndMode {
+	if s.session.preserveTimesAndMode {
 		err := os.Chmod(targetPath, os.FileMode(fileMode))
 		if err != nil {
 			return err
@@ -127,12 +127,12 @@ func ReceiveFile(session *Session, path string, pathIsDir bool, timeMessage *Tim
 		}
 	}
 
-	err = session.awaitConfirmation()
+	err = s.session.awaitConfirmation()
 	if err != nil {
 		return err
 	}
 
-	err = session.sendConfirmation()
+	err = s.session.sendConfirmation()
 	if err != nil {
 		return err
 	}

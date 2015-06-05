@@ -17,7 +17,7 @@ var _ = Describe("FlagParser", func() {
 
 		Context("when unix style command concatenated args are used", func() {
 			It("parses command line flags and returns Options", func() {
-				scpOptions, err := scp.ParseFlags([]string{"scp", "-tdvpr", "/tmp/foo"})
+				scpOptions, err := scp.ParseFlags([]string{"scp", "-tdvprq", "/tmp/foo"})
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(scpOptions.TargetMode).To(BeTrue())
@@ -26,6 +26,7 @@ var _ = Describe("FlagParser", func() {
 				Expect(scpOptions.Verbose).To(BeTrue())
 				Expect(scpOptions.PreserveTimesAndMode).To(BeTrue())
 				Expect(scpOptions.Recursive).To(BeTrue())
+				Expect(scpOptions.Quiet).To(BeTrue())
 				Expect(scpOptions.Target).To(Equal("/tmp/foo"))
 			})
 		})
@@ -131,6 +132,71 @@ var _ = Describe("FlagParser", func() {
 			It("returns an error", func() {
 				_, err := scp.ParseFlags([]string{"foobar", ""})
 				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("ParseCommand", func() {
+		var (
+			command string
+			args    []string
+			err     error
+		)
+
+		BeforeEach(func() {
+			command = "scp -v -f source"
+		})
+
+		JustBeforeEach(func() {
+			args, err = scp.ParseCommand(command)
+		})
+
+		It("returns an string slice from an scp command", func() {
+			Expect(err).NotTo(HaveOccurred())
+			Expect(args).To(Equal([]string{"scp", "-v", "-f", "source"}))
+		})
+
+		Context("when the shell lexer returns an error", func() {
+			BeforeEach(func() {
+				command = "scp -v -f source\\"
+			})
+
+			It("returns an error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(args).To(BeEmpty())
+			})
+		})
+
+		Context("when the command string contains escaped spaces as parts of filenames", func() {
+			BeforeEach(func() {
+				command = "scp -v -f source\\ file"
+			})
+
+			It("correctly captures the path as a single argument", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(args).To(Equal([]string{"scp", "-v", "-f", "source file"}))
+			})
+		})
+
+		Context("when an argument is in quotes", func() {
+			BeforeEach(func() {
+				command = "scp -v -f \"source\""
+			})
+
+			It("correctly captures the path as a single argument", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(args).To(Equal([]string{"scp", "-v", "-f", "source"}))
+			})
+		})
+
+		Context("when the command contains unexpected whitespace", func() {
+			BeforeEach(func() {
+				command = "scp -v                   -f                source"
+			})
+
+			It("correctly strips excess whitespace", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(args).To(Equal([]string{"scp", "-v", "-f", "source"}))
 			})
 		})
 	})

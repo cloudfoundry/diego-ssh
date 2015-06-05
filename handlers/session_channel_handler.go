@@ -307,6 +307,7 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 	}
 
 	if scpRegex.MatchString(execMessage.Command) {
+		logger.Info("handling-scp-command", lager.Data{"Command": execMessage.Command})
 		sess.executeSCP(execMessage.Command, request)
 	} else {
 		sess.executeShell(request, "-c", execMessage.Command)
@@ -584,11 +585,13 @@ func (sess *session) destroy() {
 }
 
 func (sess *session) executeSCP(command string, request *ssh.Request) {
+	logger := sess.logger.Session("execute-scp")
+
 	if request.WantReply {
 		request.Reply(true, nil)
 	}
 
-	copier, err := scp.New(command, sess.channel, sess.channel, sess.channel.Stderr(), sess.logger)
+	copier, err := scp.NewFromCommand(command, sess.channel, sess.channel, sess.channel.Stderr(), logger)
 
 	if err != nil {
 		sess.sendSCPExitMessage(err)
@@ -600,6 +603,7 @@ func (sess *session) executeSCP(command string, request *ssh.Request) {
 
 	sess.sendSCPExitMessage(err)
 	sess.destroy()
+
 	return
 }
 
