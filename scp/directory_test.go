@@ -21,6 +21,8 @@ var _ = Describe("Directory Message", func() {
 		tempDir string
 		logger  *lagertest.TestLogger
 		err     error
+
+		copier TestCopier
 	)
 
 	BeforeEach(func() {
@@ -32,6 +34,15 @@ var _ = Describe("Directory Message", func() {
 	AfterEach(func() {
 		os.RemoveAll(tempDir)
 	})
+
+	newTestCopier := func(stdin io.Reader, stdout io.Writer, stderr io.Writer, preserveTimeAndMode bool) TestCopier {
+		options := &scp.Options{
+			PreserveTimesAndMode: preserveTimeAndMode,
+		}
+		secureCopier, ok := scp.New(options, stdin, stdout, stderr, logger).(TestCopier)
+		Expect(ok).To(BeTrue())
+		return secureCopier
+	}
 
 	Context("when sending an empty directory to an scp sink", func() {
 		var (
@@ -61,9 +72,8 @@ var _ = Describe("Directory Message", func() {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-			err := scp.SendDirectory(session, emptySubdir, emptyDirInfo)
+			copier = newTestCopier(stdin, stdout, stderr, false)
+			err := copier.SendDirectory(emptySubdir, emptyDirInfo)
 			Expect(err).NotTo(HaveOccurred())
 
 			dirMessage, err := stdout.ReadString('\n')
@@ -78,7 +88,6 @@ var _ = Describe("Directory Message", func() {
 			stdout := &fake_io.FakeWriter{}
 			stdoutBuffer := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			stdout.WriteStub = stdoutBuffer.Write
 			stdin.ReadStub = func(buffer []byte) (int, error) {
@@ -98,7 +107,8 @@ var _ = Describe("Directory Message", func() {
 				return 1, nil
 			}
 
-			err := scp.SendDirectory(session, emptySubdir, emptyDirInfo)
+			copier = newTestCopier(stdin, stdout, stderr, false)
+			err := copier.SendDirectory(emptySubdir, emptyDirInfo)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -106,11 +116,11 @@ var _ = Describe("Directory Message", func() {
 			stdin, pw := io.Pipe()
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
-			session := scp.NewSession(stdin, stdout, stderr, false, logger)
 
 			errCh := make(chan error, 1)
 			go func() {
-				errCh <- scp.SendDirectory(session, emptySubdir, emptyDirInfo)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				errCh <- copier.SendDirectory(emptySubdir, emptyDirInfo)
 			}()
 
 			Consistently(errCh).ShouldNot(Receive())
@@ -133,9 +143,9 @@ var _ = Describe("Directory Message", func() {
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
+				copier = newTestCopier(stdin, stdout, stderr, false)
 
-				err := scp.SendDirectory(session, emptySubdir, emptyDirInfo)
+				err := copier.SendDirectory(emptySubdir, emptyDirInfo)
 				Expect(err).To(MatchError(MatchRegexp("permission denied")))
 			})
 		})
@@ -145,9 +155,9 @@ var _ = Describe("Directory Message", func() {
 				stdin := bytes.NewReader([]byte{0, 0, 0})
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
-				session := scp.NewSession(stdin, stdout, stderr, true, logger)
 
-				err := scp.SendDirectory(session, emptySubdir, emptyDirInfo)
+				copier = newTestCopier(stdin, stdout, stderr, true)
+				err := copier.SendDirectory(emptySubdir, emptyDirInfo)
 				Expect(err).NotTo(HaveOccurred())
 
 				tMessage, err := stdout.ReadString('\n')
@@ -215,9 +225,8 @@ var _ = Describe("Directory Message", func() {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 
-			session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-			err := scp.SendDirectory(session, tempDir, dirInfo)
+			copier = newTestCopier(stdin, stdout, stderr, false)
+			err := copier.SendDirectory(tempDir, dirInfo)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(stdout.ReadString('\n')).To(Equal("D0700 0 " + filepath.Base(tempDir) + "\n"))
@@ -251,12 +260,11 @@ var _ = Describe("Directory Message", func() {
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
 				subdirInfo, err := os.Stat(subdir)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = scp.SendDirectory(session, subdir, subdirInfo)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err = copier.SendDirectory(subdir, subdirInfo)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(stdout.ReadString('\n')).To(Equal("D0700 0 subdir\n"))
@@ -290,9 +298,8 @@ var _ = Describe("Directory Message", func() {
 			stdin.WriteByte(0)
 			stdin.WriteString("E\n")
 
-			session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-			err := scp.ReceiveDirectory(session, tempDir, nil)
+			copier = newTestCopier(stdin, stdout, stderr, false)
+			err := copier.ReceiveDirectory(tempDir, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(filepath.Join(tempDir, "received-dir")).To(BeADirectory())
@@ -347,9 +354,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, true, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, timeMessage)
+				copier = newTestCopier(stdin, stdout, stderr, true)
+				err := copier.ReceiveDirectory(tempDir, timeMessage)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(filepath.Join(tempDir, "empty-dir")).To(BeADirectory())
@@ -374,9 +380,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("C0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).To(MatchError("unexpected message type: C"))
 			})
 		})
@@ -390,9 +395,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0999 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).To(MatchError(`strconv.ParseUint: parsing "0999": invalid syntax`))
 			})
 		})
@@ -406,9 +410,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -421,9 +424,8 @@ var _ = Describe("Directory Message", func() {
 
 				stdin.WriteString("D0755 empty-dir\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).To(Equal(io.EOF))
 			})
 		})
@@ -448,9 +450,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, targetDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(targetDir, nil)
 				Expect(err).To(MatchError(MatchRegexp("permission denied")))
 			})
 		})
@@ -476,9 +477,8 @@ var _ = Describe("Directory Message", func() {
 					stdin.WriteByte(0)
 					stdin.WriteString("E\n")
 
-					session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-					err := scp.ReceiveDirectory(session, filepath.Join(targetDir, "newdir"), nil)
+					copier = newTestCopier(stdin, stdout, stderr, false)
+					err := copier.ReceiveDirectory(filepath.Join(targetDir, "newdir"), nil)
 					Expect(err).NotTo(HaveOccurred())
 
 					info, err := os.Stat(filepath.Join(tempDir, "target", "newdir"))
@@ -511,9 +511,8 @@ var _ = Describe("Directory Message", func() {
 					stdin.WriteString("D0700 0 empty-dir\n")
 					stdin.WriteString("E\n")
 
-					session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-					err := scp.ReceiveDirectory(session, filepath.Join(targetDir, "newdir", "newer-dir"), nil)
+					copier = newTestCopier(stdin, stdout, stderr, false)
+					err := copier.ReceiveDirectory(filepath.Join(targetDir, "newdir", "newer-dir"), nil)
 					Expect(err).To(HaveOccurred())
 				})
 			})
@@ -537,9 +536,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -551,9 +549,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				info, err := os.Stat(filepath.Join(tempDir, "empty-dir"))
@@ -580,9 +577,8 @@ var _ = Describe("Directory Message", func() {
 				stdin.WriteString("D0755 0 empty-dir\n")
 				stdin.WriteString("E\n")
 
-				session := scp.NewSession(stdin, stdout, stderr, false, logger)
-
-				err := scp.ReceiveDirectory(session, tempDir, nil)
+				copier = newTestCopier(stdin, stdout, stderr, false)
+				err := copier.ReceiveDirectory(tempDir, nil)
 				Expect(err).To(HaveOccurred())
 
 				Expect(filepath.Join(tempDir, "empty-dir")).To(BeARegularFile())

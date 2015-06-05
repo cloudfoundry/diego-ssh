@@ -3,7 +3,8 @@ package scp
 import (
 	"errors"
 
-	"code.google.com/p/getopt"
+	"github.com/flynn/go-shlex"
+	"github.com/pborman/getopt"
 )
 
 // server side scp supports the following flags:
@@ -35,9 +36,18 @@ type Options struct {
 	Verbose              bool
 	PreserveTimesAndMode bool
 	Recursive            bool
+	Quiet                bool
 
 	Sources []string
 	Target  string
+}
+
+func ParseCommand(command string) ([]string, error) {
+	args, err := shlex.Split(command)
+	if err != nil {
+		return []string{}, err
+	}
+	return args, err
 }
 
 func ParseFlags(args []string) (*Options, error) {
@@ -74,6 +84,10 @@ func ParseFlags(args []string) (*Options, error) {
 	// recursive option is optional
 	recursive := opts.Bool('r', "", "Indicates a recursive transfer, must be set if source is a directory")
 	opts.Lookup('r').SetOptional()
+
+	// showprogress option is not used but can be provided
+	quiet := opts.Bool('q', "", "Indicates that the user wishes to run in quiet mode")
+	opts.Lookup('q').SetOptional()
 
 	// parse flags
 	err := opts.Getopt(args, nil)
@@ -114,6 +128,7 @@ func ParseFlags(args []string) (*Options, error) {
 		Verbose:              *verbose,
 		PreserveTimesAndMode: *preserveTimesAndMode,
 		Recursive:            *recursive,
+		Quiet:                *quiet,
 		Sources:              sources,
 		Target:               target,
 	}, nil

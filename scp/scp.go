@@ -21,23 +21,27 @@ type secureCopy struct {
 	session *Session
 }
 
-func New(command string, stdin io.Reader, stdout io.Writer, stderr io.Writer, logger lager.Logger) (SecureCopier, error) {
-	options, err := ParseFlags(parseCommand(command))
-	if err != nil {
-		return nil, err
-	}
-
+func New(options *Options, stdin io.Reader, stdout io.Writer, stderr io.Writer, logger lager.Logger) SecureCopier {
 	session := NewSession(stdin, stdout, stderr, options.PreserveTimesAndMode, logger)
 
 	return &secureCopy{
 		options: options,
 		session: session,
-	}, nil
+	}
 }
 
-func parseCommand(command string) []string {
-	// TODO: Proper implementation and test
-	return whitespace.Split(command, -1)
+func NewFromCommand(command string, stdin io.Reader, stdout io.Writer, stderr io.Writer, logger lager.Logger) (SecureCopier, error) {
+	cmd, err := ParseCommand(command)
+	if err != nil {
+		return nil, err
+	}
+
+	options, err := ParseFlags(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(options, stdin, stdout, stderr, logger), nil
 }
 
 func (s *secureCopy) Copy() error {
@@ -67,7 +71,7 @@ func (s *secureCopy) Copy() error {
 				return err
 			}
 
-			err = send(source, s.session)
+			err = s.send(source)
 			if err != nil {
 				logger.Error("failed-sending-source", err, lager.Data{"Source": source})
 				return err
@@ -118,9 +122,10 @@ func (s *secureCopy) Copy() error {
 			}
 
 			if messageType == 'C' {
-				err = ReceiveFile(s.session, s.options.Target, targetIsDir, timeMessage)
+				s.session.logger.Info("receiving-file", lager.Data{"Message Type": messageType})
+				err = s.ReceiveFile(s.options.Target, targetIsDir, timeMessage)
 			} else if messageType == 'D' {
-				err = ReceiveDirectory(s.session, s.options.Target, timeMessage)
+				err = s.ReceiveDirectory(s.options.Target, timeMessage)
 			} else {
 				err = fmt.Errorf("unexpected message type: %c", messageType)
 				s.session.sendError(err.Error())
@@ -137,12 +142,12 @@ func (s *secureCopy) Copy() error {
 	return nil
 }
 
-func send(source string, session *Session) error {
+func (s *secureCopy) send(source string) error {
 	var err error
 
 	defer func() {
 		if err != nil {
-			session.sendError(err.Error())
+			s.session.sendError(err.Error())
 		}
 	}()
 
@@ -158,9 +163,9 @@ func send(source string, session *Session) error {
 	}
 
 	if !fileInfo.IsDir() {
-		err = SendFile(session, file, fileInfo)
+		err = s.SendFile(file, fileInfo)
 	} else {
-		err = SendDirectory(session, file.Name(), fileInfo)
+		err = s.SendDirectory(file.Name(), fileInfo)
 	}
 
 	if err != nil {
