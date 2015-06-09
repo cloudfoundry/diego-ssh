@@ -141,8 +141,9 @@ var _ = Describe("scp", func() {
 
 					session := scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 
-					timestampMessage := &scp.TimeMessage{}
+					var timestampMessage *scp.TimeMessage
 					if preserveTimestamps {
+						timestampMessage = &scp.TimeMessage{}
 						err = timestampMessage.Receive(session)
 						Expect(err).NotTo(HaveOccurred())
 					}
@@ -724,6 +725,6 @@ func compareTimestampsFromInfo(actualInfo, expectedInfo os.FileInfo) {
 	expectedAccessTime, err := atime.AccessTime(expectedInfo)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(actualInfo.ModTime()).To(Equal(expectedInfo.ModTime()))
-	Expect(actualAccessTime).To(Equal(expectedAccessTime))
+	Expect(actualInfo.ModTime().Unix()).To(Equal(expectedInfo.ModTime().Unix()))
+	Expect(actualAccessTime.Unix()).To(Equal(expectedAccessTime.Unix()))
 }
