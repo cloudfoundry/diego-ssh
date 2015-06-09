@@ -3,7 +3,7 @@ package scp
 import (
 	"errors"
 
-	"github.com/flynn/go-shlex"
+	"github.com/google/shlex"
 	"github.com/pborman/getopt"
 )
 
