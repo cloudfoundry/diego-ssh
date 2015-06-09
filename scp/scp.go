@@ -47,6 +47,8 @@ func NewFromCommand(command string, stdin io.Reader, stdout io.Writer, stderr io
 
 func (s *secureCopy) Copy() error {
 	if s.options.SourceMode {
+		var lastErr error
+
 		logger := s.session.logger.Session("source-mode")
 
 		logger.Info("awaiting-connection-confirmation")
@@ -71,23 +73,28 @@ func (s *secureCopy) Copy() error {
 				sourceInfo, err := os.Stat(source)
 				if err != nil {
 					s.session.sendError(err.Error())
-					return err
+					lastErr = err
+					continue
 				}
 
 				if sourceInfo.IsDir() && !s.options.Recursive {
 					err = errors.New(fmt.Sprintf("%s: not a regular file", sourceInfo.Name()))
 					s.session.sendError(err.Error())
-					return err
+					lastErr = err
+					continue
 				}
 
 				err = s.send(source)
 				if err != nil {
 					logger.Error("failed-sending-source", err, lager.Data{"Source": source})
-					return err
+					lastErr = err
+					continue
 				}
 				logger.Info("sent-source", lager.Data{"Source": source})
 			}
 		}
+
+		return lastErr
 	}
 
 	if s.options.TargetMode {
