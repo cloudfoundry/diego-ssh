@@ -156,7 +156,7 @@ var _ = Describe("scp", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("sends the files", func() {
+				It("sends the file", func() {
 					compareFile(filepath.Join(targetDir, sourceFileInfo.Name()), generatedTextFile, preserveTimestamps)
 				})
 
@@ -173,11 +173,13 @@ var _ = Describe("scp", func() {
 
 			Context("when the requested file does not exist", func() {
 				BeforeEach(func() {
-					os.RemoveAll(sourceDir)
+					os.RemoveAll(generatedTextFile)
 				})
 
-				It("returns an error", func() {
-					command := fmt.Sprintf("scp -f %s", generatedTextFile)
+				It("returns an error and continues sending", func() {
+					testCopier = newTestCopier(stdoutSource, stdinSource, nil, preserveTimestamps)
+
+					command := fmt.Sprintf("scp -f %s %s", generatedTextFile, generatedBinaryFile)
 					secureCopier, err := scp.NewFromCommand(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -199,7 +201,12 @@ var _ = Describe("scp", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessage).To(ContainSubstring("no such file or directory"))
 
+					err = testCopier.ReceiveFile(targetDir, true, nil)
+					Expect(err).NotTo(HaveOccurred())
+
 					Eventually(errCh).Should(Receive(HaveOccurred()))
+
+					compareFile(filepath.Join(targetDir, "binary.dat"), generatedBinaryFile, false)
 				})
 			})
 		})
@@ -208,12 +215,14 @@ var _ = Describe("scp", func() {
 			Context("when the -r (recursive) flag is not specified", func() {
 				BeforeEach(func() {
 					var err error
-					command := fmt.Sprintf("scp -f %s", sourceDir)
+					command := fmt.Sprintf("scp -f %s %s", sourceDir, generatedTextFile)
 					secureCopier, err = scp.NewFromCommand(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("returns an error", func() {
+				It("returns an error and continues sending sources", func() {
+					testCopier = newTestCopier(stdoutSource, stdinSource, nil, preserveTimestamps)
+
 					errCh := make(chan error)
 					go func() {
 						errCh <- secureCopier.Copy()
@@ -232,7 +241,11 @@ var _ = Describe("scp", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(errMessage).To(ContainSubstring("not a regular file"))
 
+					err = testCopier.ReceiveFile(targetDir, true, nil)
+					Expect(err).NotTo(HaveOccurred())
+
 					Eventually(errCh).Should(Receive(HaveOccurred()))
+					compareFile(filepath.Join(targetDir, "textfile.txt"), generatedTextFile, false)
 				})
 			})
 
