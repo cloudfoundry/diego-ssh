@@ -102,6 +102,7 @@ var _ = Describe("scp", func() {
 	})
 
 	Context("source mode", func() {
+		var preserveTimestamps bool
 		Context("when no files are requested", func() {
 			It("fails construct the copier", func() {
 				_, err := scp.NewFromCommand("scp -f", stdin, stdout, stderr, logger)
@@ -110,10 +111,7 @@ var _ = Describe("scp", func() {
 		})
 
 		Context("when files are requested", func() {
-			var (
-				sourceFileInfo     os.FileInfo
-				preserveTimestamps bool
-			)
+			var sourceFileInfo os.FileInfo
 
 			BeforeEach(func() {
 				preserveTimestamps = false
@@ -239,10 +237,7 @@ var _ = Describe("scp", func() {
 			})
 
 			Context("when the -r (recursive) flag is specified", func() {
-				var (
-					sourceDirInfo      os.FileInfo
-					preserveTimestamps bool
-				)
+				var sourceDirInfo os.FileInfo
 
 				BeforeEach(func() {
 					preserveTimestamps = false
@@ -297,6 +292,106 @@ var _ = Describe("scp", func() {
 
 					It("sends timestamp information before files and directories", func() {
 						compareDir(filepath.Join(targetDir, sourceDirInfo.Name()), sourceDir, preserveTimestamps)
+					})
+				})
+			})
+		})
+
+		Context("when a glob is requested", func() {
+			var (
+				command string
+			)
+
+			BeforeEach(func() {
+				command = fmt.Sprintf("scp -f %s/[bt]*", sourceDir)
+			})
+
+			Context("when the glob is valid", func() {
+
+				JustBeforeEach(func() {
+					var err error
+
+					secureCopier, err = scp.NewFromCommand(command, stdin, stdout, stderr, logger)
+					Expect(err).NotTo(HaveOccurred())
+
+					done := make(chan struct{})
+					go func() {
+						err := secureCopier.Copy()
+						Expect(err).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					_, err = stdinSource.Write([]byte{0})
+					Expect(err).NotTo(HaveOccurred())
+
+					testCopier = newTestCopier(stdoutSource, stdinSource, nil, false)
+
+					// Receive File 1
+					err = testCopier.ReceiveFile(targetDir, true, nil)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Receive File 2
+					err = testCopier.ReceiveFile(targetDir, true, nil)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(done).Should(BeClosed())
+				})
+
+				It("properly matches the glob against a single filename", func() {
+					compareFile(filepath.Join(targetDir, "textfile.txt"), generatedTextFile, false)
+					compareFile(filepath.Join(targetDir, "binary.dat"), generatedBinaryFile, false)
+				})
+			})
+
+			Context("when the glob does not match any sources", func() {
+				var generatedBadGlobFile string
+
+				JustBeforeEach(func() {
+					fileContents := []byte("---\nthis is a bad glob file\n\n")
+
+					err := ioutil.WriteFile(generatedBadGlobFile, fileContents, 0664)
+					Expect(err).NotTo(HaveOccurred())
+
+					command = fmt.Sprintf("scp -f %s", generatedBadGlobFile)
+					secureCopier, err := scp.NewFromCommand(command, stdin, stdout, stderr, logger)
+					Expect(err).NotTo(HaveOccurred())
+
+					done := make(chan struct{})
+					go func() {
+						err := secureCopier.Copy()
+						Expect(err).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					_, err = stdinSource.Write([]byte{0})
+					Expect(err).NotTo(HaveOccurred())
+
+					testCopier = newTestCopier(stdoutSource, stdinSource, nil, false)
+
+					// Receive File 1
+					err = testCopier.ReceiveFile(targetDir, true, nil)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(done).Should(BeClosed())
+				})
+
+				Context("because it is malformed", func() {
+					BeforeEach(func() {
+						generatedBadGlobFile = filepath.Join(sourceDir, "[")
+					})
+
+					It("attempts to match the glob literally", func() {
+						compareFile(filepath.Join(targetDir, "["), generatedBadGlobFile, false)
+					})
+				})
+
+				Context("because nothing matches the glob", func() {
+					BeforeEach(func() {
+						generatedBadGlobFile = filepath.Join(sourceDir, "[a].txt")
+					})
+
+					It("attempts to match the glob literally", func() {
+						compareFile(filepath.Join(targetDir, "[a].txt"), generatedBadGlobFile, false)
 					})
 				})
 			})

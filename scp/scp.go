@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/pivotal-golang/lager"
@@ -56,27 +57,36 @@ func (s *secureCopy) Copy() error {
 		}
 		logger.Info("received-connection-confirmation")
 
-		for _, source := range s.options.Sources {
-			logger.Info("sending-source", lager.Data{"Source": source})
-
-			sourceInfo, err := os.Stat(source)
-			if err != nil {
-				s.session.sendError(err.Error())
-				return err
+		for _, sourceGlob := range s.options.Sources {
+			logger.Info("evaluating-glob", lager.Data{"Source Glob": sourceGlob})
+			sources, err := filepath.Glob(sourceGlob)
+			if err != nil || len(sources) == 0 {
+				logger.Info("failed-matching-glob", lager.Data{"Source Glob": sourceGlob})
+				sources = []string{sourceGlob}
 			}
 
-			if sourceInfo.IsDir() && !s.options.Recursive {
-				err = errors.New(fmt.Sprintf("%s: not a regular file", sourceInfo.Name()))
-				s.session.sendError(err.Error())
-				return err
-			}
+			for _, source := range sources {
+				logger.Info("sending-source", lager.Data{"Source": source})
 
-			err = s.send(source)
-			if err != nil {
-				logger.Error("failed-sending-source", err, lager.Data{"Source": source})
-				return err
+				sourceInfo, err := os.Stat(source)
+				if err != nil {
+					s.session.sendError(err.Error())
+					return err
+				}
+
+				if sourceInfo.IsDir() && !s.options.Recursive {
+					err = errors.New(fmt.Sprintf("%s: not a regular file", sourceInfo.Name()))
+					s.session.sendError(err.Error())
+					return err
+				}
+
+				err = s.send(source)
+				if err != nil {
+					logger.Error("failed-sending-source", err, lager.Data{"Source": source})
+					return err
+				}
+				logger.Info("sent-source", lager.Data{"Source": source})
 			}
-			logger.Info("sent-source", lager.Data{"Source": source})
 		}
 	}
 
