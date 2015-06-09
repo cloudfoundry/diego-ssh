@@ -56,7 +56,6 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 
 	serverConn, serverChannels, serverRequests, err := ssh.NewServerConn(netConn, p.serverConfig)
 	if err != nil {
-		logger.Error("handshake-failed", err)
 		return
 	}
 	defer serverConn.Close()

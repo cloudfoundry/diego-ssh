@@ -263,6 +263,24 @@ var _ = Describe("SSH proxy", func() {
 				})
 			})
 
+			Context("when authentication fails", func() {
+				BeforeEach(func() {
+					clientConfig.Auth = []ssh.AuthMethod{ssh.Password("bad password")}
+					fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+							ghttp.RespondWithJSONEncoded(http.StatusUnauthorized, ""),
+						),
+					)
+				})
+
+				It("logs the authentication failure", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(runner).To(gbytes.Say("authentication-failed.*cf:app-guid/0"))
+				})
+			})
+
 			Context("when the app-guid does not exist in cc", func() {
 				BeforeEach(func() {
 					clientConfig.User = "cf:bad-app-guid/0"

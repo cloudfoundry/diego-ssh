@@ -155,6 +155,9 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: authenticator.Authenticate,
+		AuthLogCallback: func(cmd ssh.ConnMetadata, method string, err error) {
+			logger.Error("authentication-failed", err, lager.Data{"user": cmd.User()})
+		},
 	}
 
 	if *hostKey == "" {

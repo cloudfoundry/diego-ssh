@@ -165,9 +165,8 @@ var _ = Describe("Proxy", func() {
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed: ssh: unable to authenticate")))
 				})
 
-				It("logs the failure", func() {
-					Eventually(logger).Should(gbytes.Say(`handshake-failed`))
-					Expect(proxyAuthenticator.AuthenticateCallCount()).To(Equal(1))
+				It("does not attempt to authenticate with the daemon", func() {
+					Expect(daemonAuthenticator.AuthenticateCallCount()).To(Equal(0))
 				})
 			})
 
