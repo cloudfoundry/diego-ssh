@@ -36,7 +36,8 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint string
 		diegoAPIURL        string
 		ccAPIURL           string
-		cfOnly             bool
+		enableCFAuth       bool
+		enableDiegoAuth    bool
 	)
 
 	BeforeEach(func() {
@@ -52,16 +53,18 @@ var _ = Describe("SSH proxy", func() {
 		diegoAPIURL = fakeReceptor.URL()
 
 		ccAPIURL = ""
-		cfOnly = false
+		enableCFAuth = true
+		enableDiegoAuth = true
 	})
 
 	JustBeforeEach(func() {
 		args := testrunner.Args{
-			Address:     address,
-			HostKey:     hostKey,
-			DiegoAPIURL: diegoAPIURL,
-			CCAPIURL:    ccAPIURL,
-			CFOnly:      cfOnly,
+			Address:         address,
+			HostKey:         hostKey,
+			DiegoAPIURL:     diegoAPIURL,
+			CCAPIURL:        ccAPIURL,
+			EnableCFAuth:    enableCFAuth,
+			EnableDiegoAuth: enableDiegoAuth,
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -355,6 +358,18 @@ var _ = Describe("SSH proxy", func() {
 					Consistently(fakeCC.ReceivedRequests()).Should(HaveLen(0))
 				})
 			})
+
+			Context("and the enableCFAuth flag is set to false", func() {
+				BeforeEach(func() {
+					enableCFAuth = false
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+				})
+			})
 		})
 
 		Context("when the client uses the diego realm", func() {
@@ -423,9 +438,9 @@ var _ = Describe("SSH proxy", func() {
 				})
 			})
 
-			Context("and the cf-only flag is set", func() {
+			Context("and the enableDiegoAuth flag is set to false", func() {
 				BeforeEach(func() {
-					cfOnly = true
+					enableDiegoAuth = false
 				})
 
 				It("fails the authentication", func() {

@@ -52,10 +52,16 @@ var communicationTimeout = flag.Duration(
 	"Timeout applied to all HTTP requests.",
 )
 
-var cfOnly = flag.Bool(
-	"cfOnly",
+var enableCFAuth = flag.Bool(
+	"enableCFAuth",
 	false,
-	"Only allow authentication with cf",
+	"Allow authentication with cf",
+)
+
+var enableDiegoAuth = flag.Bool(
+	"enableDiegoAuth",
+	false,
+	"Allow authentication with diego",
 )
 
 const (
@@ -140,12 +146,12 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	authenticatorMap := map[string]authenticators.PasswordAuthenticator{}
 
-	if !*cfOnly {
+	if *enableDiegoAuth {
 		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds))
 		authenticatorMap[diegoAuthenticator.Realm()] = diegoAuthenticator
 	}
 
-	if *ccAPIURL != "" {
+	if *ccAPIURL != "" && *enableCFAuth {
 		ccClient := cf_http.NewClient()
 		cfAuthenticator := authenticators.NewCFAuthenticator(logger, ccClient, *ccAPIURL, receptorClient)
 		authenticatorMap[cfAuthenticator.Realm()] = cfAuthenticator

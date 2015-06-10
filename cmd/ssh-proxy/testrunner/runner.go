@@ -2,31 +2,29 @@ package testrunner
 
 import (
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
 type Args struct {
-	Address     string
-	HostKey     string
-	DiegoAPIURL string
-	CCAPIURL    string
-	CFOnly      bool
+	Address         string
+	HostKey         string
+	DiegoAPIURL     string
+	CCAPIURL        string
+	EnableCFAuth    bool
+	EnableDiegoAuth bool
 }
 
 func (args Args) ArgSlice() []string {
-	cfOnlyArg := ""
-	if args.CFOnly {
-		cfOnlyArg = "-cfOnly"
-	}
-
 	return []string{
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
 		"-diegoAPIURL=" + args.DiegoAPIURL,
 		"-ccAPIURL=" + args.CCAPIURL,
-		cfOnlyArg,
+		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
+		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),
 	}
 }
 
