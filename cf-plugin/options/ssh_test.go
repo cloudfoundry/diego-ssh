@@ -232,15 +232,123 @@ var _ = Describe("SSHOptions", func() {
 				})
 			})
 		})
+
+		Context("when local port forwarding is requested", func() {
+			BeforeEach(func() {
+				args = append(args, "app-name")
+			})
+
+			Context("without an explicit bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "9999:remote:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "remote:8888"}))
+				})
+			})
+
+			Context("with an explit bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "explicit:9999:remote:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "explicit:9999", ConnectAddress: "remote:8888"}))
+				})
+			})
+
+			Context("with an explicit ipv6 bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "[::]:9999:remote:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "remote:8888"}))
+				})
+			})
+
+			Context("with an empty bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", ":9999:remote:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
+				})
+			})
+
+			Context("with * as the bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "*:9999:remote:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
+				})
+			})
+
+			Context("with an explicit ipv6 connect address", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "[::]:9999:[2001:db8::1]:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "[2001:db8::1]:8888"}))
+				})
+			})
+
+			Context("with a missing bracket", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "localhost:9999:[example.com:8888")
+				})
+
+				It("returns an error", func() {
+					Expect(parseError).To(MatchError(`Argument missing closing bracket: "[example.com:8888"`))
+				})
+			})
+
+			Context("when a closing bracket is not followed by a colon", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "localhost:9999:[example.com]8888")
+				})
+
+				It("returns an error", func() {
+					Expect(parseError).To(MatchError(`Unexpected token: "8888"`))
+				})
+			})
+
+			Context("when multiple local port forward options are specified", func() {
+				BeforeEach(func() {
+					args = append(args, "-L", "9999:remote:8888")
+					args = append(args, "-L8080:remote:80")
+				})
+
+				It("sets the forward specs", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.ForwardSpecs).To(ConsistOf(
+						options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "remote:8888"},
+						options.ForwardSpec{ListenAddress: "localhost:8080", ConnectAddress: "remote:80"},
+					))
+				})
+			})
+		})
 	})
 
 	Describe("SSHUsage", func() {
 		It("prints usage information", func() {
 			usage := options.SSHUsage()
 
-			Expect(usage).To(ContainSubstring("Usage: ssh [-kTt] [-i instance-id] app-name [command]"))
+			Expect(usage).To(ContainSubstring("Usage: ssh [-kTt] [-i instance-id] [-L [bind_address:]port:host:hostport] app-name [command]"))
 			Expect(usage).To(ContainSubstring("-i, --instance=instance-id"))
 			Expect(usage).To(ContainSubstring("-k, --skip-host-validation"))
+			Expect(usage).To(ContainSubstring("-L [bind_address:]port:host:hostport"))
 			Expect(usage).To(ContainSubstring("-T    disable pseudo-tty allocation"))
 			Expect(usage).To(ContainSubstring("-t    force pseudo-tty allocation"))
 		})

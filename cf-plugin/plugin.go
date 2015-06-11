@@ -43,6 +43,16 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
 
+	secureShell := cmd.NewSecureShell(
+		cmd.DefaultSecureDialer(),
+		terminal.DefaultHelper(),
+		cmd.DefaultListenerFactory(),
+		30*time.Second,
+		app.NewAppFactory(cli),
+		info.NewInfoFactory(cli),
+		credential.NewCredentialFactory(cli),
+	)
+
 	switch args[0] {
 	case "ssh":
 		opts := options.NewSSHOptions()
@@ -53,16 +63,19 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			return
 		}
 
-		secureShell := cmd.NewSecureShell(
-			cmd.DefaultSecureDialer(),
-			terminal.DefaultHelper(),
-			30*time.Second,
-			app.NewAppFactory(cli),
-			info.NewInfoFactory(cli),
-			credential.NewCredentialFactory(cli),
-		)
+		err = secureShell.Connect(opts)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+		defer secureShell.Close()
 
-		err = secureShell.InteractiveSession(opts)
+		err = secureShell.LocalPortForward()
+		if err != nil {
+			return
+		}
+
+		err = secureShell.InteractiveSession()
 		if err == nil {
 			return
 		}

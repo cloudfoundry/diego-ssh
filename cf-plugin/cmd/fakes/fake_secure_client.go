@@ -2,23 +2,41 @@
 package fakes
 
 import (
+	"net"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/cmd"
+	"golang.org/x/crypto/ssh"
 )
 
 type FakeSecureClient struct {
 	NewSessionStub        func() (cmd.SecureSession, error)
 	newSessionMutex       sync.RWMutex
 	newSessionArgsForCall []struct{}
-	newSessionReturns struct {
+	newSessionReturns     struct {
 		result1 cmd.SecureSession
+		result2 error
+	}
+	ConnStub        func() ssh.Conn
+	connMutex       sync.RWMutex
+	connArgsForCall []struct{}
+	connReturns     struct {
+		result1 ssh.Conn
+	}
+	DialStub        func(network, address string) (net.Conn, error)
+	dialMutex       sync.RWMutex
+	dialArgsForCall []struct {
+		network string
+		address string
+	}
+	dialReturns struct {
+		result1 net.Conn
 		result2 error
 	}
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 }
@@ -44,6 +62,64 @@ func (fake *FakeSecureClient) NewSessionReturns(result1 cmd.SecureSession, resul
 	fake.NewSessionStub = nil
 	fake.newSessionReturns = struct {
 		result1 cmd.SecureSession
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeSecureClient) Conn() ssh.Conn {
+	fake.connMutex.Lock()
+	fake.connArgsForCall = append(fake.connArgsForCall, struct{}{})
+	fake.connMutex.Unlock()
+	if fake.ConnStub != nil {
+		return fake.ConnStub()
+	} else {
+		return fake.connReturns.result1
+	}
+}
+
+func (fake *FakeSecureClient) ConnCallCount() int {
+	fake.connMutex.RLock()
+	defer fake.connMutex.RUnlock()
+	return len(fake.connArgsForCall)
+}
+
+func (fake *FakeSecureClient) ConnReturns(result1 ssh.Conn) {
+	fake.ConnStub = nil
+	fake.connReturns = struct {
+		result1 ssh.Conn
+	}{result1}
+}
+
+func (fake *FakeSecureClient) Dial(network string, address string) (net.Conn, error) {
+	fake.dialMutex.Lock()
+	fake.dialArgsForCall = append(fake.dialArgsForCall, struct {
+		network string
+		address string
+	}{network, address})
+	fake.dialMutex.Unlock()
+	if fake.DialStub != nil {
+		return fake.DialStub(network, address)
+	} else {
+		return fake.dialReturns.result1, fake.dialReturns.result2
+	}
+}
+
+func (fake *FakeSecureClient) DialCallCount() int {
+	fake.dialMutex.RLock()
+	defer fake.dialMutex.RUnlock()
+	return len(fake.dialArgsForCall)
+}
+
+func (fake *FakeSecureClient) DialArgsForCall(i int) (string, string) {
+	fake.dialMutex.RLock()
+	defer fake.dialMutex.RUnlock()
+	return fake.dialArgsForCall[i].network, fake.dialArgsForCall[i].address
+}
+
+func (fake *FakeSecureClient) DialReturns(result1 net.Conn, result2 error) {
+	fake.DialStub = nil
+	fake.dialReturns = struct {
+		result1 net.Conn
 		result2 error
 	}{result1, result2}
 }

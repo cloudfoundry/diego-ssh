@@ -19,7 +19,7 @@ type FakeReadCloser struct {
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 }

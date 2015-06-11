@@ -9,7 +9,7 @@ import (
 )
 
 type FakeSecureDialer struct {
-	DialStub        func(network string, address string, config *ssh.ClientConfig) (ssh.Conn, cmd.SecureClient, error)
+	DialStub        func(network, address string, config *ssh.ClientConfig) (cmd.SecureClient, error)
 	dialMutex       sync.RWMutex
 	dialArgsForCall []struct {
 		network string
@@ -17,13 +17,12 @@ type FakeSecureDialer struct {
 		config  *ssh.ClientConfig
 	}
 	dialReturns struct {
-		result1 ssh.Conn
-		result2 cmd.SecureClient
-		result3 error
+		result1 cmd.SecureClient
+		result2 error
 	}
 }
 
-func (fake *FakeSecureDialer) Dial(network string, address string, config *ssh.ClientConfig) (ssh.Conn, cmd.SecureClient, error) {
+func (fake *FakeSecureDialer) Dial(network string, address string, config *ssh.ClientConfig) (cmd.SecureClient, error) {
 	fake.dialMutex.Lock()
 	fake.dialArgsForCall = append(fake.dialArgsForCall, struct {
 		network string
@@ -34,7 +33,7 @@ func (fake *FakeSecureDialer) Dial(network string, address string, config *ssh.C
 	if fake.DialStub != nil {
 		return fake.DialStub(network, address, config)
 	} else {
-		return fake.dialReturns.result1, fake.dialReturns.result2, fake.dialReturns.result3
+		return fake.dialReturns.result1, fake.dialReturns.result2
 	}
 }
 
@@ -50,13 +49,12 @@ func (fake *FakeSecureDialer) DialArgsForCall(i int) (string, string, *ssh.Clien
 	return fake.dialArgsForCall[i].network, fake.dialArgsForCall[i].address, fake.dialArgsForCall[i].config
 }
 
-func (fake *FakeSecureDialer) DialReturns(result1 ssh.Conn, result2 cmd.SecureClient, result3 error) {
+func (fake *FakeSecureDialer) DialReturns(result1 cmd.SecureClient, result2 error) {
 	fake.DialStub = nil
 	fake.dialReturns = struct {
-		result1 ssh.Conn
-		result2 cmd.SecureClient
-		result3 error
-	}{result1, result2, result3}
+		result1 cmd.SecureClient
+		result2 error
+	}{result1, result2}
 }
 
 var _ cmd.SecureDialer = new(FakeSecureDialer)

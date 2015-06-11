@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -19,10 +20,14 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/options"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/terminal"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/terminal/terminal_helper_fakes"
+	"github.com/cloudfoundry-incubator/diego-ssh/server"
+	fake_server "github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
+	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"
@@ -31,10 +36,11 @@ import (
 
 var _ = Describe("Diego SSH Plugin", func() {
 	var (
-		fakeTerminalHelper *terminal_helper_fakes.FakeTerminalHelper
-		fakeAppFactory     *app_fakes.FakeAppFactory
-		fakeInfoFactory    *info_fakes.FakeInfoFactory
-		fakeCredFactory    *credential_fakes.FakeCredentialFactory
+		fakeTerminalHelper  *terminal_helper_fakes.FakeTerminalHelper
+		fakeListenerFactory *fakes.FakeListenerFactory
+		fakeAppFactory      *app_fakes.FakeAppFactory
+		fakeInfoFactory     *info_fakes.FakeInfoFactory
+		fakeCredFactory     *credential_fakes.FakeCredentialFactory
 
 		fakeConnection    *fake_ssh.FakeConn
 		fakeSecureClient  *fakes.FakeSecureClient
@@ -50,6 +56,9 @@ var _ = Describe("Diego SSH Plugin", func() {
 		fakeTerminalHelper = &terminal_helper_fakes.FakeTerminalHelper{}
 		terminalHelper = terminal.DefaultHelper()
 
+		fakeListenerFactory = &fakes.FakeListenerFactory{}
+		fakeListenerFactory.ListenStub = net.Listen
+
 		keepAliveDuration = 30 * time.Second
 
 		fakeAppFactory = &app_fakes.FakeAppFactory{}
@@ -61,8 +70,9 @@ var _ = Describe("Diego SSH Plugin", func() {
 		fakeSecureDialer = &fakes.FakeSecureDialer{}
 		fakeSecureSession = &fakes.FakeSecureSession{}
 
-		fakeSecureDialer.DialReturns(fakeConnection, fakeSecureClient, nil)
+		fakeSecureDialer.DialReturns(fakeSecureClient, nil)
 		fakeSecureClient.NewSessionReturns(fakeSecureSession, nil)
+		fakeSecureClient.ConnReturns(fakeConnection)
 
 		stdinPipe := &fake_io.FakeWriteCloser{}
 		stdinPipe.WriteStub = func(p []byte) (int, error) {
@@ -88,6 +98,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 		secureShell = cmd.NewSecureShell(
 			fakeSecureDialer,
 			terminalHelper,
+			fakeListenerFactory,
 			keepAliveDuration,
 			fakeAppFactory,
 			fakeInfoFactory,
@@ -96,7 +107,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 	})
 
 	Describe("Validation", func() {
-		var sshError error
+		var connectErr error
 		var opts *options.SSHOptions
 
 		BeforeEach(func() {
@@ -106,7 +117,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 		})
 
 		JustBeforeEach(func() {
-			sshError = secureShell.InteractiveSession(opts)
+			connectErr = secureShell.Connect(opts)
 		})
 
 		Context("when there is an error getting the app model", func() {
@@ -116,7 +127,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			It("returns the error", func() {
 				Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
-				Expect(sshError).To(Equal(errors.New("woops")))
+				Expect(connectErr).To(Equal(errors.New("woops")))
 			})
 
 			It("does not attempt to acquire endpoint info", func() {
@@ -141,14 +152,17 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 				It("returns the error", func() {
 					Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
-					Expect(sshError).To(Equal(errors.New("woops")))
+					Expect(connectErr).To(Equal(errors.New("woops")))
 				})
 			})
 		})
 
 		Context("when the app model and endpoint info are successfully acquired", func() {
 			BeforeEach(func() {
-				fakeAppFactory.GetReturns(app.App{}, nil)
+				fakeAppFactory.GetReturns(app.App{
+					State: "STARTED",
+					Diego: true,
+				}, nil)
 				fakeInfoFactory.GetReturns(info.Info{}, nil)
 				fakeCredFactory.GetReturns(credential.Credential{}, nil)
 			})
@@ -164,37 +178,50 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 				It("returns the error", func() {
 					Expect(fakeCredFactory.GetCallCount()).To(Equal(1))
-					Expect(sshError).To(Equal(errors.New("woops")))
+					Expect(connectErr).To(Equal(errors.New("woops")))
 				})
 			})
-		})
 
-		Context("when the app is not in the 'STARTED' state", func() {
-			BeforeEach(func() {
-				stoppedApp := app.App{
-					State: "STOPPED",
-				}
-				fakeAppFactory.GetReturns(stoppedApp, nil)
+			Context("when the app is not in the 'STARTED' state", func() {
+				BeforeEach(func() {
+					stoppedApp := app.App{
+						State: "STOPPED",
+					}
+					fakeAppFactory.GetReturns(stoppedApp, nil)
+				})
+
+				It("returns an error", func() {
+					Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
+					Expect(connectErr).To(MatchError(MatchRegexp("Application.*not in the STARTED state")))
+				})
 			})
 
-			It("returns an error", func() {
-				Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
-				Expect(sshError).To(MatchError(MatchRegexp("Application.*not in the STARTED state")))
-			})
-		})
+			Context("when the app is not a Diego app", func() {
+				BeforeEach(func() {
+					deaApp := app.App{
+						State: "STARTED",
+						Diego: false,
+					}
+					fakeAppFactory.GetReturns(deaApp, nil)
+				})
 
-		Context("when the app is not a Diego app", func() {
-			BeforeEach(func() {
-				deaApp := app.App{
-					State: "STARTED",
-					Diego: false,
-				}
-				fakeAppFactory.GetReturns(deaApp, nil)
+				It("returns an error", func() {
+					Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
+					Expect(connectErr).To(MatchError(MatchRegexp("Application.*not running on Diego")))
+				})
 			})
 
-			It("returns an error", func() {
-				Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
-				Expect(sshError).To(MatchError(MatchRegexp("Application.*not running on Diego")))
+			Context("when dialing fails", func() {
+				var dialError = errors.New("woops")
+
+				BeforeEach(func() {
+					fakeSecureDialer.DialReturns(nil, dialError)
+				})
+
+				It("returns the dial error", func() {
+					Expect(connectErr).To(Equal(dialError))
+					Expect(fakeSecureDialer.DialCallCount()).To(Equal(1))
+				})
 			})
 		})
 	})
@@ -231,7 +258,9 @@ var _ = Describe("Diego SSH Plugin", func() {
 		})
 
 		JustBeforeEach(func() {
-			sessionError = secureShell.InteractiveSession(opts)
+			connectErr := secureShell.Connect(opts)
+			Expect(connectErr).NotTo(HaveOccurred())
+			sessionError = secureShell.InteractiveSession()
 		})
 
 		It("dials the correct endpoint as the correct user", func() {
@@ -243,10 +272,6 @@ var _ = Describe("Diego SSH Plugin", func() {
 			Expect(config.Auth).NotTo(BeEmpty())
 			Expect(config.User).To(Equal("cf:app-guid/2"))
 			Expect(config.HostKeyCallback).NotTo(BeNil())
-		})
-
-		It("closes the client", func() {
-			Expect(fakeSecureClient.CloseCallCount()).To(Equal(1))
 		})
 
 		Context("when host key validation is enabled", func() {
@@ -333,20 +358,6 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 				_, _, config := fakeSecureDialer.DialArgsForCall(0)
 				Expect(config.HostKeyCallback).To(BeNil())
-			})
-		})
-
-		Context("when dialing fails", func() {
-			var dialError = errors.New("woops")
-
-			BeforeEach(func() {
-				fakeSecureDialer.DialReturns(nil, nil, dialError)
-			})
-
-			It("returns the dial error", func() {
-				Expect(fakeSecureDialer.DialCallCount()).To(Equal(1))
-
-				Expect(sessionError).To(Equal(dialError))
 			})
 		})
 
@@ -817,6 +828,317 @@ var _ = Describe("Diego SSH Plugin", func() {
 				times := <-timesCh
 				Expect(times[2]).To(BeTemporally("~", times[0].Add(200*time.Millisecond), 100*time.Millisecond))
 			})
+		})
+	})
+
+	Describe("LocalPortForward", func() {
+		var (
+			opts              *options.SSHOptions
+			localForwardError error
+
+			echoAddress  string
+			echoListener *fake_net.FakeListener
+			echoHandler  *fake_server.FakeConnectionHandler
+			echoServer   *server.Server
+
+			localAddress string
+
+			realLocalListener net.Listener
+			fakeLocalListener *fake_net.FakeListener
+		)
+
+		BeforeEach(func() {
+			logger := lagertest.NewTestLogger("test")
+
+			var err error
+			realLocalListener, err = net.Listen("tcp", "127.0.0.1:0")
+			Expect(err).NotTo(HaveOccurred())
+
+			localAddress = realLocalListener.Addr().String()
+			fakeListenerFactory.ListenReturns(realLocalListener, nil)
+
+			echoHandler = &fake_server.FakeConnectionHandler{}
+			echoHandler.HandleConnectionStub = func(conn net.Conn) {
+				io.Copy(conn, conn)
+				conn.Close()
+			}
+
+			realListener, err := net.Listen("tcp", "127.0.0.1:0")
+			Expect(err).NotTo(HaveOccurred())
+			echoAddress = realListener.Addr().String()
+
+			echoListener = &fake_net.FakeListener{}
+			echoListener.AcceptStub = realListener.Accept
+			echoListener.CloseStub = realListener.Close
+			echoListener.AddrStub = realListener.Addr
+
+			fakeLocalListener = &fake_net.FakeListener{}
+
+			echoServer = server.NewServer(logger.Session("echo"), "", echoHandler)
+			echoServer.SetListener(echoListener)
+			go echoServer.Serve()
+
+			opts = &options.SSHOptions{
+				AppName: "app-1",
+				ForwardSpecs: []options.ForwardSpec{{
+					ListenAddress:  localAddress,
+					ConnectAddress: echoAddress,
+				}},
+			}
+
+			fakeAppFactory.GetReturns(app.App{
+				State: "STARTED",
+				Diego: true,
+			}, nil)
+			fakeInfoFactory.GetReturns(info.Info{}, nil)
+			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+
+			fakeSecureClient.DialStub = net.Dial
+		})
+
+		JustBeforeEach(func() {
+			connectErr := secureShell.Connect(opts)
+			Expect(connectErr).NotTo(HaveOccurred())
+
+			localForwardError = secureShell.LocalPortForward()
+		})
+
+		AfterEach(func() {
+			err := secureShell.Close()
+			Expect(err).NotTo(HaveOccurred())
+			echoServer.Shutdown()
+
+			realLocalListener.Close()
+		})
+
+		validateConnectivity := func(addr string) {
+			conn, err := net.Dial("tcp", addr)
+			Expect(err).NotTo(HaveOccurred())
+
+			msg := fmt.Sprintf("Hello from %s\n", addr)
+			n, err := conn.Write([]byte(msg))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(len(msg)))
+
+			response := make([]byte, len(msg))
+			n, err = conn.Read(response)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(n).To(Equal(len(msg)))
+
+			err = conn.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(response).To(Equal([]byte(msg)))
+		}
+
+		It("dials the connect address when a local connection is made", func() {
+			Expect(localForwardError).NotTo(HaveOccurred())
+
+			conn, err := net.Dial("tcp", localAddress)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(echoListener.AcceptCallCount).Should(Equal(1))
+			Eventually(fakeSecureClient.DialCallCount).Should(Equal(1))
+
+			network, addr := fakeSecureClient.DialArgsForCall(0)
+			Expect(network).To(Equal("tcp"))
+			Expect(addr).To(Equal(echoAddress))
+
+			Expect(conn.Close()).NotTo(HaveOccurred())
+		})
+
+		It("copies data between the local and remote connections", func() {
+			validateConnectivity(localAddress)
+		})
+
+		Context("when a local connection is already open", func() {
+			var (
+				conn net.Conn
+				err  error
+			)
+
+			JustBeforeEach(func() {
+				conn, err = net.Dial("tcp", localAddress)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				err = conn.Close()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("allows for new incoming connections as well", func() {
+				validateConnectivity(localAddress)
+			})
+		})
+
+		Context("when there are multiple port forward specs", func() {
+			var realLocalListener2 net.Listener
+			var localAddress2 string
+
+			BeforeEach(func() {
+				var err error
+				realLocalListener2, err = net.Listen("tcp", "127.0.0.1:0")
+				Expect(err).NotTo(HaveOccurred())
+
+				localAddress2 = realLocalListener.Addr().String()
+
+				fakeListenerFactory.ListenStub = func(network, addr string) (net.Listener, error) {
+					if addr == localAddress {
+						return realLocalListener, nil
+					}
+
+					if addr == localAddress2 {
+						return realLocalListener2, nil
+					}
+
+					return nil, errors.New("unexpected address")
+				}
+
+				opts = &options.SSHOptions{
+					AppName: "app-1",
+					ForwardSpecs: []options.ForwardSpec{{
+						ListenAddress:  localAddress,
+						ConnectAddress: echoAddress,
+					}, {
+						ListenAddress:  localAddress2,
+						ConnectAddress: echoAddress,
+					}},
+				}
+			})
+
+			AfterEach(func() {
+				realLocalListener2.Close()
+			})
+
+			It("listens to all the things", func() {
+				Eventually(fakeListenerFactory.ListenCallCount).Should(Equal(2))
+
+				network, addr := fakeListenerFactory.ListenArgsForCall(0)
+				Expect(network).To(Equal("tcp"))
+				Expect(addr).To(Equal(localAddress))
+
+				network, addr = fakeListenerFactory.ListenArgsForCall(1)
+				Expect(network).To(Equal("tcp"))
+				Expect(addr).To(Equal(localAddress2))
+			})
+
+			It("forwards to the correct target", func() {
+				validateConnectivity(localAddress)
+				validateConnectivity(localAddress2)
+			})
+
+			Context("when the secure client is closed", func() {
+				BeforeEach(func() {
+					fakeConn := &fake_net.FakeConn{}
+					fakeConn.ReadReturns(0, io.EOF)
+
+					fakeLocalListener.AcceptReturns(fakeConn, nil)
+					fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
+				})
+
+				It("closes the listeners ", func() {
+					Eventually(fakeListenerFactory.ListenCallCount).Should(Equal(2))
+					Eventually(fakeLocalListener.AcceptCallCount).Should(BeNumerically(">=", 2))
+
+					err := secureShell.Close()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(fakeLocalListener.CloseCallCount()).Should(Equal(2))
+				})
+			})
+		})
+
+		Context("when listen fails", func() {
+			BeforeEach(func() {
+				fakeListenerFactory.ListenReturns(nil, errors.New("failure is an option"))
+			})
+
+			It("returns the error", func() {
+				Expect(localForwardError).To(MatchError("failure is an option"))
+			})
+		})
+
+		Context("when the client it closed", func() {
+			var fakeConn *fake_net.FakeConn
+
+			BeforeEach(func() {
+				fakeConn = &fake_net.FakeConn{}
+				fakeConn.ReadReturns(0, io.EOF)
+
+				fakeLocalListener.AcceptReturns(fakeConn, nil)
+				fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
+			})
+
+			It("closes the listener when the client is closed", func() {
+				Eventually(fakeListenerFactory.ListenCallCount).Should(Equal(1))
+
+				err := secureShell.Close()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeLocalListener.CloseCallCount()).Should(Equal(1))
+			})
+		})
+
+		Context("when accept fails", func() {
+			var fakeConn *fake_net.FakeConn
+
+			BeforeEach(func() {
+				fakeConn = &fake_net.FakeConn{}
+				fakeConn.ReadReturns(0, io.EOF)
+
+				fakeLocalListener.AcceptStub = func() (net.Conn, error) {
+					if fakeLocalListener.AcceptCallCount() == 1 {
+						return nil, errors.New("boom")
+					}
+					return fakeConn, nil
+				}
+				fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
+			})
+
+			PIt("continues to listen for new connections", func() {
+				Eventually(fakeLocalListener.AcceptCallCount).Should(BeNumerically(">", 1))
+			})
+		})
+
+		Context("when dialing the connect address fails", func() {
+			var fakeTarget *fake_net.FakeConn
+
+			BeforeEach(func() {
+				fakeTarget = &fake_net.FakeConn{}
+				fakeSecureClient.DialReturns(fakeTarget, errors.New("boom"))
+			})
+
+			It("does not call close on the target connection", func() {
+				Consistently(fakeTarget.CloseCallCount).Should(Equal(0))
+			})
+		})
+	})
+
+	Describe("Close", func() {
+		var opts *options.SSHOptions
+
+		BeforeEach(func() {
+			opts = &options.SSHOptions{
+				AppName: "app-1",
+			}
+
+			fakeAppFactory.GetReturns(app.App{
+				State: "STARTED",
+				Diego: true,
+			}, nil)
+			fakeInfoFactory.GetReturns(info.Info{}, nil)
+			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+		})
+
+		JustBeforeEach(func() {
+			connectErr := secureShell.Connect(opts)
+			Expect(connectErr).NotTo(HaveOccurred())
+		})
+
+		It("calls close on the secureClient", func() {
+			err := secureShell.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fakeSecureClient.CloseCallCount()).To(Equal(1))
 		})
 	})
 })

@@ -83,7 +83,7 @@ func (d *Daemon) handleNewChannels(logger lager.Logger, newChannelRequests <-cha
 		})
 
 		if handler, ok := d.newChannelHandlers[newChannel.ChannelType()]; ok {
-			handler.HandleNewChannel(logger, newChannel)
+			go handler.HandleNewChannel(logger, newChannel)
 			continue
 		}
 

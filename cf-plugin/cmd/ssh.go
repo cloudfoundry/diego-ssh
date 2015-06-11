@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -25,22 +26,28 @@ import (
 )
 
 type SecureShell interface {
-	InteractiveSession(opts *options.SSHOptions) error
+	Connect(opts *options.SSHOptions) error
+	InteractiveSession() error
+	LocalPortForward() error
+	Close() error
 }
 
 //go:generate counterfeiter -o fakes/fake_secure_dialer.go . SecureDialer
 type SecureDialer interface {
-	Dial(network string, address string, config *ssh.ClientConfig) (ssh.Conn, SecureClient, error)
+	Dial(network, address string, config *ssh.ClientConfig) (SecureClient, error)
 }
 
 //go:generate counterfeiter -o fakes/fake_secure_client.go . SecureClient
 type SecureClient interface {
 	NewSession() (SecureSession, error)
+	Conn() ssh.Conn
+	Dial(network, address string) (net.Conn, error)
 	Close() error
 }
 
-func DefaultSecureDialer() SecureDialer {
-	return &secureDialer{}
+//go:generate counterfeiter -o fakes/fake_listener_factory.go . ListenerFactory
+type ListenerFactory interface {
+	Listen(network, address string) (net.Listener, error)
 }
 
 //go:generate counterfeiter -o fakes/fake_secure_session.go . SecureSession
@@ -59,15 +66,21 @@ type SecureSession interface {
 type secureShell struct {
 	secureDialer      SecureDialer
 	terminalHelper    terminal.TerminalHelper
+	listenerFactory   ListenerFactory
 	keepAliveInterval time.Duration
 	appFactory        app.AppFactory
 	infoFactory       info.InfoFactory
 	credFactory       credential.CredentialFactory
+	secureClient      SecureClient
+	opts              *options.SSHOptions
+
+	localListeners []net.Listener
 }
 
 func NewSecureShell(
 	secureDialer SecureDialer,
 	terminalHelper terminal.TerminalHelper,
+	listenerFactory ListenerFactory,
 	keepAliveInterval time.Duration,
 	appFactory app.AppFactory,
 	infoFactory info.InfoFactory,
@@ -76,14 +89,16 @@ func NewSecureShell(
 	return &secureShell{
 		secureDialer:      secureDialer,
 		terminalHelper:    terminalHelper,
+		listenerFactory:   listenerFactory,
 		keepAliveInterval: keepAliveInterval,
 		appFactory:        appFactory,
 		infoFactory:       infoFactory,
 		credFactory:       credFactory,
+		localListeners:    []net.Listener{},
 	}
 }
 
-func (c *secureShell) InteractiveSession(opts *options.SSHOptions) error {
+func (c *secureShell) Connect(opts *options.SSHOptions) error {
 	app, err := c.appFactory.Get(opts.AppName)
 	if err != nil {
 		return err
@@ -112,28 +127,73 @@ func (c *secureShell) InteractiveSession(opts *options.SSHOptions) error {
 		HostKeyCallback: fingerprintCallback(opts, info.SSHEndpointFingerprint),
 	}
 
-	sshConn, secureClient, err := c.secureDialer.Dial("tcp", info.SSHEndpoint, clientConfig)
+	secureClient, err := c.secureDialer.Dial("tcp", info.SSHEndpoint, clientConfig)
 	if err != nil {
 		return err
 	}
-	defer secureClient.Close()
 
-	return c.interactiveSession(sshConn, secureClient, opts)
+	c.secureClient = secureClient
+	c.opts = opts
+	return nil
 }
 
-func (c *secureShell) validateTarget(app app.App, opts *options.SSHOptions) error {
-	if app.State != "STARTED" {
-		return fmt.Errorf("Application %q is not in the STARTED state", opts.AppName)
+func (c *secureShell) Close() error {
+	for _, listener := range c.localListeners {
+		listener.Close()
 	}
+	return c.secureClient.Close()
+}
 
-	if !app.Diego {
-		return fmt.Errorf("Application %q is not running on Diego", opts.AppName)
+func (c *secureShell) LocalPortForward() error {
+	for _, forwardSpec := range c.opts.ForwardSpecs {
+		listener, err := c.listenerFactory.Listen("tcp", forwardSpec.ListenAddress)
+		if err != nil {
+			return err
+		}
+		c.localListeners = append(c.localListeners, listener)
+
+		go c.localForwardAcceptLoop(listener, forwardSpec.ConnectAddress)
 	}
 
 	return nil
 }
 
-func (c *secureShell) interactiveSession(conn ssh.Conn, secureClient SecureClient, opts *options.SSHOptions) error {
+func (c *secureShell) localForwardAcceptLoop(listener net.Listener, addr string) {
+	for {
+		conn, err := listener.Accept()
+		if err == nil {
+			go c.handleForwardConnection(conn, addr)
+		}
+	}
+}
+
+func (c *secureShell) handleForwardConnection(conn net.Conn, targetAddr string) {
+	defer conn.Close()
+
+	target, err := c.secureClient.Dial("tcp", targetAddr)
+	if err != nil {
+		return
+	}
+	defer target.Close()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go copyAndClose(wg, conn, target)
+	go copyAndClose(wg, target, conn)
+	wg.Wait()
+}
+
+func copyAndClose(wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {
+	io.Copy(dest, src)
+	dest.Close()
+	wg.Done()
+}
+
+func (c *secureShell) InteractiveSession() error {
+	secureClient := c.secureClient
+	opts := c.opts
+
 	session, err := secureClient.NewSession()
 	if err != nil {
 		return fmt.Errorf("SSH session allocation failed: %s", err.Error())
@@ -218,12 +278,24 @@ func (c *secureShell) interactiveSession(conn ssh.Conn, secureClient SecureClien
 		go c.resize(resized, session, stdoutFd)
 	}
 
-	keepaliveTicker := time.NewTicker(c.keepAliveInterval)
-	defer keepaliveTicker.Stop()
+	keepaliveStopCh := make(chan struct{})
+	defer close(keepaliveStopCh)
 
-	go keepalive(conn, keepaliveTicker)
+	go keepalive(secureClient.Conn(), time.NewTicker(c.keepAliveInterval), keepaliveStopCh)
 
 	return session.Wait()
+}
+
+func (c *secureShell) validateTarget(app app.App, opts *options.SSHOptions) error {
+	if app.State != "STARTED" {
+		return fmt.Errorf("Application %q is not in the STARTED state", opts.AppName)
+	}
+
+	if !app.Diego {
+		return fmt.Errorf("Application %q is not running on Diego", opts.AppName)
+	}
+
+	return nil
 }
 
 type hostKeyCallback func(hostname string, remote net.Addr, key ssh.PublicKey) error
@@ -299,9 +371,15 @@ func (c *secureShell) resize(resized <-chan os.Signal, session SecureSession, te
 	}
 }
 
-func keepalive(conn ssh.Conn, ticker *time.Ticker) {
-	for _ = range ticker.C {
-		conn.SendRequest("keepalive@cloudfoundry.org", true, nil)
+func keepalive(conn ssh.Conn, ticker *time.Ticker, stopCh chan struct{}) {
+	for {
+		select {
+		case <-ticker.C:
+			conn.SendRequest("keepalive@cloudfoundry.org", true, nil)
+		case <-stopCh:
+			ticker.Stop()
+			return
+		}
 	}
 }
 
@@ -327,18 +405,36 @@ func (c *secureShell) getWindowDimensions(terminalFd uintptr) (width int, height
 
 type secureDialer struct{}
 
-func (d *secureDialer) Dial(network string, address string, config *ssh.ClientConfig) (ssh.Conn, SecureClient, error) {
+func (d *secureDialer) Dial(network string, address string, config *ssh.ClientConfig) (SecureClient, error) {
 	client, err := ssh.Dial(network, address, config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return client.Conn, &secureClient{client: client}, nil
+	return &secureClient{client: client}, nil
+}
+
+func DefaultSecureDialer() SecureDialer {
+	return &secureDialer{}
 }
 
 type secureClient struct{ client *ssh.Client }
 
-func (sc *secureClient) Close() error { return sc.client.Close() }
+func (sc *secureClient) Close() error   { return sc.client.Close() }
+func (sc *secureClient) Conn() ssh.Conn { return sc.client.Conn }
+func (sc *secureClient) Dial(n, addr string) (net.Conn, error) {
+	return sc.client.Dial(n, addr)
+}
 func (sc *secureClient) NewSession() (SecureSession, error) {
 	return sc.client.NewSession()
+}
+
+type listenerFactory struct{}
+
+func (lf *listenerFactory) Listen(network, address string) (net.Listener, error) {
+	return net.Listen(network, address)
+}
+
+func DefaultListenerFactory() ListenerFactory {
+	return &listenerFactory{}
 }
