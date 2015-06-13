@@ -25,16 +25,18 @@ type ForwardSpec struct {
 }
 
 type SSHOptions struct {
-	AppName            string
-	Command            []string
-	Instance           uint
-	SkipHostValidation bool
-	TerminalRequest    TTYRequest
-	ForwardSpecs       []ForwardSpec
+	AppName             string
+	Command             []string
+	Instance            uint
+	SkipHostValidation  bool
+	SkipRemoteExecution bool
+	TerminalRequest     TTYRequest
+	ForwardSpecs        []ForwardSpec
 
 	getoptSet                       *getopt.Set
 	instanceOption                  getopt.Option
 	skipHostValidationOption        getopt.Option
+	skipRemoteExecutionOption       getopt.Option
 	disableTerminalAllocationOption getopt.Option
 	forceTerminalAllocationOption   getopt.Option
 	localForwardingOption           getopt.Option
@@ -55,6 +57,12 @@ func NewSSHOptions() *SSHOptions {
 		"skip-host-validation",
 		'k',
 		"skip host key validation",
+	).SetFlag()
+
+	sshOptions.skipRemoteExecutionOption = opts.BoolVar(
+		&sshOptions.SkipRemoteExecution,
+		'N',
+		"do not execute a remote command",
 	).SetFlag()
 
 	var force, disable bool

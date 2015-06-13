@@ -13,14 +13,14 @@ type FakeSecureClient struct {
 	NewSessionStub        func() (cmd.SecureSession, error)
 	newSessionMutex       sync.RWMutex
 	newSessionArgsForCall []struct{}
-	newSessionReturns     struct {
+	newSessionReturns struct {
 		result1 cmd.SecureSession
 		result2 error
 	}
 	ConnStub        func() ssh.Conn
 	connMutex       sync.RWMutex
 	connArgsForCall []struct{}
-	connReturns     struct {
+	connReturns struct {
 		result1 ssh.Conn
 	}
 	DialStub        func(network, address string) (net.Conn, error)
@@ -33,10 +33,16 @@ type FakeSecureClient struct {
 		result1 net.Conn
 		result2 error
 	}
+	WaitStub        func() error
+	waitMutex       sync.RWMutex
+	waitArgsForCall []struct{}
+	waitReturns struct {
+		result1 error
+	}
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns     struct {
+	closeReturns struct {
 		result1 error
 	}
 }
@@ -122,6 +128,30 @@ func (fake *FakeSecureClient) DialReturns(result1 net.Conn, result2 error) {
 		result1 net.Conn
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeSecureClient) Wait() error {
+	fake.waitMutex.Lock()
+	fake.waitArgsForCall = append(fake.waitArgsForCall, struct{}{})
+	fake.waitMutex.Unlock()
+	if fake.WaitStub != nil {
+		return fake.WaitStub()
+	} else {
+		return fake.waitReturns.result1
+	}
+}
+
+func (fake *FakeSecureClient) WaitCallCount() int {
+	fake.waitMutex.RLock()
+	defer fake.waitMutex.RUnlock()
+	return len(fake.waitArgsForCall)
+}
+
+func (fake *FakeSecureClient) WaitReturns(result1 error) {
+	fake.WaitStub = nil
+	fake.waitReturns = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeSecureClient) Close() error {

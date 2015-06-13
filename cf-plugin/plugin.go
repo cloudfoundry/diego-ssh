@@ -75,7 +75,12 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			return
 		}
 
-		err = secureShell.InteractiveSession()
+		if opts.SkipRemoteExecution {
+			err = secureShell.Wait()
+		} else {
+			err = secureShell.InteractiveSession()
+		}
+
 		if err == nil {
 			return
 		}

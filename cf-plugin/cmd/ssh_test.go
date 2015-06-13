@@ -22,6 +22,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/terminal/terminal_helper_fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	fake_server "github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
@@ -873,6 +874,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 			echoListener.AddrStub = realListener.Addr
 
 			fakeLocalListener = &fake_net.FakeListener{}
+			fakeLocalListener.AcceptReturns(nil, errors.New("Not Accepting Connections"))
 
 			echoServer = server.NewServer(logger.Session("echo"), "", echoHandler)
 			echoServer.SetListener(echoListener)
@@ -981,7 +983,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				realLocalListener2, err = net.Listen("tcp", "127.0.0.1:0")
 				Expect(err).NotTo(HaveOccurred())
 
-				localAddress2 = realLocalListener.Addr().String()
+				localAddress2 = realLocalListener2.Addr().String()
 
 				fakeListenerFactory.ListenStub = func(network, addr string) (net.Listener, error) {
 					if addr == localAddress {
@@ -1030,20 +1032,18 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			Context("when the secure client is closed", func() {
 				BeforeEach(func() {
-					fakeConn := &fake_net.FakeConn{}
-					fakeConn.ReadReturns(0, io.EOF)
-
-					fakeLocalListener.AcceptReturns(fakeConn, nil)
 					fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
+					fakeLocalListener.AcceptReturns(nil, errors.New("not accepting connections"))
 				})
 
 				It("closes the listeners ", func() {
 					Eventually(fakeListenerFactory.ListenCallCount).Should(Equal(2))
-					Eventually(fakeLocalListener.AcceptCallCount).Should(BeNumerically(">=", 2))
+					Eventually(fakeLocalListener.AcceptCallCount).Should(Equal(2))
 
+					originalCloseCount := fakeLocalListener.CloseCallCount()
 					err := secureShell.Close()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(fakeLocalListener.CloseCallCount()).Should(Equal(2))
+					Expect(fakeLocalListener.CloseCallCount()).Should(Equal(originalCloseCount + 2))
 				})
 			})
 		})
@@ -1059,43 +1059,73 @@ var _ = Describe("Diego SSH Plugin", func() {
 		})
 
 		Context("when the client it closed", func() {
-			var fakeConn *fake_net.FakeConn
-
 			BeforeEach(func() {
-				fakeConn = &fake_net.FakeConn{}
-				fakeConn.ReadReturns(0, io.EOF)
-
-				fakeLocalListener.AcceptReturns(fakeConn, nil)
 				fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
+				fakeLocalListener.AcceptReturns(nil, errors.New("not accepting and connections"))
 			})
 
 			It("closes the listener when the client is closed", func() {
 				Eventually(fakeListenerFactory.ListenCallCount).Should(Equal(1))
+				Eventually(fakeLocalListener.AcceptCallCount).Should(Equal(1))
 
+				originalCloseCount := fakeLocalListener.CloseCallCount()
 				err := secureShell.Close()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(fakeLocalListener.CloseCallCount()).Should(Equal(1))
+				Expect(fakeLocalListener.CloseCallCount()).Should(Equal(originalCloseCount + 1))
 			})
 		})
 
 		Context("when accept fails", func() {
 			var fakeConn *fake_net.FakeConn
-
 			BeforeEach(func() {
 				fakeConn = &fake_net.FakeConn{}
 				fakeConn.ReadReturns(0, io.EOF)
 
-				fakeLocalListener.AcceptStub = func() (net.Conn, error) {
-					if fakeLocalListener.AcceptCallCount() == 1 {
-						return nil, errors.New("boom")
-					}
-					return fakeConn, nil
-				}
 				fakeListenerFactory.ListenReturns(fakeLocalListener, nil)
 			})
 
-			PIt("continues to listen for new connections", func() {
-				Eventually(fakeLocalListener.AcceptCallCount).Should(BeNumerically(">", 1))
+			Context("with a permanent error", func() {
+				BeforeEach(func() {
+					fakeLocalListener.AcceptReturns(nil, errors.New("boom"))
+				})
+
+				It("stops trying to accept connections", func() {
+					Eventually(fakeLocalListener.AcceptCallCount).Should(Equal(1))
+					Consistently(fakeLocalListener.AcceptCallCount).Should(Equal(1))
+					Expect(fakeLocalListener.CloseCallCount()).To(Equal(1))
+				})
+			})
+
+			Context("with a temporary error", func() {
+				var timeCh chan time.Time
+
+				BeforeEach(func() {
+					timeCh = make(chan time.Time, 3)
+
+					fakeLocalListener.AcceptStub = func() (net.Conn, error) {
+						timeCh := timeCh
+						if fakeLocalListener.AcceptCallCount() > 3 {
+							close(timeCh)
+							return nil, test_helpers.NewTestNetError(false, false)
+						} else {
+							timeCh <- time.Now()
+							return nil, test_helpers.NewTestNetError(false, true)
+						}
+					}
+				})
+
+				It("retries connecting after a short delay", func() {
+					Eventually(fakeLocalListener.AcceptCallCount).Should(Equal(3))
+					Expect(timeCh).To(HaveLen(3))
+
+					times := make([]time.Time, 0)
+					for t := range timeCh {
+						times = append(times, t)
+					}
+
+					Expect(times[1]).To(BeTemporally("~", times[0].Add(100*time.Millisecond), 20*time.Millisecond))
+					Expect(times[2]).To(BeTemporally("~", times[1].Add(100*time.Millisecond), 20*time.Millisecond))
+				})
 			})
 		})
 
@@ -1110,6 +1140,35 @@ var _ = Describe("Diego SSH Plugin", func() {
 			It("does not call close on the target connection", func() {
 				Consistently(fakeTarget.CloseCallCount).Should(Equal(0))
 			})
+		})
+	})
+
+	Describe("Wait", func() {
+		var opts *options.SSHOptions
+
+		BeforeEach(func() {
+			opts = &options.SSHOptions{
+				AppName: "app-1",
+			}
+
+			fakeAppFactory.GetReturns(app.App{
+				State: "STARTED",
+				Diego: true,
+			}, nil)
+			fakeInfoFactory.GetReturns(info.Info{}, nil)
+			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+		})
+
+		JustBeforeEach(func() {
+			connectErr := secureShell.Connect(opts)
+			Expect(connectErr).NotTo(HaveOccurred())
+		})
+
+		It("calls close on the secureClient", func() {
+			err := secureShell.Wait()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fakeSecureClient.WaitCallCount()).To(Equal(1))
 		})
 	})
 

@@ -339,16 +339,29 @@ var _ = Describe("SSHOptions", func() {
 				})
 			})
 		})
+
+		Context("when -N is specified", func() {
+			BeforeEach(func() {
+				args = append(args, "app-name", "-N")
+			})
+
+			It("indicates that no remote command should be run", func() {
+				Expect(parseError).ToNot(HaveOccurred())
+				Expect(opts.SkipRemoteExecution).To(BeTrue())
+				Expect(opts.AppName).To(Equal("app-name"))
+			})
+		})
 	})
 
 	Describe("SSHUsage", func() {
 		It("prints usage information", func() {
 			usage := options.SSHUsage()
 
-			Expect(usage).To(ContainSubstring("Usage: ssh [-kTt] [-i instance-id] [-L [bind_address:]port:host:hostport] app-name [command]"))
+			Expect(usage).To(ContainSubstring("Usage: ssh [-kNTt] [-i instance-id] [-L [bind_address:]port:host:hostport] app-name [command]"))
 			Expect(usage).To(ContainSubstring("-i, --instance=instance-id"))
 			Expect(usage).To(ContainSubstring("-k, --skip-host-validation"))
 			Expect(usage).To(ContainSubstring("-L [bind_address:]port:host:hostport"))
+			Expect(usage).To(ContainSubstring("-N    do not execute a remote command"))
 			Expect(usage).To(ContainSubstring("-T    disable pseudo-tty allocation"))
 			Expect(usage).To(ContainSubstring("-t    force pseudo-tty allocation"))
 		})

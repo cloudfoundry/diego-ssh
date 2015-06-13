@@ -29,6 +29,7 @@ type SecureShell interface {
 	Connect(opts *options.SSHOptions) error
 	InteractiveSession() error
 	LocalPortForward() error
+	Wait() error
 	Close() error
 }
 
@@ -42,6 +43,7 @@ type SecureClient interface {
 	NewSession() (SecureSession, error)
 	Conn() ssh.Conn
 	Dial(network, address string) (net.Conn, error)
+	Wait() error
 	Close() error
 }
 
@@ -159,10 +161,18 @@ func (c *secureShell) LocalPortForward() error {
 }
 
 func (c *secureShell) localForwardAcceptLoop(listener net.Listener, addr string) {
+	defer listener.Close()
+
 	for {
 		conn, err := listener.Accept()
 		if err == nil {
 			go c.handleForwardConnection(conn, addr)
+		} else {
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return
 		}
 	}
 }
@@ -284,6 +294,10 @@ func (c *secureShell) InteractiveSession() error {
 	go keepalive(secureClient.Conn(), time.NewTicker(c.keepAliveInterval), keepaliveStopCh)
 
 	return session.Wait()
+}
+
+func (c *secureShell) Wait() error {
+	return c.secureClient.Wait()
 }
 
 func (c *secureShell) validateTarget(app app.App, opts *options.SSHOptions) error {
@@ -422,6 +436,7 @@ type secureClient struct{ client *ssh.Client }
 
 func (sc *secureClient) Close() error   { return sc.client.Close() }
 func (sc *secureClient) Conn() ssh.Conn { return sc.client.Conn }
+func (sc *secureClient) Wait() error    { return sc.client.Wait() }
 func (sc *secureClient) Dial(n, addr string) (net.Conn, error) {
 	return sc.client.Dial(n, addr)
 }

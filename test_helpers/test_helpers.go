@@ -56,3 +56,19 @@ func NewClient(clientNetConn net.Conn, clientConfig *ssh.ClientConfig) *ssh.Clie
 
 	return ssh.NewClient(clientConn, clientChannels, clientRequests)
 }
+
+type TestNetError struct {
+	timeout   bool
+	temporary bool
+}
+
+func NewTestNetError(timeout, temporary bool) *TestNetError {
+	return &TestNetError{
+		timeout:   timeout,
+		temporary: temporary,
+	}
+}
+
+func (e *TestNetError) Error() string   { return "test error" }
+func (e *TestNetError) Timeout() bool   { return e.timeout }
+func (e *TestNetError) Temporary() bool { return e.temporary }

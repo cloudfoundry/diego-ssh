@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/cloudfoundry-incubator/diego-ssh/server/fakes"
+	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -142,10 +143,10 @@ var _ = Describe("Server", func() {
 					timeCh := timeCh
 					select {
 					case timeCh <- time.Now():
-						return nil, &testNetError{temporary: true}
+						return nil, test_helpers.NewTestNetError(false, true)
 					default:
 						close(timeCh)
-						return nil, &testNetError{temporary: false}
+						return nil, test_helpers.NewTestNetError(false, false)
 					}
 				}
 			})
@@ -227,12 +228,3 @@ var _ = Describe("Server", func() {
 		})
 	})
 })
-
-type testNetError struct {
-	timeout   bool
-	temporary bool
-}
-
-func (e *testNetError) Error() string   { return "test error" }
-func (e *testNetError) Timeout() bool   { return e.timeout }
-func (e *testNetError) Temporary() bool { return e.temporary }
