@@ -51,7 +51,14 @@ func NewSSHOptions() *SSHOptions {
 
 	opts := getopt.New()
 
-	sshOptions.instanceOption = opts.UintVarLong(&sshOptions.Instance, "instance", 'i', "application instance id", "instance-id")
+	sshOptions.instanceOption = opts.UintVarLong(
+		&sshOptions.Instance,
+		"instance",
+		'i',
+		"application instance id",
+		"instance-id",
+	)
+
 	sshOptions.skipHostValidationOption = opts.BoolVarLong(
 		&sshOptions.SkipHostValidation,
 		"skip-host-validation",

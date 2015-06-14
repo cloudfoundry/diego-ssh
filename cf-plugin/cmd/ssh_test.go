@@ -442,7 +442,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			AfterEach(func() {
 				master.Close()
-				// slave.Close() // TODO: race
+				// slave.Close() // race
 			})
 
 			Context("when a command is not specified", func() {

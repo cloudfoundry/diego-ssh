@@ -13,7 +13,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
-	"github.com/creack/termios/win"
+	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
@@ -456,7 +456,7 @@ func (sess *session) sendExitMessage(err error) {
 
 func setWindowSize(logger lager.Logger, pseudoTty *os.File, columns, rows uint32) error {
 	logger.Info("new-size", lager.Data{"columns": columns, "rows": rows})
-	return win.SetWinsize(pseudoTty.Fd(), &win.Winsize{
+	return term.SetWinsize(pseudoTty.Fd(), &term.Winsize{
 		Width:  uint16(columns),
 		Height: uint16(rows),
 	})

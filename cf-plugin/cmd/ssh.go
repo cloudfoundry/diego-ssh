@@ -165,15 +165,15 @@ func (c *secureShell) localForwardAcceptLoop(listener net.Listener, addr string)
 
 	for {
 		conn, err := listener.Accept()
-		if err == nil {
-			go c.handleForwardConnection(conn, addr)
-		} else {
+		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			return
 		}
+
+		go c.handleForwardConnection(conn, addr)
 	}
 }
 
