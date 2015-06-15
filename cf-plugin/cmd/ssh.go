@@ -182,6 +182,7 @@ func (c *secureShell) handleForwardConnection(conn net.Conn, targetAddr string) 
 
 	target, err := c.secureClient.Dial("tcp", targetAddr)
 	if err != nil {
+		fmt.Printf("connect to %s failed: %s\n", targetAddr, err.Error())
 		return
 	}
 	defer target.Close()
