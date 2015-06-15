@@ -51,6 +51,8 @@ var _ = Describe("Diego SSH Plugin", func() {
 		terminalHelper    terminal.TerminalHelper
 		keepAliveDuration time.Duration
 		secureShell       cmd.SecureShell
+
+		stdinPipe *fake_io.FakeWriteCloser
 	)
 
 	BeforeEach(func() {
@@ -75,7 +77,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 		fakeSecureClient.NewSessionReturns(fakeSecureSession, nil)
 		fakeSecureClient.ConnReturns(fakeConnection)
 
-		stdinPipe := &fake_io.FakeWriteCloser{}
+		stdinPipe = &fake_io.FakeWriteCloser{}
 		stdinPipe.WriteStub = func(p []byte) (int, error) {
 			return len(p), nil
 		}
@@ -721,6 +723,21 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			It("returns the result from wait", func() {
 				Expect(sessionError).To(MatchError("error result"))
+			})
+
+			Context("when stdin is closed", func() {
+				BeforeEach(func() {
+					stdin.ReadStub = func(p []byte) (int, error) {
+						defer GinkgoRecover()
+						Consistently(stdinPipe.CloseCallCount).Should(Equal(0))
+						p[0] = 0
+						return 1, io.EOF
+					}
+				})
+
+				It("closes the stdinPipe", func() {
+					Eventually(stdinPipe.CloseCallCount).Should(Equal(1))
+				})
 			})
 		})
 
