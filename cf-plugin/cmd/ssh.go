@@ -197,7 +197,9 @@ func (c *secureShell) handleForwardConnection(conn net.Conn, targetAddr string) 
 func copyAndClose(wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {
 	io.Copy(dest, src)
 	dest.Close()
-	wg.Done()
+	if wg != nil {
+		wg.Done()
+	}
 }
 
 func (c *secureShell) InteractiveSession() error {
@@ -263,7 +265,7 @@ func (c *secureShell) InteractiveSession() error {
 		}
 	}
 
-	go io.Copy(inPipe, stdin)
+	go copyAndClose(nil, inPipe, stdin)
 	go io.Copy(stdout, outPipe)
 	go io.Copy(stderr, errPipe)
 
