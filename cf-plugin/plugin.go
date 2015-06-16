@@ -22,7 +22,7 @@ type SSHPlugin struct {
 
 func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
-		Name: "SSH",
+		Name: "Diego-SSH",
 		Version: plugin.VersionType{
 			Major: 0,
 			Minor: 1,
