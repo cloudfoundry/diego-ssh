@@ -49,9 +49,6 @@ func New(
 
 func (p *Proxy) HandleConnection(netConn net.Conn) {
 	logger := p.logger.Session("handle-connection")
-
-	logger.Info("started")
-	defer logger.Info("completed")
 	defer netConn.Close()
 
 	serverConn, serverChannels, serverRequests, err := ssh.NewServerConn(netConn, p.serverConfig)
