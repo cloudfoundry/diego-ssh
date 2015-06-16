@@ -956,7 +956,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 			conn, err := net.Dial("tcp", localAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			Eventually(echoListener.AcceptCallCount).Should(Equal(1))
+			Eventually(echoListener.AcceptCallCount).Should(BeNumerically(">=", 1))
 			Eventually(fakeSecureClient.DialCallCount).Should(Equal(1))
 
 			network, addr := fakeSecureClient.DialArgsForCall(0)
