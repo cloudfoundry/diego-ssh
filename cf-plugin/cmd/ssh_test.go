@@ -1140,8 +1140,8 @@ var _ = Describe("Diego SSH Plugin", func() {
 						times = append(times, t)
 					}
 
-					Expect(times[1]).To(BeTemporally("~", times[0].Add(100*time.Millisecond), 20*time.Millisecond))
-					Expect(times[2]).To(BeTemporally("~", times[1].Add(100*time.Millisecond), 20*time.Millisecond))
+					Expect(times[1]).To(BeTemporally("~", times[0].Add(115*time.Millisecond), 30*time.Millisecond))
+					Expect(times[2]).To(BeTemporally("~", times[1].Add(115*time.Millisecond), 30*time.Millisecond))
 				})
 			})
 		})
