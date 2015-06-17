@@ -676,6 +676,13 @@ var _ = Describe("SessionChannelHandler", func() {
 				It("changes the the size of the terminal", func() {
 					Expect(result).To(ContainSubstring("50 132"))
 				})
+
+				Context("and the channel is closed by the client", func() {
+					FIt("the server closes its PTYs", func() {
+						session.channel.Close()
+					})
+				})
+
 			})
 		})
 

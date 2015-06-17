@@ -565,22 +565,27 @@ func (sess *session) wait(command *exec.Cmd) error {
 }
 
 func (sess *session) destroy() {
+	logger := sess.logger.Session("destroy")
 	sess.Lock()
+	logger.Info("session-lock-acquired")
 	defer sess.Unlock()
 
 	if sess.complete {
 		return
 	}
+	logger.Info("approaching-destruction-wait")
 
 	sess.wg.Wait()
+	logger.Info("cleared-destruction-wait")
 	sess.complete = true
-
-	if sess.channel != nil {
-		sess.channel.Close()
-	}
 
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()
+		logger.Info("closed ptyMaster")
+	}
+
+	if sess.channel != nil {
+		sess.channel.Close()
 	}
 }
 
