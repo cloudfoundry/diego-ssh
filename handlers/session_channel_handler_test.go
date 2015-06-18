@@ -7,9 +7,11 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
@@ -57,7 +59,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		defaultEnv = map[string]string{}
 		defaultEnv["TEST"] = "FOO"
 
-		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv)
+		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv, time.Second)
 
 		newChannelHandlers = map[string]handlers.NewChannelHandler{
 			"session": sessionChannelHandler,
@@ -76,8 +78,10 @@ var _ = Describe("SessionChannelHandler", func() {
 	})
 
 	AfterEach(func() {
-		err := client.Close()
-		Expect(err).NotTo(HaveOccurred())
+		if client != nil {
+			err := client.Close()
+			Expect(err).NotTo(HaveOccurred())
+		}
 		Eventually(connectionFinished).Should(BeClosed())
 	})
 
@@ -495,6 +499,27 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				stdin.Close()
+			})
+
+			It("terminates the shell when the stdin closes", func() {
+				waitCh := make(chan error, 1)
+				waitStub := runner.WaitStub
+				runner.WaitStub = func(command *exec.Cmd) error {
+					err := waitStub(command)
+					waitCh <- err
+					return err
+				}
+
+				err := session.Shell()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = client.Conn.Close()
+				client = nil
+				Expect(err).NotTo(HaveOccurred())
+
+				session.Wait()
+
+				Eventually(waitCh, 3).Should(Receive(MatchError("signal: hangup")))
 			})
 
 			It("should set the terminal type", func() {

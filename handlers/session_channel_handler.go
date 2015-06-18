@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
@@ -71,17 +72,20 @@ type SessionChannelHandler struct {
 	runner       Runner
 	shellLocator ShellLocator
 	defaultEnv   map[string]string
+	keepalive    time.Duration
 }
 
 func NewSessionChannelHandler(
 	runner Runner,
 	shellLocator ShellLocator,
 	defaultEnv map[string]string,
+	keepalive time.Duration,
 ) *SessionChannelHandler {
 	return &SessionChannelHandler{
 		runner:       runner,
 		shellLocator: shellLocator,
 		defaultEnv:   defaultEnv,
+		keepalive:    keepalive,
 	}
 }
 
@@ -92,7 +96,7 @@ func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newC
 		return
 	}
 
-	handler.newSession(logger, channel).serviceRequests(requests)
+	handler.newSession(logger, channel, handler.keepalive).serviceRequests(requests)
 }
 
 type ptyRequestMsg struct {
@@ -105,8 +109,10 @@ type ptyRequestMsg struct {
 }
 
 type session struct {
-	logger   lager.Logger
-	complete bool
+	logger            lager.Logger
+	complete          bool
+	keepaliveDuration time.Duration
+	keepaliveStopCh   chan struct{}
 
 	shellPath string
 	runner    Runner
@@ -123,13 +129,14 @@ type session struct {
 	ptyMaster *os.File
 }
 
-func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel) *session {
+func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel, keepalive time.Duration) *session {
 	return &session{
-		logger:    logger.Session("session-channel"),
-		runner:    handler.runner,
-		shellPath: handler.shellLocator.ShellPath(),
-		channel:   channel,
-		env:       handler.defaultEnv,
+		logger:            logger.Session("session-channel"),
+		keepaliveDuration: keepalive,
+		runner:            handler.runner,
+		shellPath:         handler.shellLocator.ShellPath(),
+		channel:           channel,
+		env:               handler.defaultEnv,
 	}
 }
 
@@ -554,7 +561,34 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 		sess.channel.CloseWrite()
 	}()
 
-	return sess.runner.Start(command)
+	err = sess.runner.Start(command)
+	if err == nil {
+		sess.keepaliveStopCh = make(chan struct{})
+		go sess.keepalive(command, sess.keepaliveStopCh)
+	}
+	return err
+}
+
+func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {
+	logger := sess.logger.Session("keepalive")
+
+	ticker := time.NewTicker(sess.keepaliveDuration)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			_, err := sess.channel.SendRequest("keepalive@cloudfoundry.org", true, nil)
+			logger.Info("keepalive", lager.Data{"success": err == nil})
+
+			if err != nil {
+				err = sess.runner.Signal(command, syscall.SIGHUP)
+				logger.Info("process-signaled", lager.Data{"error": err})
+				return
+			}
+		case <-stopCh:
+			return
+		}
+	}
 }
 
 func (sess *session) wait(command *exec.Cmd) error {
@@ -581,6 +615,10 @@ func (sess *session) destroy() {
 
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()
+	}
+
+	if sess.keepaliveStopCh != nil {
+		close(sess.keepaliveStopCh)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
@@ -73,7 +74,7 @@ func main() {
 		serverConfig,
 		nil,
 		map[string]handlers.NewChannelHandler{
-			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment()),
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
 			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
 		},
 	)
