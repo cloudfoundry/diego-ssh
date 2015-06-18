@@ -615,6 +615,7 @@ func (sess *session) destroy() {
 
 	if sess.ptyMaster != nil {
 		sess.ptyMaster.Close()
+		sess.ptyMaster = nil
 	}
 
 	if sess.keepaliveStopCh != nil {
@@ -630,19 +631,12 @@ func (sess *session) executeSCP(command string, request *ssh.Request) {
 	}
 
 	copier, err := scp.NewFromCommand(command, sess.channel, sess.channel, sess.channel.Stderr(), logger)
-
-	if err != nil {
-		sess.sendSCPExitMessage(err)
-		sess.destroy()
-		return
+	if err == nil {
+		err = copier.Copy()
 	}
-
-	err = copier.Copy()
 
 	sess.sendSCPExitMessage(err)
 	sess.destroy()
-
-	return
 }
 
 func (sess *session) sendSCPExitMessage(err error) {
@@ -660,5 +654,4 @@ func (sess *session) sendSCPExitMessage(err error) {
 	if sendErr != nil {
 		logger.Error("send-exit-status-failed", sendErr)
 	}
-	return
 }

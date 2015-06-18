@@ -616,7 +616,6 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			Context("when control character modes are specified in TerminalModes", func() {
 				BeforeEach(func() {
-					// Set to E71
 					terminalModes[ssh.PARODD] = 0
 				})
 
