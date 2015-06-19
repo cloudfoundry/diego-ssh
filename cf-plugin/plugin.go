@@ -89,6 +89,8 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	spaceFactory := space.NewSpaceFactory(cli)
 
 	switch args[0] {
+	case "CLI-MESSAGE-UNINSTALL":
+		return
 	case "enable-ssh":
 		err := cmd.EnableSSH(args, appFactory, p.OutputWriter)
 		if err != nil {
