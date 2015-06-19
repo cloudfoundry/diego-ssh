@@ -1,20 +1,19 @@
 # diego-ssh
 
-Diego-ssh is an implmentation of an ssh proxy server and a lightweight
-ssh daemon. When deployed and configured correctly, they provide a simple and
-scalable way access containers associated with LRP instances.
+Diego-ssh is an implementation of an ssh proxy server, a lightweight ssh
+daemon, and a Cloud Foundry cli plugin. When deployed and configured
+correctly, they provide a simple and scalable way to access containers
+associated with Diego long running processes.
 
 ## Proxy
 
-The proxy server hosts the user-accessible ssh endpoint and is responsble for
-authentication, policy enforcment, and access controls in the context of Cloud
-Foundry. After succesfully authenticating with the proxy, the proxy will
-attempt to locate the target container and create an ssh session to the
-container. Once both sessions have been established, the proxy will manage the
-communication between the user's ssh client and the container's ssh daemon.
-
-The container must run an ssh daemon inside the container on a port that is
-exposed to the host.
+The ssh proxy hosts the user-accessible ssh endpoint and is responsible for
+authentication, policy enforcement, and access controls in the context of
+Cloud Foundry. After a user has successfully authenticated with the proxy, the
+proxy will attempt to locate the target container and create an ssh session to
+a daemon running inside the container. After both sessions have been
+established, the proxy will manage the communication between the user's ssh
+client and the container's ssh daemon.
 
 ### Proxy Authentication
 
@@ -22,59 +21,96 @@ Clients authenticate with the proxy using a specially formed user name that
 describes the authentication domain and target container and a password that
 contains the appropriate credentials for the domain.
 
+The proxy currently supports authentication against a `diego` domain and a
+`cf` domain. Each authentication domain can be enabled independently via
+command line arguments.
+
+#### Diego via the Receptor API
+
+
 For Diego, the user is of the form `diego:`_process-guid_/_index_ and the
 password must hold the receptor credentials in the form _user_:_password_.
 
 Client example:
-
 ```
-ssh -p 2222 'diego:my-process-guid/1'@ssh.10.244.0.34.xip.io
+$ ssh -p 2222 'diego:my-process-guid/1'@ssh.10.244.0.34.xip.io
+$ scp -P 2222 -oUser='diego:ssh-process-guid/0' my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
 ```
 
-The user and password used by the proxy are extracted from the diegoAPIURL
-that is specified on the command line. If the user info field is empty, the
-password will be empty as well.
+The receptor credentials checked by the proxy are extracted from the
+diegoAPIURL provided on the command line. The password provided by the client
+to the proxy must match what is present in the URL for a successful
+authentication.
 
-## SSH Daemon
+This support is enabled with the `--enableDiegoAuth` flag.
 
-The ssh daemon is a lightweight implementation that is built around go's ssh
-library. It supports command execution, interactive shells, and local port
-forwarding. The daemon is self-contained and has no dependencies on the
-container root filesystem.
+#### Cloud Foundry via Cloud Controller and UAA
 
-The daemon is expected to be made available on a file server and Diego LRPs
-that want to use it can include a download action to acquire the binary and a
-run action to start it.
+For Cloud Foundry, the user is of the form `cf:`_app-guid_/_instance_ and the
+password must be a valid OAuth 2 bearer token that represents the end user.
+The proxy will contact the Cloud Controller as the user to determine if the
+policy allows the user to access application containers via SSH.
 
-## Proxy to Container Authentication
+Client example:
+```
+$ cf outh-token | tail -1 | pbcopy # paste oauth token when prompted for password
+$ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.10.244.0.34.xip.io
+$ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0' my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
+```
+
+Cloud Foundry `cf` client example that uses the [ssh][ssh-plugin] plugin:
+```
+$ cf install-plugin https://github.com/cloudfoundry-incubator/diego-ssh/releases/download/${version}/ssh-plugin-${platform}-${arch}
+$ cf ssh app-name
+```
+
+This support is enabled with the `--enableCFAuth` flag.
+
+### Daemon discovery
+
+To be accessible via the SSH proxy, containers must host an ssh daemon, expose
+it via a mapped port, and advertise the port in a `diego-ssh` route. The proxy
+will fail end user authentication if the target LRP or a route is not found.
+
+```json
+  "routes": {
+    "diego-ssh": { "container_port": 2222 }
+  }
+```
+
+The [CC-Bridge][bridge] components of Diego will generate the appropriate LRP
+definitions for Cloud Foundry applications which reflect the policies that are
+in effect.
+
+### Proxy to Container Authentication
 
 When the proxy attempts to handshake with the SSH daemon inside the target
 container, it will use the information associated with the `diego-ssh` key in
 the LRP routes.
 
-### `container_port` [required]
+#### `container_port` [required]
 `container_port` indicates which port inside the container the ssh daemon is
 listening on. The proxy will attempt to connect to host side mapping of this
 port after authenticating the client.
 
-### `host_fingerprint` [optional]
+#### `host_fingerprint` [optional]
 When present, `host_fingerprint` declares the expected fingerprint of the SSH
 daemon's host public key. When the fingerprint of the actual target's host key
 does not match the expected fingerprint, the connection is terminated. The
 fingerprint should only contain the hex string generated by `ssh-keygen -l`.
 
-### `user` [optional]
+#### `user` [optional]
 `user` declares the user ID to use during authentication with the container's
 SSH daemon. While it's not a required part of the routing data, it is required
 for password authentication and may be required for public key authentication.
 
-### `password` [optional]
+#### `password` [optional]
 `password` declares the password to use during password authentication with
 the container's ssh daemon.
 
-### `private_key` [optional]
+#### `private_key` [optional]
 `private_key` declares the private key to use when authenticating with the
-container's SSH daemon. If present, the key must be a PEM encoded  RSA or DSA
+container's SSH daemon. If present, the key must be a PEM encoded RSA or DSA
 public key.
 
 ##### Example LRP
@@ -114,16 +150,23 @@ public key.
 }
 ```
 
-##### Dependencies
-If you wish to use `scp` to copy files in and out of the containers, the
-container root file system must include `/usr/bin/scp`. The Cloud Foundry root
-file system [cflinuxfs2][cflinuxfs2] already contain
-the binaries but custom root file systems or docker images may not.
+## SSH Daemon
 
-scp example:
-```
-scp -oUser='diego:ssh-process-guid/0' -P 2222 my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
-```
+The ssh daemon is a lightweight implementation that is built around go's ssh
+library. It supports command execution, interactive shells, local port
+forwarding, and scp. The daemon is self-contained and has no dependencies on the
+container root file system.
 
+The daemon is focused on delivering basic access to application instances in
+Cloud Foundry. It is intended to run as an unprivileged process and
+interactive shells and commands will run as the daemon user. The daemon only
+supports one authorized key is not intended to support multiple users.
+
+The daemon can be made available on a file server and Diego LRPs that
+want to use it can include a download action to acquire the binary and a run
+action to start it. Cloud Foundry applications will download the daemon as
+part of the lifecycle bundle.
+
+[bridge]: https://github.com/cloudfoundry-incubator/diego-design-notes#cc-bridge-components
 [cflinuxfs2]: https://github.com/cloudfoundry/stacks/tree/master/cflinuxfs2
-
+[ssh-plugin]: https://github.com/cloudfoundry-incubator/diego-ssh/releases
