@@ -36,24 +36,75 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 					Usage: options.SSHUsage(),
 				},
 			},
+			{
+				Name:     "enable-ssh",
+				HelpText: "enable ssh on an application container instance",
+				UsageDetails: plugin.Usage{
+					Usage: cmd.EnableSSHUsage,
+				},
+			},
+			{
+				Name:     "disable-ssh",
+				HelpText: "disable ssh on an application container instance",
+				UsageDetails: plugin.Usage{
+					Usage: cmd.DisableSSHUsage,
+				},
+			},
+			{
+				Name:     "ssh-enabled",
+				HelpText: "reports whether SSH is enabled on an application container instance",
+				UsageDetails: plugin.Usage{
+					Usage: cmd.SSHEnabledUsage,
+				},
+			},
+			{
+				Name:     "allow-space-ssh",
+				HelpText: "allows applications to use SSH within a space",
+				UsageDetails: plugin.Usage{
+					Usage: "cf allow-space-ssh SPACE_NAME",
+				},
+			},
+			{
+				Name:     "disallow-space-ssh",
+				HelpText: "reports whether SSH is enabled on an application container instance",
+				UsageDetails: plugin.Usage{
+					Usage: "cf disallow-space-ssh SPACE_NAME",
+				},
+			},
+			{
+				Name:     "space-ssh-allowed",
+				HelpText: "reports whether SSH is allowed in a space",
+				UsageDetails: plugin.Usage{
+					Usage: "cf space-ssh-allowed SPACE_NAME",
+				},
+			},
 		},
 	}
 }
 
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
-
-	secureShell := cmd.NewSecureShell(
-		cmd.DefaultSecureDialer(),
-		terminal.DefaultHelper(),
-		cmd.DefaultListenerFactory(),
-		30*time.Second,
-		app.NewAppFactory(cli),
-		info.NewInfoFactory(cli),
-		credential.NewCredentialFactory(cli),
-	)
+	appFactory := app.NewAppFactory(cli)
 
 	switch args[0] {
+	case "enable-ssh":
+		err := cmd.EnableSSH(args, appFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+	case "disable-ssh":
+		err := cmd.EnableSSH(args, appFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+	case "ssh-enabled":
+		err := cmd.SSHEnabled(args, appFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
 	case "ssh":
 		opts := options.NewSSHOptions()
 		err := opts.Parse(args)
@@ -62,6 +113,16 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			fmt.Fprintf(p.OutputWriter, options.SSHUsage())
 			return
 		}
+
+		secureShell := cmd.NewSecureShell(
+			cmd.DefaultSecureDialer(),
+			terminal.DefaultHelper(),
+			cmd.DefaultListenerFactory(),
+			30*time.Second,
+			appFactory,
+			info.NewInfoFactory(cli),
+			credential.NewCredentialFactory(cli),
+		)
 
 		err = secureShell.Connect(opts)
 		if err != nil {

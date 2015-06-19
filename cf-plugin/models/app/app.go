@@ -3,14 +3,16 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/cloudfoundry/cli/plugin"
 )
 
-//go:generate counterfeiter -o fakes/fake_app_factory.go . AppFactory
+//go:generate counterfeiter -o app_fakes/fake_app_factory.go . AppFactory
 type AppFactory interface {
 	Get(string) (App, error)
+	SetBool(anApp App, key string, value bool) error
 }
 
 type appFactory struct {
@@ -72,4 +74,13 @@ func (af *appFactory) Get(appName string) (App, error) {
 	}, nil
 
 	return App{}, nil
+}
+
+func (af *appFactory) SetBool(anApp App, key string, value bool) error {
+	output, err := af.cli.CliCommandWithoutTerminalOutput("curl", "/v2/apps/"+anApp.Guid, "-X", "PUT", "-d", `{"`+key+`":`+strconv.FormatBool(value)+`}`)
+	if err != nil {
+		return errors.New(output[len(output)-1])
+	}
+
+	return nil
 }

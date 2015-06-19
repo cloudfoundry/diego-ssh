@@ -104,4 +104,36 @@ var _ = Describe("App", func() {
 			})
 		})
 	})
+
+	Describe("SetBool", func() {
+		var anApp app.App
+
+		BeforeEach(func() {
+			anApp = app.App{
+				Guid: "myguid",
+			}
+		})
+
+		It("it sends a cli command", func() {
+			af.SetBool(anApp, "foobar", true)
+
+			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
+			args := fakeCliConnection.CliCommandWithoutTerminalOutputArgsForCall(0)
+			Expect(args).To(Equal([]string{"curl", "/v2/apps/myguid", "-X", "PUT", "-d", `{"foobar":true}`}))
+		})
+
+		Context("when the app does not exist", func() {
+			BeforeEach(func() {
+				fakeCliConnection.CliCommandWithoutTerminalOutputReturns(
+					[]string{"FAILED", "App app1 is not found"},
+					errors.New("Error executing cli core command"),
+				)
+			})
+
+			It("returns 'App not found' error", func() {
+				err := af.SetBool(anApp, "foobar", true)
+				Expect(err).To(MatchError("App app1 is not found"))
+			})
+		})
+	})
 })

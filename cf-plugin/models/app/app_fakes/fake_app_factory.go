@@ -17,6 +17,16 @@ type FakeAppFactory struct {
 		result1 app.App
 		result2 error
 	}
+	SetBoolStub        func(anApp app.App, key string, value bool) error
+	setBoolMutex       sync.RWMutex
+	setBoolArgsForCall []struct {
+		anApp app.App
+		key   string
+		value bool
+	}
+	setBoolReturns struct {
+		result1 error
+	}
 }
 
 func (fake *FakeAppFactory) Get(arg1 string) (app.App, error) {
@@ -50,6 +60,40 @@ func (fake *FakeAppFactory) GetReturns(result1 app.App, result2 error) {
 		result1 app.App
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeAppFactory) SetBool(anApp app.App, key string, value bool) error {
+	fake.setBoolMutex.Lock()
+	fake.setBoolArgsForCall = append(fake.setBoolArgsForCall, struct {
+		anApp app.App
+		key   string
+		value bool
+	}{anApp, key, value})
+	fake.setBoolMutex.Unlock()
+	if fake.SetBoolStub != nil {
+		return fake.SetBoolStub(anApp, key, value)
+	} else {
+		return fake.setBoolReturns.result1
+	}
+}
+
+func (fake *FakeAppFactory) SetBoolCallCount() int {
+	fake.setBoolMutex.RLock()
+	defer fake.setBoolMutex.RUnlock()
+	return len(fake.setBoolArgsForCall)
+}
+
+func (fake *FakeAppFactory) SetBoolArgsForCall(i int) (app.App, string, bool) {
+	fake.setBoolMutex.RLock()
+	defer fake.setBoolMutex.RUnlock()
+	return fake.setBoolArgsForCall[i].anApp, fake.setBoolArgsForCall[i].key, fake.setBoolArgsForCall[i].value
+}
+
+func (fake *FakeAppFactory) SetBoolReturns(result1 error) {
+	fake.SetBoolStub = nil
+	fake.setBoolReturns = struct {
+		result1 error
+	}{result1}
 }
 
 var _ app.AppFactory = new(FakeAppFactory)
