@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/app"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/credential"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/info"
+	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/space"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/options"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/terminal"
 	"github.com/cloudfoundry/cli/plugin"
@@ -38,14 +39,14 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 			},
 			{
 				Name:     "enable-ssh",
-				HelpText: "enable ssh on an application container instance",
+				HelpText: "enable ssh for the application",
 				UsageDetails: plugin.Usage{
 					Usage: cmd.EnableSSHUsage,
 				},
 			},
 			{
 				Name:     "disable-ssh",
-				HelpText: "disable ssh on an application container instance",
+				HelpText: "disable ssh for the application",
 				UsageDetails: plugin.Usage{
 					Usage: cmd.DisableSSHUsage,
 				},
@@ -59,23 +60,23 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 			},
 			{
 				Name:     "allow-space-ssh",
-				HelpText: "allows applications to use SSH within a space",
+				HelpText: "allow SSH access for the space",
 				UsageDetails: plugin.Usage{
-					Usage: "cf allow-space-ssh SPACE_NAME",
+					Usage: cmd.AllowSSHUsage,
 				},
 			},
 			{
 				Name:     "disallow-space-ssh",
-				HelpText: "reports whether SSH is enabled on an application container instance",
+				HelpText: "disallow SSH access for the space",
 				UsageDetails: plugin.Usage{
-					Usage: "cf disallow-space-ssh SPACE_NAME",
+					Usage: cmd.DisallowSSHUsage,
 				},
 			},
 			{
 				Name:     "space-ssh-allowed",
 				HelpText: "reports whether SSH is allowed in a space",
 				UsageDetails: plugin.Usage{
-					Usage: "cf space-ssh-allowed SPACE_NAME",
+					Usage: cmd.SSHAllowedUsage,
 				},
 			},
 		},
@@ -85,6 +86,7 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
 	appFactory := app.NewAppFactory(cli)
+	spaceFactory := space.NewSpaceFactory(cli)
 
 	switch args[0] {
 	case "enable-ssh":
@@ -94,13 +96,31 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			return
 		}
 	case "disable-ssh":
-		err := cmd.EnableSSH(args, appFactory, p.OutputWriter)
+		err := cmd.DisableSSH(args, appFactory, p.OutputWriter)
 		if err != nil {
 			p.Fail(err.Error())
 			return
 		}
 	case "ssh-enabled":
 		err := cmd.SSHEnabled(args, appFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+	case "allow-space-ssh":
+		err := cmd.AllowSSH(args, spaceFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+	case "disallow-space-ssh":
+		err := cmd.DisallowSSH(args, spaceFactory, p.OutputWriter)
+		if err != nil {
+			p.Fail(err.Error())
+			return
+		}
+	case "space-ssh-allowed":
+		err := cmd.SSHAllowed(args, spaceFactory, p.OutputWriter)
 		if err != nil {
 			p.Fail(err.Error())
 			return

@@ -20,7 +20,7 @@ func EnableSSH(args []string, appFactory app.AppFactory, output io.Writer) error
 		return err
 	}
 
-	err = appFactory.SetBool(app, "enable-ssh", true)
+	err = appFactory.SetBool(app, "enable_ssh", true)
 	if err != nil {
 		return err
 	}

@@ -51,7 +51,7 @@ var _ = Describe("DisableSsh", func() {
 		Expect(fakeAppFactory.SetBoolCallCount()).To(Equal(1))
 		anApp, key, val := fakeAppFactory.SetBoolArgsForCall(0)
 		Expect(anApp).To(Equal(myApp))
-		Expect(key).To(Equal("enable-ssh"))
+		Expect(key).To(Equal("enable_ssh"))
 		Expect(val).To(BeFalse())
 	})
 
