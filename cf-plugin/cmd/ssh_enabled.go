@@ -11,8 +11,7 @@ const SSHEnabledUsage = "cf ssh-enabled APP_NAME"
 
 func SSHEnabled(args []string, appFactory app.AppFactory, output io.Writer) error {
 	if len(args) != 2 || args[0] != "ssh-enabled" {
-		fmt.Fprintf(output, "FAILED\n\n%s\n%s", "Invalid usage", SSHEnabledUsage)
-		return nil
+		return fmt.Errorf("%s\n%s", "Invalid usage", SSHEnabledUsage)
 	}
 
 	app, err := appFactory.Get(args[1])

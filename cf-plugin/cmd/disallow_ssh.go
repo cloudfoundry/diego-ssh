@@ -2,17 +2,15 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/space"
 )
 
 const DisallowSSHUsage = "cf disallow-space-ssh SPACE_NAME"
 
-func DisallowSSH(args []string, spaceFactory space.SpaceFactory, output io.Writer) error {
+func DisallowSSH(args []string, spaceFactory space.SpaceFactory) error {
 	if len(args) != 2 || args[0] != "disallow-space-ssh" {
-		fmt.Fprintf(output, "FAILED\n\n%s\n%s", "Invalid usage", DisallowSSHUsage)
-		return nil
+		return fmt.Errorf("%s\n%s", "Invalid usage", DisallowSSHUsage)
 	}
 
 	space, err := spaceFactory.Get(args[1])

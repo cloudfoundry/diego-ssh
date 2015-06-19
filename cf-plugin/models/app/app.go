@@ -1,11 +1,11 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models"
 	"github.com/cloudfoundry/cli/plugin"
 )
 
@@ -16,11 +16,12 @@ type AppFactory interface {
 }
 
 type appFactory struct {
-	cli plugin.CliConnection
+	cli  plugin.CliConnection
+	curl models.Curler
 }
 
-func NewAppFactory(cli plugin.CliConnection) AppFactory {
-	return &appFactory{cli: cli}
+func NewAppFactory(cli plugin.CliConnection, curl models.Curler) AppFactory {
+	return &appFactory{cli: cli, curl: curl}
 }
 
 type App struct {
@@ -40,7 +41,7 @@ type entity struct {
 	State     string `json:"state"`
 }
 
-type cfApp struct {
+type CFApp struct {
 	Metadata metadata `json:"metadata"`
 	Entity   entity   `json:"entity"`
 }
@@ -53,17 +54,10 @@ func (af *appFactory) Get(appName string) (App, error) {
 
 	guid := strings.TrimSpace(output[0])
 
-	output, err = af.cli.CliCommandWithoutTerminalOutput("curl", "/v2/apps/"+guid)
+	app := CFApp{}
+	err = af.curl(af.cli, &app, "/v2/apps/"+guid)
 	if err != nil {
 		return App{}, errors.New("Failed to acquire " + appName + " info")
-	}
-
-	response := []byte(output[0])
-	app := cfApp{}
-
-	err = json.Unmarshal(response, &app)
-	if err != nil {
-		return App{}, err
 	}
 
 	return App{
@@ -72,15 +66,8 @@ func (af *appFactory) Get(appName string) (App, error) {
 		Diego:     app.Entity.Diego,
 		State:     app.Entity.State,
 	}, nil
-
-	return App{}, nil
 }
 
 func (af *appFactory) SetBool(anApp App, key string, value bool) error {
-	output, err := af.cli.CliCommandWithoutTerminalOutput("curl", "/v2/apps/"+anApp.Guid, "-X", "PUT", "-d", `{"`+key+`":`+strconv.FormatBool(value)+`}`)
-	if err != nil {
-		return errors.New(output[len(output)-1])
-	}
-
-	return nil
+	return af.curl(af.cli, nil, "/v2/apps/"+anApp.Guid, "-X", "PUT", "-d", `{"`+key+`":`+strconv.FormatBool(value)+`}`)
 }

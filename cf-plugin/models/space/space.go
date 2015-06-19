@@ -1,11 +1,11 @@
 package space
 
 import (
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models"
 	"github.com/cloudfoundry/cli/plugin"
 )
 
@@ -16,11 +16,12 @@ type SpaceFactory interface {
 }
 
 type spaceFactory struct {
-	cli plugin.CliConnection
+	cli  plugin.CliConnection
+	curl models.Curler
 }
 
-func NewSpaceFactory(cli plugin.CliConnection) SpaceFactory {
-	return &spaceFactory{cli: cli}
+func NewSpaceFactory(cli plugin.CliConnection, curl models.Curler) SpaceFactory {
+	return &spaceFactory{cli: cli, curl: curl}
 }
 
 type Space struct {
@@ -36,7 +37,7 @@ type entity struct {
 	AllowSSH bool `json:"allow_ssh"`
 }
 
-type cfSpace struct {
+type CFSpace struct {
 	Metadata metadata `json:"metadata"`
 	Entity   entity   `json:"entity"`
 }
@@ -48,33 +49,19 @@ func (sf *spaceFactory) Get(spaceName string) (Space, error) {
 	}
 
 	guid := strings.TrimSpace(output[0])
+	space := CFSpace{}
+	err = sf.curl(sf.cli, &space, "/v2/spaces/"+guid)
 
-	output, err = sf.cli.CliCommandWithoutTerminalOutput("curl", "/v2/spaces/"+guid)
 	if err != nil {
 		return Space{}, errors.New("Failed to acquire " + spaceName + " info")
-	}
-
-	response := []byte(output[0])
-	space := cfSpace{}
-
-	err = json.Unmarshal(response, &space)
-	if err != nil {
-		return Space{}, err
 	}
 
 	return Space{
 		Guid:     space.Metadata.Guid,
 		AllowSSH: space.Entity.AllowSSH,
 	}, nil
-
-	return Space{}, nil
 }
 
 func (sf *spaceFactory) SetBool(aSpace Space, key string, value bool) error {
-	output, err := sf.cli.CliCommandWithoutTerminalOutput("curl", "/v2/spaces/"+aSpace.Guid, "-X", "PUT", "-d", `{"`+key+`":`+strconv.FormatBool(value)+`}`)
-	if err != nil {
-		return errors.New(output[len(output)-1])
-	}
-
-	return nil
+	return sf.curl(sf.cli, nil, "/v2/spaces/"+aSpace.Guid, "-X", "PUT", "-d", `{"`+key+`":`+strconv.FormatBool(value)+`}`)
 }

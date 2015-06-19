@@ -1,7 +1,6 @@
 package cmd_test
 
 import (
-	"bytes"
 	"errors"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/cmd"
@@ -23,26 +22,22 @@ var _ = Describe("DisableSsh", func() {
 
 	Context("validation", func() {
 		It("requires an application name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.DisableSSH([]string{"disable-ssh"}, fakeAppFactory, writer)
+			err := cmd.DisableSSH([]string{"disable-ssh"}, fakeAppFactory)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.DisableSSHUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.DisableSSHUsage))
 		})
 
 		It("validates the command name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.DisableSSH([]string{"disable-ss", "app"}, fakeAppFactory, writer)
+			err := cmd.DisableSSH([]string{"disable-ss", "app"}, fakeAppFactory)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.DisableSSHUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.DisableSSHUsage))
 		})
 	})
 
 	It("disables SSH on an app endpoint", func() {
 		fakeAppFactory.GetReturns(myApp, nil)
 
-		err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory, nil)
+		err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
@@ -61,7 +56,7 @@ var _ = Describe("DisableSsh", func() {
 		})
 
 		It("returns an err", func() {
-			err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory, nil)
+			err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory)
 			Expect(err).To(MatchError("get failed"))
 			Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
 			Expect(fakeAppFactory.SetBoolCallCount()).To(Equal(0))
@@ -75,7 +70,7 @@ var _ = Describe("DisableSsh", func() {
 		})
 
 		It("returns an err", func() {
-			err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory, nil)
+			err := cmd.DisableSSH([]string{"disable-ssh", "myapp"}, fakeAppFactory)
 			Expect(err).To(MatchError("set failed"))
 			Expect(fakeAppFactory.GetCallCount()).To(Equal(1))
 			Expect(fakeAppFactory.SetBoolCallCount()).To(Equal(1))

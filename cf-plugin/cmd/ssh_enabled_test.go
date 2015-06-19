@@ -23,19 +23,15 @@ var _ = Describe("SSHEnabled", func() {
 
 	Context("validation", func() {
 		It("requires an application name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.SSHEnabled([]string{"ssh-enabled"}, fakeAppFactory, writer)
+			err := cmd.SSHEnabled([]string{"ssh-enabled"}, fakeAppFactory, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.SSHEnabledUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.SSHEnabledUsage))
 		})
 
 		It("validates the command name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.SSHEnabled([]string{"ssh-enable", "app"}, fakeAppFactory, writer)
+			err := cmd.SSHEnabled([]string{"ssh-enable", "app"}, fakeAppFactory, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.SSHEnabledUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.SSHEnabledUsage))
 		})
 	})
 

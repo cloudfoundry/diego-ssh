@@ -23,19 +23,15 @@ var _ = Describe("SSHAllowed", func() {
 
 	Context("validation", func() {
 		It("requires an spacelication name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.SSHAllowed([]string{"space-ssh-allowed"}, fakeSpaceFactory, writer)
+			err := cmd.SSHAllowed([]string{"space-ssh-allowed"}, fakeSpaceFactory, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.SSHAllowedUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.SSHAllowedUsage))
 		})
 
 		It("validates the command name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.SSHAllowed([]string{"bogus", "space"}, fakeSpaceFactory, writer)
+			err := cmd.SSHAllowed([]string{"bogus", "space"}, fakeSpaceFactory, nil)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.SSHAllowedUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.SSHAllowedUsage))
 		})
 	})
 

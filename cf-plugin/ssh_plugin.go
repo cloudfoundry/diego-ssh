@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/cmd"
+	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/app"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/credential"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/info"
@@ -85,47 +86,41 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
-	appFactory := app.NewAppFactory(cli)
-	spaceFactory := space.NewSpaceFactory(cli)
+	appFactory := app.NewAppFactory(cli, models.Curl)
+	spaceFactory := space.NewSpaceFactory(cli, models.Curl)
 
 	switch args[0] {
 	case "CLI-MESSAGE-UNINSTALL":
 		return
 	case "enable-ssh":
-		err := cmd.EnableSSH(args, appFactory, p.OutputWriter)
+		err := cmd.EnableSSH(args, appFactory)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "disable-ssh":
-		err := cmd.DisableSSH(args, appFactory, p.OutputWriter)
+		err := cmd.DisableSSH(args, appFactory)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "ssh-enabled":
 		err := cmd.SSHEnabled(args, appFactory, p.OutputWriter)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "allow-space-ssh":
-		err := cmd.AllowSSH(args, spaceFactory, p.OutputWriter)
+		err := cmd.AllowSSH(args, spaceFactory)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "disallow-space-ssh":
-		err := cmd.DisallowSSH(args, spaceFactory, p.OutputWriter)
+		err := cmd.DisallowSSH(args, spaceFactory)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "space-ssh-allowed":
 		err := cmd.SSHAllowed(args, spaceFactory, p.OutputWriter)
 		if err != nil {
-			p.Fail(err.Error())
-			return
+			p.Fatal(err)
 		}
 	case "ssh":
 		opts := options.NewSSHOptions()
@@ -183,9 +178,9 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	}
 }
 
-func main() {
-	sshPlugin := &SSHPlugin{}
-	plugin.Start(sshPlugin)
+func (p *SSHPlugin) Fatal(err error) {
+	p.Fail(err.Error())
+	os.Exit(1)
 }
 
 func (p *SSHPlugin) Fail(message string) {

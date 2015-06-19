@@ -3,7 +3,9 @@ package app_test
 import (
 	"errors"
 
+	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/app"
+	"github.com/cloudfoundry/cli/plugin"
 	"github.com/cloudfoundry/cli/plugin/fakes"
 
 	. "github.com/onsi/ginkgo"
@@ -13,51 +15,62 @@ import (
 var _ = Describe("App", func() {
 	var (
 		fakeCliConnection *fakes.FakeCliConnection
+		curler            models.Curler
 		af                app.AppFactory
 	)
 
 	BeforeEach(func() {
 		fakeCliConnection = &fakes.FakeCliConnection{}
-		af = app.NewAppFactory(fakeCliConnection)
+	})
+
+	JustBeforeEach(func() {
+		af = app.NewAppFactory(fakeCliConnection, curler)
 	})
 
 	Describe("Get", func() {
-		Context("when CC returns a valid response", func() {
+		Context("when CC returns a valid app guid", func() {
 			BeforeEach(func() {
-				expectedJson := `{
-				"metadata": {
-					"guid": "app1-guid"
-				},
-				"entity": {
-					"instances": 1,
-					"state": "STARTED",
-					"diego": true,
-					"enable_ssh": true
-				}
-			}`
-
 				fakeCliConnection.CliCommandWithoutTerminalOutputStub = func(args ...string) ([]string, error) {
-					if fakeCliConnection.CliCommandWithoutTerminalOutputCallCount() == 1 {
-						Expect(args).To(ConsistOf("app", "app1", "--guid"))
-						return []string{"app1-guid\n"}, nil
-					}
-					if fakeCliConnection.CliCommandWithoutTerminalOutputCallCount() == 2 {
-						Expect(args).To(ConsistOf("curl", "/v2/apps/app1-guid"))
-						return []string{expectedJson}, nil
-					}
-					Expect(false).To(BeTrue())
-					return []string{}, nil
+					Expect(args).To(ConsistOf("app", "app1", "--guid"))
+					return []string{"app1-guid\n"}, nil
 				}
 			})
 
-			It("returns a populated App model", func() {
-				model, err := af.Get("app1")
+			Context("when an App is returned", func() {
+				BeforeEach(func() {
+					curler = func(cli plugin.CliConnection, result interface{}, args ...string) error {
+						a, ok := result.(*app.CFApp)
+						Expect(ok).To(BeTrue())
+						a.Metadata.Guid = "app1-guid"
+						a.Entity.EnableSSH = true
+						a.Entity.Diego = true
+						a.Entity.State = "STARTED"
+						return nil
+					}
+				})
 
-				Expect(err).NotTo(HaveOccurred())
-				Expect(model.Guid).To(Equal("app1-guid"))
-				Expect(model.EnableSSH).To(BeTrue())
-				Expect(model.Diego).To(BeTrue())
-				Expect(model.State).To(Equal("STARTED"))
+				It("returns a populated App model", func() {
+					model, err := af.Get("app1")
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(model.Guid).To(Equal("app1-guid"))
+					Expect(model.EnableSSH).To(BeTrue())
+					Expect(model.Diego).To(BeTrue())
+					Expect(model.State).To(Equal("STARTED"))
+				})
+			})
+
+			Context("when curling the App fails", func() {
+				BeforeEach(func() {
+					curler = func(cli plugin.CliConnection, result interface{}, args ...string) error {
+						return errors.New("not good")
+					}
+				})
+
+				It("returns an error", func() {
+					_, err := af.Get("app1")
+					Expect(err).To(MatchError("Failed to acquire app1 info"))
+				})
 			})
 		})
 
@@ -76,63 +89,6 @@ var _ = Describe("App", func() {
 				Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
 				args := fakeCliConnection.CliCommandWithoutTerminalOutputArgsForCall(0)
 				Expect(args).To(ConsistOf("app", "app1", "--guid"))
-			})
-		})
-
-		Context("when curling the app model fails", func() {
-			Context("when CC returns a valid response", func() {
-				BeforeEach(func() {
-					fakeCliConnection.CliCommandWithoutTerminalOutputStub = func(args ...string) ([]string, error) {
-						if fakeCliConnection.CliCommandWithoutTerminalOutputCallCount() == 1 {
-							Expect(args).To(ConsistOf("app", "app1", "--guid"))
-							return []string{"app1-guid\n"}, nil
-						}
-						if fakeCliConnection.CliCommandWithoutTerminalOutputCallCount() == 2 {
-							Expect(args).To(ConsistOf("curl", "/v2/apps/app1-guid"))
-							return []string{"{}"}, errors.New("Failed to acquire app1 info")
-						}
-						Expect(false).To(BeTrue())
-						return []string{}, nil
-					}
-				})
-
-				It("returns 'fail to acquire app info' error", func() {
-					_, err := af.Get("app1")
-
-					Expect(err).To(MatchError("Failed to acquire app1 info"))
-				})
-			})
-		})
-	})
-
-	Describe("SetBool", func() {
-		var anApp app.App
-
-		BeforeEach(func() {
-			anApp = app.App{
-				Guid: "myguid",
-			}
-		})
-
-		It("it sends a cli command", func() {
-			af.SetBool(anApp, "foobar", true)
-
-			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
-			args := fakeCliConnection.CliCommandWithoutTerminalOutputArgsForCall(0)
-			Expect(args).To(Equal([]string{"curl", "/v2/apps/myguid", "-X", "PUT", "-d", `{"foobar":true}`}))
-		})
-
-		Context("when the app does not exist", func() {
-			BeforeEach(func() {
-				fakeCliConnection.CliCommandWithoutTerminalOutputReturns(
-					[]string{"FAILED", "App app1 is not found"},
-					errors.New("Error executing cli core command"),
-				)
-			})
-
-			It("returns 'App not found' error", func() {
-				err := af.SetBool(anApp, "foobar", true)
-				Expect(err).To(MatchError("App app1 is not found"))
 			})
 		})
 	})

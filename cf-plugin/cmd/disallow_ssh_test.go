@@ -1,7 +1,6 @@
 package cmd_test
 
 import (
-	"bytes"
 	"errors"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/cmd"
@@ -23,26 +22,22 @@ var _ = Describe("DisallowSSH", func() {
 
 	Context("validation", func() {
 		It("requires an space name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.DisallowSSH([]string{"disallow-space-ssh"}, fakeSpaceFactory, writer)
+			err := cmd.DisallowSSH([]string{"disallow-space-ssh"}, fakeSpaceFactory)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.DisallowSSHUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.DisallowSSHUsage))
 		})
 
 		It("validates the command name", func() {
-			writer := bytes.NewBuffer(nil)
-			err := cmd.DisallowSSH([]string{"bogus", "space"}, fakeSpaceFactory, writer)
+			err := cmd.DisallowSSH([]string{"bogus", "space"}, fakeSpaceFactory)
 
-			Expect(err).NotTo(HaveOccurred())
-			Expect(writer.String()).To(Equal("FAILED\n\nInvalid usage\n" + cmd.DisallowSSHUsage))
+			Expect(err).To(MatchError("Invalid usage\n" + cmd.DisallowSSHUsage))
 		})
 	})
 
 	It("disallows SSH on an space endpoint", func() {
 		fakeSpaceFactory.GetReturns(mySpace, nil)
 
-		err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory, nil)
+		err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(fakeSpaceFactory.GetCallCount()).To(Equal(1))
@@ -61,7 +56,7 @@ var _ = Describe("DisallowSSH", func() {
 		})
 
 		It("returns an err", func() {
-			err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory, nil)
+			err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory)
 			Expect(err).To(MatchError("get failed"))
 			Expect(fakeSpaceFactory.GetCallCount()).To(Equal(1))
 			Expect(fakeSpaceFactory.SetBoolCallCount()).To(Equal(0))
@@ -75,7 +70,7 @@ var _ = Describe("DisallowSSH", func() {
 		})
 
 		It("returns an err", func() {
-			err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory, nil)
+			err := cmd.DisallowSSH([]string{"disallow-space-ssh", "myspace"}, fakeSpaceFactory)
 			Expect(err).To(MatchError("set failed"))
 			Expect(fakeSpaceFactory.GetCallCount()).To(Equal(1))
 			Expect(fakeSpaceFactory.SetBoolCallCount()).To(Equal(1))
