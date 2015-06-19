@@ -27,14 +27,14 @@ type ForwardSpec struct {
 type SSHOptions struct {
 	AppName             string
 	Command             []string
-	Instance            uint
+	Index               uint
 	SkipHostValidation  bool
 	SkipRemoteExecution bool
 	TerminalRequest     TTYRequest
 	ForwardSpecs        []ForwardSpec
 
 	getoptSet                       *getopt.Set
-	instanceOption                  getopt.Option
+	indexOption                     getopt.Option
 	skipHostValidationOption        getopt.Option
 	skipRemoteExecutionOption       getopt.Option
 	disableTerminalAllocationOption getopt.Option
@@ -51,12 +51,12 @@ func NewSSHOptions() *SSHOptions {
 
 	opts := getopt.New()
 
-	sshOptions.instanceOption = opts.UintVarLong(
-		&sshOptions.Instance,
-		"instance",
+	sshOptions.indexOption = opts.UintVarLong(
+		&sshOptions.Index,
+		"index",
 		'i',
-		"application instance id",
-		"instance-id",
+		"application instance index",
+		"app-instance-index",
 	)
 
 	sshOptions.skipHostValidationOption = opts.BoolVarLong(

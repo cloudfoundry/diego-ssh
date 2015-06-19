@@ -251,8 +251,8 @@ var _ = Describe("Diego SSH Plugin", func() {
 			}
 
 			opts = &options.SSHOptions{
-				AppName:  "app-name",
-				Instance: 2,
+				AppName: "app-name",
+				Index:   2,
 			}
 
 			fakeAppFactory.GetReturns(app, nil)

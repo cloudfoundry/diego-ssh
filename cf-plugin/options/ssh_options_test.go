@@ -129,9 +129,9 @@ var _ = Describe("SSHOptions", func() {
 					args = append(args, "-i", "3")
 				})
 
-				It("populates the Instance field", func() {
+				It("populates the Index field", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.Instance).To(BeEquivalentTo(3))
+					Expect(opts.Index).To(BeEquivalentTo(3))
 				})
 			})
 
@@ -357,8 +357,8 @@ var _ = Describe("SSHOptions", func() {
 		It("prints usage information", func() {
 			usage := options.SSHUsage()
 
-			Expect(usage).To(ContainSubstring("Usage: ssh [-kNTt] [-i instance-id] [-L [bind_address:]port:host:hostport] app-name [command]"))
-			Expect(usage).To(ContainSubstring("-i, --instance=instance-id"))
+			Expect(usage).To(ContainSubstring("Usage: ssh [-kNTt] [-i app-instance-index] [-L [bind_address:]port:host:hostport] app-name [command]"))
+			Expect(usage).To(ContainSubstring("-i, --index=app-instance-index"))
 			Expect(usage).To(ContainSubstring("-k, --skip-host-validation"))
 			Expect(usage).To(ContainSubstring("-L [bind_address:]port:host:hostport"))
 			Expect(usage).To(ContainSubstring("-N    do not execute a remote command"))
