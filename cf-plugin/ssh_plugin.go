@@ -135,6 +135,7 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			cmd.DefaultSecureDialer(),
 			terminal.DefaultHelper(),
 			cmd.DefaultListenerFactory(),
+			cmd.DefaultDialerFactory(),
 			30*time.Second,
 			appFactory,
 			info.NewInfoFactory(cli),
@@ -150,6 +151,12 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 
 		err = secureShell.LocalPortForward()
 		if err != nil {
+			return
+		}
+
+		err = secureShell.RemotePortForward()
+		if err != nil {
+			fmt.Printf("Error: %s\n", err.Error())
 			return
 		}
 

@@ -31,7 +31,8 @@ type SSHOptions struct {
 	SkipHostValidation  bool
 	SkipRemoteExecution bool
 	TerminalRequest     TTYRequest
-	ForwardSpecs        []ForwardSpec
+	LocalForwardSpecs   []ForwardSpec
+	RemoteForwardSpecs  []ForwardSpec
 
 	getoptSet                       *getopt.Set
 	indexOption                     getopt.Option
@@ -40,8 +41,10 @@ type SSHOptions struct {
 	disableTerminalAllocationOption getopt.Option
 	forceTerminalAllocationOption   getopt.Option
 	localForwardingOption           getopt.Option
+	remoteForwardingOption          getopt.Option
 
-	localForwardMultiVal *multiopt.MultiValue
+	localForwardMultiVal  *multiopt.MultiValue
+	remoteForwardMultiVal *multiopt.MultiValue
 }
 
 var UsageError = errors.New("Invalid usage")
@@ -84,6 +87,14 @@ func NewSSHOptions() *SSHOptions {
 		"[bind_address:]port:host:hostport",
 	)
 
+	sshOptions.remoteForwardMultiVal = &multiopt.MultiValue{}
+	sshOptions.remoteForwardingOption = opts.Var(
+		sshOptions.remoteForwardMultiVal,
+		'R',
+		"remote port forward specification",
+		"[bind_address:]port:host:hostport",
+	)
+
 	sshOptions.getoptSet = opts
 
 	return sshOptions
@@ -117,11 +128,21 @@ func (o *SSHOptions) Parse(args []string) error {
 
 	if o.localForwardingOption.Seen() {
 		for _, arg := range o.localForwardMultiVal.Values() {
-			forwardSpec, err := o.parseLocalForwardingSpec(arg)
+			forwardSpec, err := o.parseForwardingSpec(arg)
 			if err != nil {
 				return err
 			}
-			o.ForwardSpecs = append(o.ForwardSpecs, *forwardSpec)
+			o.LocalForwardSpecs = append(o.LocalForwardSpecs, *forwardSpec)
+		}
+	}
+
+	if o.remoteForwardingOption.Seen() {
+		for _, arg := range o.remoteForwardMultiVal.Values() {
+			forwardSpec, err := o.parseForwardingSpec(arg)
+			if err != nil {
+				return err
+			}
+			o.RemoteForwardSpecs = append(o.RemoteForwardSpecs, *forwardSpec)
 		}
 	}
 
@@ -138,7 +159,7 @@ func (o *SSHOptions) Parse(args []string) error {
 	return nil
 }
 
-func (o *SSHOptions) parseLocalForwardingSpec(arg string) (*ForwardSpec, error) {
+func (o *SSHOptions) parseForwardingSpec(arg string) (*ForwardSpec, error) {
 	arg = strings.TrimSpace(arg)
 
 	parts := []string{}

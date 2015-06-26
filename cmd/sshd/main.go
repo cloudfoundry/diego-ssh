@@ -72,7 +72,9 @@ func main() {
 	sshDaemon := daemon.New(
 		logger,
 		serverConfig,
-		nil,
+		map[string]handlers.GlobalRequestHandler{
+			"tcpip-forward": handlers.NewTcpipForwardGlobalRequestHandler(),
+		},
 		map[string]handlers.NewChannelHandler{
 			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
 			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),

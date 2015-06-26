@@ -39,6 +39,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 	var (
 		fakeTerminalHelper  *terminal_helper_fakes.FakeTerminalHelper
 		fakeListenerFactory *fakes.FakeListenerFactory
+		fakeDialerFactory   *fakes.FakeDialerFactory
 		fakeAppFactory      *app_fakes.FakeAppFactory
 		fakeInfoFactory     *info_fakes.FakeInfoFactory
 		fakeCredFactory     *credential_fakes.FakeCredentialFactory
@@ -55,12 +56,35 @@ var _ = Describe("Diego SSH Plugin", func() {
 		stdinPipe *fake_io.FakeWriteCloser
 	)
 
+	validateConnectivity := func(addr string) {
+		conn, err := net.Dial("tcp", addr)
+		Expect(err).NotTo(HaveOccurred())
+
+		msg := fmt.Sprintf("Hello from %s\n", addr)
+		n, err := conn.Write([]byte(msg))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(n).To(Equal(len(msg)))
+
+		response := make([]byte, len(msg))
+		n, err = conn.Read(response)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(n).To(Equal(len(msg)))
+
+		err = conn.Close()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(response).To(Equal([]byte(msg)))
+	}
+
 	BeforeEach(func() {
 		fakeTerminalHelper = &terminal_helper_fakes.FakeTerminalHelper{}
 		terminalHelper = terminal.DefaultHelper()
 
 		fakeListenerFactory = &fakes.FakeListenerFactory{}
 		fakeListenerFactory.ListenStub = net.Listen
+
+		fakeDialerFactory = &fakes.FakeDialerFactory{}
+		fakeDialerFactory.DialStub = net.Dial
 
 		keepAliveDuration = 30 * time.Second
 
@@ -102,6 +126,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 			fakeSecureDialer,
 			terminalHelper,
 			fakeListenerFactory,
+			fakeDialerFactory,
 			keepAliveDuration,
 			fakeAppFactory,
 			fakeInfoFactory,
@@ -899,7 +924,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			opts = &options.SSHOptions{
 				AppName: "app-1",
-				ForwardSpecs: []options.ForwardSpec{{
+				LocalForwardSpecs: []options.ForwardSpec{{
 					ListenAddress:  localAddress,
 					ConnectAddress: echoAddress,
 				}},
@@ -929,26 +954,6 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 			realLocalListener.Close()
 		})
-
-		validateConnectivity := func(addr string) {
-			conn, err := net.Dial("tcp", addr)
-			Expect(err).NotTo(HaveOccurred())
-
-			msg := fmt.Sprintf("Hello from %s\n", addr)
-			n, err := conn.Write([]byte(msg))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(n).To(Equal(len(msg)))
-
-			response := make([]byte, len(msg))
-			n, err = conn.Read(response)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(n).To(Equal(len(msg)))
-
-			err = conn.Close()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(response).To(Equal([]byte(msg)))
-		}
 
 		It("dials the connect address when a local connection is made", func() {
 			Expect(localForwardError).NotTo(HaveOccurred())
@@ -1016,7 +1021,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 
 				opts = &options.SSHOptions{
 					AppName: "app-1",
-					ForwardSpecs: []options.ForwardSpec{{
+					LocalForwardSpecs: []options.ForwardSpec{{
 						ListenAddress:  localAddress,
 						ConnectAddress: echoAddress,
 					}, {
@@ -1152,6 +1157,314 @@ var _ = Describe("Diego SSH Plugin", func() {
 			BeforeEach(func() {
 				fakeTarget = &fake_net.FakeConn{}
 				fakeSecureClient.DialReturns(fakeTarget, errors.New("boom"))
+			})
+
+			It("does not call close on the target connection", func() {
+				Consistently(fakeTarget.CloseCallCount).Should(Equal(0))
+			})
+		})
+	})
+
+	Describe("RemotePortForward", func() {
+		var (
+			listenAddress, localAddress string
+			remotePortForwardError      error
+
+			opts *options.SSHOptions
+
+			realListener, realLocalListener net.Listener
+			remoteListener, echoListener    *fake_net.FakeListener
+			echoServer                      *server.Server
+		)
+
+		BeforeEach(func() {
+			var err error
+			realListener, err = net.Listen("tcp", "127.0.0.1:0")
+			Expect(err).NotTo(HaveOccurred())
+			listenAddress = realListener.Addr().String()
+
+			remoteListener = &fake_net.FakeListener{}
+			remoteListener.AcceptStub = realListener.Accept
+			remoteListener.CloseStub = realListener.Close
+			remoteListener.AddrStub = realListener.Addr
+
+			fakeSecureClient.ListenStub = func(network, addr string) (net.Listener, error) {
+				if addr == listenAddress && network == "tcp" && fakeSecureClient.ListenCallCount() == 1 {
+					return remoteListener, nil
+				} else {
+					return nil, errors.New("Not Accepting Connections")
+				}
+			}
+
+			echoHandler := &fake_server.FakeConnectionHandler{}
+			echoHandler.HandleConnectionStub = func(conn net.Conn) {
+				io.Copy(conn, conn)
+				conn.Close()
+			}
+
+			realLocalListener, err = net.Listen("tcp", "127.0.0.1:0")
+			Expect(err).NotTo(HaveOccurred())
+			localAddress = realLocalListener.Addr().String()
+
+			echoListener = &fake_net.FakeListener{}
+			echoListener.AcceptStub = realLocalListener.Accept
+			echoListener.CloseStub = realLocalListener.Close
+			echoListener.AddrStub = realLocalListener.Addr
+
+			logger := lagertest.NewTestLogger("echo server")
+			echoServer = server.NewServer(logger.Session("echo"), "", echoHandler)
+			echoServer.SetListener(echoListener)
+			go echoServer.Serve()
+
+			opts = &options.SSHOptions{
+				AppName: "app-1",
+				RemoteForwardSpecs: []options.ForwardSpec{{
+					ListenAddress:  listenAddress,
+					ConnectAddress: localAddress,
+				}},
+			}
+
+			fakeAppFactory.GetReturns(app.App{
+				State: "STARTED",
+				Diego: true,
+			}, nil)
+			fakeInfoFactory.GetReturns(info.Info{}, nil)
+			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+		})
+
+		JustBeforeEach(func() {
+			err := secureShell.Connect(opts)
+			Expect(err).NotTo(HaveOccurred())
+
+			remotePortForwardError = secureShell.RemotePortForward()
+		})
+
+		AfterEach(func() {
+			err := secureShell.Close()
+			Expect(err).NotTo(HaveOccurred())
+			echoServer.Shutdown()
+
+			realListener.Close()
+			realLocalListener.Close()
+		})
+
+		It("dials the connect address when a remote connection is made", func() {
+			Expect(remotePortForwardError).NotTo(HaveOccurred())
+
+			Eventually(fakeSecureClient.ListenCallCount).Should(Equal(1))
+			network, addr := fakeSecureClient.ListenArgsForCall(0)
+			Expect(network).To(Equal("tcp"))
+			Expect(addr).To(Equal(listenAddress))
+
+			Eventually(remoteListener.AcceptCallCount).Should(Equal(1))
+
+			conn, err := net.Dial("tcp", listenAddress)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(fakeDialerFactory.DialCallCount).Should(Equal(1))
+			network, addr = fakeDialerFactory.DialArgsForCall(0)
+			Expect(network).To(Equal("tcp"))
+			Expect(addr).To(Equal(localAddress))
+
+			Expect(conn.Close()).NotTo(HaveOccurred())
+		})
+
+		It("copies data between the remote and local connections", func() {
+			Expect(remotePortForwardError).NotTo(HaveOccurred())
+			validateConnectivity(listenAddress)
+		})
+
+		Context("when a remote connection is already open", func() {
+			var (
+				conn net.Conn
+				err  error
+			)
+
+			JustBeforeEach(func() {
+				conn, err = net.Dial("tcp", listenAddress)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				err = conn.Close()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("allows for new incoming connections as well", func() {
+				Expect(remotePortForwardError).NotTo(HaveOccurred())
+				validateConnectivity(listenAddress)
+			})
+		})
+
+		Context("when there are multiple remote port forward specs", func() {
+			var (
+				realListener2   net.Listener
+				remoteListener2 *fake_net.FakeListener
+				listenAddress2  string
+			)
+
+			BeforeEach(func() {
+				var err error
+				realListener2, err = net.Listen("tcp", "127.0.0.1:0")
+				Expect(err).NotTo(HaveOccurred())
+				listenAddress2 = realListener2.Addr().String()
+
+				remoteListener2 = &fake_net.FakeListener{}
+				remoteListener2.AcceptStub = realListener2.Accept
+				remoteListener2.CloseStub = realListener2.Close
+				remoteListener2.AddrStub = realListener2.Addr
+
+				fakeSecureClient.ListenStub = func(network, addr string) (net.Listener, error) {
+					if addr == listenAddress && network == "tcp" {
+						return remoteListener, nil
+					} else if addr == listenAddress2 && network == "tcp" {
+						return remoteListener2, nil
+					} else {
+						return nil, errors.New("Unexpected Address")
+					}
+				}
+
+				opts = &options.SSHOptions{
+					AppName: "app-1",
+					RemoteForwardSpecs: []options.ForwardSpec{{
+						ListenAddress:  listenAddress,
+						ConnectAddress: localAddress,
+					}, {
+						ListenAddress:  listenAddress2,
+						ConnectAddress: localAddress,
+					}},
+				}
+			})
+
+			AfterEach(func() {
+				realListener2.Close()
+			})
+
+			It("listens to all the remote things", func() {
+				Expect(remotePortForwardError).NotTo(HaveOccurred())
+
+				Eventually(fakeSecureClient.ListenCallCount).Should(Equal(2))
+
+				network, addr := fakeSecureClient.ListenArgsForCall(0)
+				Expect(network).To(Equal("tcp"))
+				Expect(addr).To(Equal(listenAddress))
+
+				network, addr = fakeSecureClient.ListenArgsForCall(1)
+				Expect(network).To(Equal("tcp"))
+				Expect(addr).To(Equal(listenAddress2))
+			})
+
+			It("forwards to the correct local target", func() {
+				validateConnectivity(listenAddress)
+				validateConnectivity(listenAddress2)
+			})
+
+			Context("when the secure client is closed", func() {
+				BeforeEach(func() {
+					fakeSecureClient.ListenReturns(remoteListener, nil)
+					remoteListener.AcceptReturns(nil, errors.New("not accepting connections"))
+				})
+
+				It("closes the listeners ", func() {
+					Eventually(fakeSecureClient.ListenCallCount).Should(Equal(2))
+					Eventually(remoteListener.AcceptCallCount).Should(Equal(2))
+
+					originalCloseCount := remoteListener.CloseCallCount()
+					err := secureShell.Close()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(remoteListener.CloseCallCount()).Should(Equal(originalCloseCount + 2))
+				})
+			})
+		})
+
+		Context("when the remote listen fails", func() {
+			BeforeEach(func() {
+				fakeSecureClient.ListenReturns(nil, errors.New("failure is an option"))
+			})
+
+			It("returns the error", func() {
+				Expect(remotePortForwardError).To(MatchError("failure is an option"))
+			})
+		})
+
+		Context("when the client it closed", func() {
+			BeforeEach(func() {
+				// dont allow goroutines to spawn out of control
+				fakeSecureClient.ListenReturns(remoteListener, nil)
+				remoteListener.AcceptReturns(nil, errors.New("not accepting and connections"))
+			})
+
+			It("closes the listener when the client is closed", func() {
+				Eventually(fakeSecureClient.ListenCallCount).Should(Equal(1))
+				Eventually(remoteListener.AcceptCallCount).Should(Equal(1))
+
+				originalCloseCount := remoteListener.CloseCallCount()
+				err := secureShell.Close()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(remoteListener.CloseCallCount()).Should(Equal(originalCloseCount + 1))
+			})
+		})
+
+		Context("when the remote listener fails to accept", func() {
+			var fakeConn *fake_net.FakeConn
+			BeforeEach(func() {
+				fakeConn = &fake_net.FakeConn{}
+				fakeConn.ReadReturns(0, io.EOF)
+
+				fakeSecureClient.ListenReturns(remoteListener, nil)
+			})
+
+			Context("with a permanent error", func() {
+				BeforeEach(func() {
+					remoteListener.AcceptReturns(nil, errors.New("boom"))
+				})
+
+				It("stops trying to accept connections", func() {
+					Eventually(remoteListener.AcceptCallCount).Should(Equal(1))
+					Consistently(remoteListener.AcceptCallCount).Should(Equal(1))
+					Expect(remoteListener.CloseCallCount()).To(Equal(1))
+				})
+			})
+
+			Context("with a temporary error", func() {
+				var timeCh chan time.Time
+
+				BeforeEach(func() {
+					timeCh = make(chan time.Time, 3)
+
+					remoteListener.AcceptStub = func() (net.Conn, error) {
+						timeCh := timeCh
+						if remoteListener.AcceptCallCount() > 3 {
+							close(timeCh)
+							return nil, test_helpers.NewTestNetError(false, false)
+						} else {
+							timeCh <- time.Now()
+							return nil, test_helpers.NewTestNetError(false, true)
+						}
+					}
+				})
+
+				It("retries connecting after a short delay", func() {
+					Eventually(remoteListener.AcceptCallCount).Should(Equal(3))
+					Expect(timeCh).To(HaveLen(3))
+
+					times := make([]time.Time, 0)
+					for t := range timeCh {
+						times = append(times, t)
+					}
+
+					Expect(times[1]).To(BeTemporally("~", times[0].Add(115*time.Millisecond), 30*time.Millisecond))
+					Expect(times[2]).To(BeTemporally("~", times[1].Add(115*time.Millisecond), 30*time.Millisecond))
+				})
+			})
+		})
+
+		Context("when dialing the connect address fails", func() {
+			var fakeTarget *fake_net.FakeConn
+
+			BeforeEach(func() {
+				fakeTarget = &fake_net.FakeConn{}
+				fakeDialerFactory.DialReturns(fakeTarget, errors.New("boom"))
 			})
 
 			It("does not call close on the target connection", func() {

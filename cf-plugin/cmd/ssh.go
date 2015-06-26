@@ -29,6 +29,7 @@ type SecureShell interface {
 	Connect(opts *options.SSHOptions) error
 	InteractiveSession() error
 	LocalPortForward() error
+	RemotePortForward() error
 	Wait() error
 	Close() error
 }
@@ -43,6 +44,7 @@ type SecureClient interface {
 	NewSession() (SecureSession, error)
 	Conn() ssh.Conn
 	Dial(network, address string) (net.Conn, error)
+	Listen(network, address string) (net.Listener, error)
 	Wait() error
 	Close() error
 }
@@ -50,6 +52,11 @@ type SecureClient interface {
 //go:generate counterfeiter -o fakes/fake_listener_factory.go . ListenerFactory
 type ListenerFactory interface {
 	Listen(network, address string) (net.Listener, error)
+}
+
+//go:generate counterfeiter -o fakes/fake_dialer_factory.go . DialerFactory
+type DialerFactory interface {
+	Dial(network, address string) (net.Conn, error)
 }
 
 //go:generate counterfeiter -o fakes/fake_secure_session.go . SecureSession
@@ -69,6 +76,7 @@ type secureShell struct {
 	secureDialer      SecureDialer
 	terminalHelper    terminal.TerminalHelper
 	listenerFactory   ListenerFactory
+	dialerFactory     DialerFactory
 	keepAliveInterval time.Duration
 	appFactory        app.AppFactory
 	infoFactory       info.InfoFactory
@@ -76,13 +84,15 @@ type secureShell struct {
 	secureClient      SecureClient
 	opts              *options.SSHOptions
 
-	localListeners []net.Listener
+	localListeners  []net.Listener
+	remoteListeners []net.Listener
 }
 
 func NewSecureShell(
 	secureDialer SecureDialer,
 	terminalHelper terminal.TerminalHelper,
 	listenerFactory ListenerFactory,
+	dialerFactory DialerFactory,
 	keepAliveInterval time.Duration,
 	appFactory app.AppFactory,
 	infoFactory info.InfoFactory,
@@ -92,6 +102,7 @@ func NewSecureShell(
 		secureDialer:      secureDialer,
 		terminalHelper:    terminalHelper,
 		listenerFactory:   listenerFactory,
+		dialerFactory:     dialerFactory,
 		keepAliveInterval: keepAliveInterval,
 		appFactory:        appFactory,
 		infoFactory:       infoFactory,
@@ -143,11 +154,68 @@ func (c *secureShell) Close() error {
 	for _, listener := range c.localListeners {
 		listener.Close()
 	}
+
+	for _, listener := range c.remoteListeners {
+		listener.Close()
+	}
+
 	return c.secureClient.Close()
 }
 
+func (c *secureShell) RemotePortForward() error {
+	for _, forwardSpec := range c.opts.RemoteForwardSpecs {
+		listener, err := c.secureClient.Listen("tcp", forwardSpec.ListenAddress)
+		if err != nil {
+			return err
+		}
+
+		_, requestedPort, _ := net.SplitHostPort(forwardSpec.ListenAddress)
+		if requestedPort == "0" {
+			listenAddress := listener.Addr().String()
+			_, listenPort, _ := net.SplitHostPort(listenAddress)
+
+			fmt.Printf("Allocated port %s for remote forward to %s", listenPort, forwardSpec.ConnectAddress)
+		}
+
+		c.remoteListeners = append(c.remoteListeners, listener)
+
+		go c.remoteForwardAcceptLoop(listener, forwardSpec.ConnectAddress)
+	}
+	return nil
+}
+
+func (c *secureShell) remoteForwardAcceptLoop(listener net.Listener, addr string) {
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return
+		}
+
+		go c.handleRemoteForwardConnection(conn, addr)
+	}
+}
+
+func (c *secureShell) handleRemoteForwardConnection(conn net.Conn, addr string) {
+	defer conn.Close()
+
+	target, err := c.dialerFactory.Dial("tcp", addr)
+	if err != nil {
+		fmt.Printf("connect to %s failed: %s\n", addr, err.Error())
+		return
+	}
+	defer target.Close()
+
+	c.copyConn(conn, target)
+}
+
 func (c *secureShell) LocalPortForward() error {
-	for _, forwardSpec := range c.opts.ForwardSpecs {
+	for _, forwardSpec := range c.opts.LocalForwardSpecs {
 		listener, err := c.listenerFactory.Listen("tcp", forwardSpec.ListenAddress)
 		if err != nil {
 			return err
@@ -173,11 +241,11 @@ func (c *secureShell) localForwardAcceptLoop(listener net.Listener, addr string)
 			return
 		}
 
-		go c.handleForwardConnection(conn, addr)
+		go c.handleLocalForwardConnection(conn, addr)
 	}
 }
 
-func (c *secureShell) handleForwardConnection(conn net.Conn, targetAddr string) {
+func (c *secureShell) handleLocalForwardConnection(conn net.Conn, targetAddr string) {
 	defer conn.Close()
 
 	target, err := c.secureClient.Dial("tcp", targetAddr)
@@ -187,11 +255,15 @@ func (c *secureShell) handleForwardConnection(conn net.Conn, targetAddr string) 
 	}
 	defer target.Close()
 
+	c.copyConn(conn, target)
+}
+
+func (c *secureShell) copyConn(conn1, conn2 net.Conn) {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
-	go copyAndClose(wg, conn, target)
-	go copyAndClose(wg, target, conn)
+	go copyAndClose(wg, conn1, conn2)
+	go copyAndClose(wg, conn2, conn1)
 	wg.Wait()
 }
 
@@ -443,6 +515,9 @@ func (sc *secureClient) Wait() error    { return sc.client.Wait() }
 func (sc *secureClient) Dial(n, addr string) (net.Conn, error) {
 	return sc.client.Dial(n, addr)
 }
+func (sc *secureClient) Listen(n, addr string) (net.Listener, error) {
+	return sc.client.Listen(n, addr)
+}
 func (sc *secureClient) NewSession() (SecureSession, error) {
 	return sc.client.NewSession()
 }
@@ -455,4 +530,14 @@ func (lf *listenerFactory) Listen(network, address string) (net.Listener, error)
 
 func DefaultListenerFactory() ListenerFactory {
 	return &listenerFactory{}
+}
+
+type dialerFactory struct{}
+
+func (lf *dialerFactory) Dial(network, address string) (net.Conn, error) {
+	return net.Dial(network, address)
+}
+
+func DefaultDialerFactory() DialerFactory {
+	return &dialerFactory{}
 }

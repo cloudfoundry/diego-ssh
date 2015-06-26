@@ -245,7 +245,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "remote:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "remote:8888"}))
 				})
 			})
 
@@ -256,7 +256,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "explicit:9999", ConnectAddress: "remote:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "explicit:9999", ConnectAddress: "remote:8888"}))
 				})
 			})
 
@@ -267,7 +267,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "remote:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "remote:8888"}))
 				})
 			})
 
@@ -278,7 +278,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
 				})
 			})
 
@@ -289,7 +289,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "remote:8888"}))
 				})
 			})
 
@@ -300,7 +300,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward spec", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "[2001:db8::1]:8888"}))
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "[2001:db8::1]:8888"}))
 				})
 			})
 
@@ -332,7 +332,7 @@ var _ = Describe("SSHOptions", func() {
 
 				It("sets the forward specs", func() {
 					Expect(parseError).NotTo(HaveOccurred())
-					Expect(opts.ForwardSpecs).To(ConsistOf(
+					Expect(opts.LocalForwardSpecs).To(ConsistOf(
 						options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "remote:8888"},
 						options.ForwardSpec{ListenAddress: "localhost:8080", ConnectAddress: "remote:80"},
 					))
@@ -351,16 +351,124 @@ var _ = Describe("SSHOptions", func() {
 				Expect(opts.AppName).To(Equal("app-name"))
 			})
 		})
+
+		Context("when remote port forwarding is requested", func() {
+			BeforeEach(func() {
+				args = append(args, "app-name")
+			})
+
+			Context("without an explicit bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "9999:foobar:8888")
+				})
+
+				It("uses the loopback interface as the bind address", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "foobar:8888"}))
+				})
+			})
+
+			Context("with an explicit bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "remote:9999:foobar:8888")
+				})
+
+				It("uses the loopback interface as the bind address", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "remote:9999", ConnectAddress: "foobar:8888"}))
+				})
+			})
+
+			Context("with an explicit ipv6 bind aaddress", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "[::]:9999:localhost:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "localhost:8888"}))
+				})
+			})
+
+			Context("with an empty bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", ":9999:localhost:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "localhost:8888"}))
+				})
+			})
+
+			Context("with * as the bind address", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "*:9999:localhost:8888")
+				})
+
+				It("includes all interfaces in the listen address", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: ":9999", ConnectAddress: "localhost:8888"}))
+				})
+			})
+
+			Context("with an explicit ipv6 connect address", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "[::]:9999:[2001:db8::1]:8888")
+				})
+
+				It("sets the forward spec", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(options.ForwardSpec{ListenAddress: "[::]:9999", ConnectAddress: "[2001:db8::1]:8888"}))
+				})
+			})
+
+			Context("with a missing bracket", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "localhost:9999:[example.com:8888")
+				})
+
+				It("returns an error", func() {
+					Expect(parseError).To(MatchError(`Argument missing closing bracket: "[example.com:8888"`))
+				})
+			})
+
+			Context("when a closing bracket is not followed by a colon", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "localhost:9999:[example.com]8888")
+				})
+
+				It("returns an error", func() {
+					Expect(parseError).To(MatchError(`Unexpected token: "8888"`))
+				})
+			})
+
+			Context("when multiple local port forward options are specified", func() {
+				BeforeEach(func() {
+					args = append(args, "-R", "9999:localhost:8888")
+					args = append(args, "-R8080:localhost:80")
+				})
+
+				It("sets the forward specs", func() {
+					Expect(parseError).NotTo(HaveOccurred())
+					Expect(opts.RemoteForwardSpecs).To(ConsistOf(
+						options.ForwardSpec{ListenAddress: "localhost:9999", ConnectAddress: "localhost:8888"},
+						options.ForwardSpec{ListenAddress: "localhost:8080", ConnectAddress: "localhost:80"},
+					))
+				})
+			})
+		})
 	})
 
 	Describe("SSHUsage", func() {
 		It("prints usage information", func() {
 			usage := options.SSHUsage()
 
-			Expect(usage).To(ContainSubstring("Usage: ssh [-kNTt] [-i app-instance-index] [-L [bind_address:]port:host:hostport] app-name [command]"))
+			Expect(usage).To(ContainSubstring("Usage: ssh [-kNTt] [-i app-instance-index] [-L [bind_address:]port:host:hostport] [-R [bind_address:]port:host:hostport] app-name [command]"))
 			Expect(usage).To(ContainSubstring("-i, --index=app-instance-index"))
 			Expect(usage).To(ContainSubstring("-k, --skip-host-validation"))
 			Expect(usage).To(ContainSubstring("-L [bind_address:]port:host:hostport"))
+			Expect(usage).To(ContainSubstring("-R [bind_address:]port:host:hostport"))
 			Expect(usage).To(ContainSubstring("-N    do not execute a remote command"))
 			Expect(usage).To(ContainSubstring("-T    disable pseudo-tty allocation"))
 			Expect(usage).To(ContainSubstring("-t    force pseudo-tty allocation"))

@@ -33,6 +33,16 @@ type FakeSecureClient struct {
 		result1 net.Conn
 		result2 error
 	}
+	ListenStub        func(network, address string) (net.Listener, error)
+	listenMutex       sync.RWMutex
+	listenArgsForCall []struct {
+		network string
+		address string
+	}
+	listenReturns struct {
+		result1 net.Listener
+		result2 error
+	}
 	WaitStub        func() error
 	waitMutex       sync.RWMutex
 	waitArgsForCall []struct{}
@@ -126,6 +136,40 @@ func (fake *FakeSecureClient) DialReturns(result1 net.Conn, result2 error) {
 	fake.DialStub = nil
 	fake.dialReturns = struct {
 		result1 net.Conn
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeSecureClient) Listen(network string, address string) (net.Listener, error) {
+	fake.listenMutex.Lock()
+	fake.listenArgsForCall = append(fake.listenArgsForCall, struct {
+		network string
+		address string
+	}{network, address})
+	fake.listenMutex.Unlock()
+	if fake.ListenStub != nil {
+		return fake.ListenStub(network, address)
+	} else {
+		return fake.listenReturns.result1, fake.listenReturns.result2
+	}
+}
+
+func (fake *FakeSecureClient) ListenCallCount() int {
+	fake.listenMutex.RLock()
+	defer fake.listenMutex.RUnlock()
+	return len(fake.listenArgsForCall)
+}
+
+func (fake *FakeSecureClient) ListenArgsForCall(i int) (string, string) {
+	fake.listenMutex.RLock()
+	defer fake.listenMutex.RUnlock()
+	return fake.listenArgsForCall[i].network, fake.listenArgsForCall[i].address
+}
+
+func (fake *FakeSecureClient) ListenReturns(result1 net.Listener, result2 error) {
+	fake.ListenStub = nil
+	fake.listenReturns = struct {
+		result1 net.Listener
 		result2 error
 	}{result1, result2}
 }
