@@ -15,17 +15,13 @@ type TcpipForwardGlobalRequestHandler struct {
 }
 
 func NewTcpipForwardGlobalRequestHandler() *TcpipForwardGlobalRequestHandler {
-	return &TcpipForwardGlobalRequestHandler{}
+	return &TcpipForwardGlobalRequestHandler{
+		listeners: make(map[string]net.Listener),
+	}
 }
 
 func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request) {
 	logger = logger.Session("tcpip-forward")
-
-	msgType := request.Type
-	if msgType != TCP_IP_FORWARD {
-		logger.Error("invalid message type", nil)
-		return
-	}
 
 	type tcpipForwardMsg struct {
 		Address string
@@ -56,9 +52,9 @@ func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, re
 
 	go h.forwardAcceptLoop(listener, logger)
 
-	if request.WantReply {
-		//TODO do stuff
-	}
+	// if request.WantReply {
+	// 	//TODO do stuff
+	// }
 }
 
 func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger) {
@@ -69,4 +65,6 @@ func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listen
 		logger.Error("failed-to-accept", err)
 		return
 	}
+
+	logger.Info("accepted-connection", lager.Data{"Address": listener.Addr().String()})
 }
