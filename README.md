@@ -170,3 +170,22 @@ part of the lifecycle bundle.
 [bridge]: https://github.com/cloudfoundry-incubator/diego-design-notes#cc-bridge-components
 [cflinuxfs2]: https://github.com/cloudfoundry/stacks/tree/master/cflinuxfs2
 [ssh-plugin]: https://github.com/cloudfoundry-incubator/diego-ssh/releases
+
+## CF CLI Plugin
+
+The [cf CLI](https://github.com/cloudfoundry/cli) plugin adds the following commands:
+- **ssh** - ssh to an application container instance
+- **enable-ssh** - enable ssh for the application
+- **disable-ssh** - disable ssh for the application
+- **ssh-enabled** - reports whether SSH is enabled on an application container instance
+- **allow-space-ssh** - allow SSH access for the space
+- **disallow-space-ssh** - disallow SSH access for the space
+- **space-ssh-allowed** - reports whether SSH is allowed in a space
+
+To build and install the plugin:
+```
+cd ~/workspace/diego-release/src/github.com/cloudfoundry-incubator/diego-ssh/cf-plugin
+go build
+cf uninstall-plugin Diego-SSH
+cf install-plugin cf-plugin
+```
