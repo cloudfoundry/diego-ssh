@@ -124,7 +124,7 @@ public key.
   "setup": {
     "download": {
       "artifact": "diego-sshd",
-      "from": "http://file-server.service.consul:8080/v1/static/diego-sshd/diego-sshd.tgz",
+      "from": "http://file-server.service.cf.internal:8080/v1/static/diego-sshd/diego-sshd.tgz",
       "to": "/tmp",
       "cache_key": "diego-sshd"
     }
