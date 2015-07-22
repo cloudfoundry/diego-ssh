@@ -105,9 +105,9 @@ func (s *secureCopy) ReceiveFile(path string, pathIsDir bool, timeMessage *TimeM
 	if err != nil {
 		return err
 	}
-	defer targetFile.Close()
 
 	_, err = io.CopyN(targetFile, s.session.stdin, length)
+	targetFile.Close()
 	if err != nil {
 		return err
 	}
