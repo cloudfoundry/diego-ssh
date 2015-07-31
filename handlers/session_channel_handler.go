@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
 	"github.com/docker/docker/pkg/term"
-	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -45,27 +44,6 @@ func (commandRunner) Wait(cmd *exec.Cmd) error {
 
 func (commandRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
 	return cmd.Process.Signal(signal)
-}
-
-//go:generate counterfeiter -o fakes/fake_shell_locator.go . ShellLocator
-type ShellLocator interface {
-	ShellPath() string
-}
-
-type shellLocator struct{}
-
-func NewShellLocator() ShellLocator {
-	return &shellLocator{}
-}
-
-func (shellLocator) ShellPath() string {
-	for _, shell := range []string{"/bin/bash", "/usr/local/bin/bash", "/bin/sh", "bash", "sh"} {
-		if path, err := exec.LookPath(shell); err == nil {
-			return path
-		}
-	}
-
-	return "/bin/sh"
 }
 
 type SessionChannelHandler struct {
@@ -528,45 +506,6 @@ func (sess *session) run(command *exec.Cmd) error {
 	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel)
 
 	return sess.runner.Start(command)
-}
-
-func (sess *session) runWithPty(command *exec.Cmd) error {
-	logger := sess.logger.Session("run-with-pty")
-
-	ptyMaster, ptySlave, err := pty.Open()
-	if err != nil {
-		logger.Error("failed-to-open-pty", err)
-		return err
-	}
-
-	sess.ptyMaster = ptyMaster
-	defer ptySlave.Close()
-
-	command.Stdout = ptySlave
-	command.Stdin = ptySlave
-	command.Stderr = ptySlave
-
-	command.SysProcAttr = &syscall.SysProcAttr{
-		Setctty: true,
-		Setsid:  true,
-	}
-
-	setTerminalAttributes(logger, ptyMaster, sess.ptyRequest.Modelist)
-	setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
-
-	sess.wg.Add(1)
-	go helpers.Copy(logger.Session("to-pty"), nil, ptyMaster, sess.channel)
-	go func() {
-		helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
-		sess.channel.CloseWrite()
-	}()
-
-	err = sess.runner.Start(command)
-	if err == nil {
-		sess.keepaliveStopCh = make(chan struct{})
-		go sess.keepalive(command, sess.keepaliveStopCh)
-	}
-	return err
 }
 
 func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {

@@ -1,4 +1,4 @@
-// +build !windows
+// +build windows
 
 package handlers
 
@@ -20,8 +20,6 @@ var SyscallSignals = map[ssh.Signal]syscall.Signal{
 	ssh.SIGQUIT: syscall.SIGQUIT,
 	ssh.SIGSEGV: syscall.SIGSEGV,
 	ssh.SIGTERM: syscall.SIGTERM,
-	ssh.SIGUSR1: syscall.SIGUSR1,
-	ssh.SIGUSR2: syscall.SIGUSR2,
 }
 
 var SSHSignals = map[syscall.Signal]ssh.Signal{
@@ -36,6 +34,4 @@ var SSHSignals = map[syscall.Signal]ssh.Signal{
 	syscall.SIGQUIT: ssh.SIGQUIT,
 	syscall.SIGSEGV: ssh.SIGSEGV,
 	syscall.SIGTERM: ssh.SIGTERM,
-	syscall.SIGUSR1: ssh.SIGUSR1,
-	syscall.SIGUSR2: ssh.SIGUSR2,
 }
