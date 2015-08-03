@@ -295,6 +295,7 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 		logger.Info("handling-scp-command", lager.Data{"Command": execMessage.Command})
 		sess.executeSCP(execMessage.Command, request)
 	} else {
+		logger.Info("executeShell", lager.Data{"request": request, "command": execMessage.Command})
 		sess.executeShell(request, "-c", execMessage.Command)
 	}
 }

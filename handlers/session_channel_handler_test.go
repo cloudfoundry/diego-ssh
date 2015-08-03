@@ -54,7 +54,11 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner.SignalStub = realRunner.Signal
 
 		shellLocator = &fakes.FakeShellLocator{}
-		shellLocator.ShellPathReturns("/bin/sh")
+		if runtime.GOOS == "windows" {
+			shellLocator.ShellPathReturns(`\windows\system32\cmd.exe`)
+		} else {
+			shellLocator.ShellPathReturns("/bin/sh")
+		}
 
 		defaultEnv = map[string]string{}
 		defaultEnv["TEST"] = "FOO"
@@ -95,23 +99,24 @@ var _ = Describe("SessionChannelHandler", func() {
 			Expect(sessionErr).NotTo(HaveOccurred())
 		})
 
-		It("can use the session to execute a command with stdout and stderr", func() {
+		FIt("can use the session to execute a command with stdout and stderr", func() {
 			stdout, err := session.StdoutPipe()
 			Expect(err).NotTo(HaveOccurred())
 
 			stderr, err := session.StderrPipe()
 			Expect(err).NotTo(HaveOccurred())
 
-			err = session.Run("/bin/echo -n Hello; /bin/echo -n Goodbye >&2")
+			// err = session.Run("echo Hello && echo Goodbye >&2")
+			err = session.Run("dir\r\n")
 			Expect(err).NotTo(HaveOccurred())
 
 			stdoutBytes, err := ioutil.ReadAll(stdout)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(stdoutBytes).To(Equal([]byte("Hello")))
+			Expect(stdoutBytes).To(Equal([]byte("Hello\n")))
 
 			stderrBytes, err := ioutil.ReadAll(stderr)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(stderrBytes).To(Equal([]byte("Goodbye")))
+			Expect(stderrBytes).To(Equal([]byte("Goodbye\n")))
 		})
 
 		It("returns when the process exits", func() {
