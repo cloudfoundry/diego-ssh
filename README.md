@@ -53,9 +53,9 @@ policy allows the user to access application containers via SSH.
 
 Client example:
 ```
-$ cf outh-token | tail -1 | pbcopy # paste oauth token when prompted for password
+$ cf oauth-token | tail -1 | pbcopy # paste oauth token when prompted for password
 $ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.10.244.0.34.xip.io
-$ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0' my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
+$ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0 my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
 ```
 
 Cloud Foundry `cf` client example that uses the [ssh][ssh-plugin] plugin:
