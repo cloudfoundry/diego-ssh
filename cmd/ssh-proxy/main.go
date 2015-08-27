@@ -92,9 +92,9 @@ func main() {
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
-		members = append(grouper.Members{
-			{"debug-server", cf_debug_server.Runner(dbgAddr, reconfigurableSink)},
-		}, members...)
+		members = append(grouper.Members{{
+			"debug-server", cf_debug_server.Runner(dbgAddr, reconfigurableSink),
+		}}, members...)
 	}
 
 	group := grouper.NewOrdered(os.Interrupt, members)
@@ -115,7 +115,7 @@ func main() {
 func initializeDropsonde(logger lager.Logger) {
 	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
-		logger.Error("failed to initialize dropsonde: %v", err)
+		logger.Error("failed-to-initialize-dropsonde", err)
 	}
 }
 

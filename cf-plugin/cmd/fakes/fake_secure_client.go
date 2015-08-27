@@ -13,14 +13,14 @@ type FakeSecureClient struct {
 	NewSessionStub        func() (cmd.SecureSession, error)
 	newSessionMutex       sync.RWMutex
 	newSessionArgsForCall []struct{}
-	newSessionReturns struct {
+	newSessionReturns     struct {
 		result1 cmd.SecureSession
 		result2 error
 	}
 	ConnStub        func() ssh.Conn
 	connMutex       sync.RWMutex
 	connArgsForCall []struct{}
-	connReturns struct {
+	connReturns     struct {
 		result1 ssh.Conn
 	}
 	DialStub        func(network, address string) (net.Conn, error)
@@ -36,13 +36,13 @@ type FakeSecureClient struct {
 	WaitStub        func() error
 	waitMutex       sync.RWMutex
 	waitArgsForCall []struct{}
-	waitReturns struct {
+	waitReturns     struct {
 		result1 error
 	}
 	CloseStub        func() error
 	closeMutex       sync.RWMutex
 	closeArgsForCall []struct{}
-	closeReturns struct {
+	closeReturns     struct {
 		result1 error
 	}
 }

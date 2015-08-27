@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
+	"github.com/cloudfoundry-incubator/diego-ssh/termcodes"
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
@@ -497,13 +498,13 @@ func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist str
 			"value":  fmt.Sprintf("%x", value),
 		})
 
-		termios, err := TcGetAttr(pseudoTty)
+		termios, err := termcodes.GetAttr(pseudoTty)
 		if err != nil {
 			logger.Error("failed-to-get-terminal-attrs", err)
 			continue
 		}
 
-		err = TermAttrSetters[opcode].Set(pseudoTty, termios, value)
+		err = termcodes.TermAttrSetters[opcode].Set(pseudoTty, termios, value)
 		if err != nil {
 			logger.Error("failed-to-set-terminal-attrs", err, lager.Data{
 				"opcode": opcode,

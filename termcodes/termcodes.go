@@ -1,4 +1,4 @@
-package handlers
+package termcodes
 
 import (
 	"os"
@@ -17,11 +17,11 @@ import (
 // 	speed_t c_ospeed;
 // };
 
-type TCSetter interface {
+type Setter interface {
 	Set(pty *os.File, termios *syscall.Termios, value uint32) error
 }
 
-var TermAttrSetters map[uint8]TCSetter = map[uint8]TCSetter{
+var TermAttrSetters map[uint8]Setter = map[uint8]Setter{
 	ssh.VINTR:    &ccSetter{Character: syscall.VINTR},
 	ssh.VQUIT:    &ccSetter{Character: syscall.VQUIT},
 	ssh.VERASE:   &ccSetter{Character: syscall.VERASE},
@@ -97,7 +97,7 @@ type ccSetter struct {
 
 func (cc *ccSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
 	termios.Cc[cc.Character] = byte(value)
-	return TcSetAttr(pty, termios)
+	return SetAttr(pty, termios)
 }
 
 func (i *iflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
@@ -106,7 +106,7 @@ func (i *iflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) 
 	} else {
 		termios.Iflag |= i.Flag
 	}
-	return TcSetAttr(pty, termios)
+	return SetAttr(pty, termios)
 }
 
 func (l *lflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
@@ -115,7 +115,7 @@ func (l *lflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) 
 	} else {
 		termios.Lflag |= l.Flag
 	}
-	return TcSetAttr(pty, termios)
+	return SetAttr(pty, termios)
 }
 
 func (o *oflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
@@ -125,7 +125,7 @@ func (o *oflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) 
 		termios.Oflag |= o.Flag
 	}
 
-	return TcSetAttr(pty, termios)
+	return SetAttr(pty, termios)
 }
 
 func (c *cflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {
@@ -142,7 +142,7 @@ func (c *cflagSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) 
 		}
 	}
 
-	return TcSetAttr(pty, termios)
+	return SetAttr(pty, termios)
 }
 
 func (n *nopSetter) Set(pty *os.File, termios *syscall.Termios, value uint32) error {

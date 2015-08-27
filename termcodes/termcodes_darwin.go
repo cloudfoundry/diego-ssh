@@ -1,6 +1,6 @@
 // +build darwin
 
-package handlers
+package termcodes
 
 import (
 	"os"
@@ -24,7 +24,7 @@ type cflagSetter struct {
 	Flag uint64
 }
 
-func TcSetAttr(tty *os.File, termios *syscall.Termios) error {
+func SetAttr(tty *os.File, termios *syscall.Termios) error {
 	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TIOCSETA, uintptr(unsafe.Pointer(termios)))
 	if r != 0 {
 		return os.NewSyscallError("SYS_IOCTL", e)
@@ -33,7 +33,7 @@ func TcSetAttr(tty *os.File, termios *syscall.Termios) error {
 	return nil
 }
 
-func TcGetAttr(tty *os.File) (*syscall.Termios, error) {
+func GetAttr(tty *os.File) (*syscall.Termios, error) {
 	termios := &syscall.Termios{}
 
 	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TIOCGETA, uintptr(unsafe.Pointer(termios)))
