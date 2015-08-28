@@ -24,7 +24,7 @@ type cflagSetter struct {
 	Flag uint64
 }
 
-func TcSetAttr(tty *os.File, termios *syscall.Termios) error {
+func TcSetAttr(tty *os.File, termios *Termios) error {
 	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TIOCSETA, uintptr(unsafe.Pointer(termios)))
 	if r != 0 {
 		return os.NewSyscallError("SYS_IOCTL", e)
@@ -33,8 +33,8 @@ func TcSetAttr(tty *os.File, termios *syscall.Termios) error {
 	return nil
 }
 
-func TcGetAttr(tty *os.File) (*syscall.Termios, error) {
-	termios := &syscall.Termios{}
+func TcGetAttr(tty *os.File) (*Termios, error) {
+	termios := &Termios{}
 
 	r, _, e := syscall.Syscall(syscall.SYS_IOCTL, tty.Fd(), syscall.TIOCGETA, uintptr(unsafe.Pointer(termios)))
 	if r != 0 {
