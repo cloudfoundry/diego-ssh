@@ -3,16 +3,13 @@ package main
 import (
 	"errors"
 	"flag"
-	"net"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
 	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
@@ -65,19 +62,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	runner := handlers.NewCommandRunner()
-	shellLocator := handlers.NewShellLocator()
-	dialer := &net.Dialer{}
-
-	sshDaemon := daemon.New(
-		logger,
-		serverConfig,
-		nil,
-		map[string]handlers.NewChannelHandler{
-			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
-			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
-		},
-	)
+	sshDaemon := daemon.New(logger, serverConfig, nil, newChannelHandlers())
 	server := server.NewServer(logger, *address, sshDaemon)
 
 	members := grouper.Members{
