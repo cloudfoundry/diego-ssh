@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/scp"
+	"github.com/cloudfoundry-incubator/diego-ssh/signals"
 	"github.com/cloudfoundry-incubator/diego-ssh/termcodes"
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
@@ -219,7 +220,7 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	cmd := sess.command
 
 	if cmd != nil {
-		signal := SyscallSignals[ssh.Signal(signalMessage.Signal)]
+		signal := signals.SyscallSignals[ssh.Signal(signalMessage.Signal)]
 		err := sess.runner.Signal(cmd, signal)
 		if err != nil {
 			logger.Error("process-signal-failed", err)
@@ -445,7 +446,7 @@ func (sess *session) sendExitMessage(err error) {
 
 	if waitStatus.Signaled() {
 		exitMessage := exitSignalMsg{
-			Signal:     string(SSHSignals[waitStatus.Signal()]),
+			Signal:     string(signals.SSHSignals[waitStatus.Signal()]),
 			CoreDumped: waitStatus.CoreDump(),
 		}
 		_, sendErr := sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
