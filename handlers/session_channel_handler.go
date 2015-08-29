@@ -24,52 +24,6 @@ import (
 
 var scpRegex = regexp.MustCompile(`^\s*scp($|\s+)`)
 
-//go:generate counterfeiter -o fakes/fake_runner.go . Runner
-type Runner interface {
-	Start(cmd *exec.Cmd) error
-	Wait(cmd *exec.Cmd) error
-	Signal(cmd *exec.Cmd, signal syscall.Signal) error
-}
-
-type commandRunner struct{}
-
-func NewCommandRunner() Runner {
-	return &commandRunner{}
-}
-
-func (commandRunner) Start(cmd *exec.Cmd) error {
-	return cmd.Start()
-}
-
-func (commandRunner) Wait(cmd *exec.Cmd) error {
-	return cmd.Wait()
-}
-
-func (commandRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
-	return cmd.Process.Signal(signal)
-}
-
-//go:generate counterfeiter -o fakes/fake_shell_locator.go . ShellLocator
-type ShellLocator interface {
-	ShellPath() string
-}
-
-type shellLocator struct{}
-
-func NewShellLocator() ShellLocator {
-	return &shellLocator{}
-}
-
-func (shellLocator) ShellPath() string {
-	for _, shell := range []string{"/bin/bash", "/usr/local/bin/bash", "/bin/sh", "bash", "sh"} {
-		if path, err := exec.LookPath(shell); err == nil {
-			return path
-		}
-	}
-
-	return "/bin/sh"
-}
-
 type SessionChannelHandler struct {
 	runner       Runner
 	shellLocator ShellLocator
