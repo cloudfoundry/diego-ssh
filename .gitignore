@@ -1,7 +1,8 @@
-*.test
+*.coverprofile
+*.exe
 *.swp
+*.test
 *~
 .DS_Store
 .idea
-*.coverprofile
 tags
