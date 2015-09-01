@@ -7,57 +7,54 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
 
-const CF_REALM = "cf"
-
 type CFAuthenticator struct {
-	logger         lager.Logger
-	ccClient       *http.Client
-	ccURL          string
-	receptorClient receptor.Client
-}
-
-var CFPrincipalRegex *regexp.Regexp = regexp.MustCompile(`(.*)/(\d+)`)
-var CFRealmRegex *regexp.Regexp = regexp.MustCompile(CF_REALM + `:(.*)`)
-
-func NewCFAuthenticator(
-	logger lager.Logger,
-	ccClient *http.Client,
-	ccURL string,
-	receptorClient receptor.Client,
-) *CFAuthenticator {
-	return &CFAuthenticator{
-		logger:         logger,
-		ccClient:       ccClient,
-		ccURL:          ccURL,
-		receptorClient: receptorClient,
-	}
-}
-
-func (cfa *CFAuthenticator) Realm() string {
-	return CF_REALM
+	logger             lager.Logger
+	ccClient           *http.Client
+	ccURL              string
+	permissionsBuilder PermissionsBuilder
 }
 
 type AppSSHResponse struct {
 	ProcessGuid string `json:"process_guid"`
 }
 
+var CFUserRegex *regexp.Regexp = regexp.MustCompile(`cf:(.+)/(\d+)`)
+
+func NewCFAuthenticator(
+	logger lager.Logger,
+	ccClient *http.Client,
+	ccURL string,
+	permissionsBuilder PermissionsBuilder,
+) *CFAuthenticator {
+	return &CFAuthenticator{
+		logger:             logger,
+		ccClient:           ccClient,
+		ccURL:              ccURL,
+		permissionsBuilder: permissionsBuilder,
+	}
+}
+
+func (cfa *CFAuthenticator) UserRegexp() *regexp.Regexp {
+	return CFUserRegex
+}
+
 func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	logger := cfa.logger.Session("authenticate")
-	if !CFRealmRegex.Match([]byte(metadata.User())) {
-		return nil, InvalidDomainErr
-	}
+	logger.Info("authentication-starting")
+	defer logger.Info("authentication-finished")
 
-	principal := CFRealmRegex.FindStringSubmatch(metadata.User())[1]
-	if !CFPrincipalRegex.Match([]byte(principal)) {
+	if !CFUserRegex.MatchString(metadata.User()) {
+		logger.Error("regex-match-fail", InvalidCredentialsErr)
 		return nil, InvalidCredentialsErr
 	}
 
-	guidAndIndex := CFPrincipalRegex.FindStringSubmatch(principal)
+	guidAndIndex := CFUserRegex.FindStringSubmatch(metadata.User())
+
+	appGuid := guidAndIndex[1]
 
 	index, err := strconv.Atoi(guidAndIndex[2])
 	if err != nil {
@@ -65,20 +62,33 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, InvalidCredentialsErr
 	}
 
-	appGuid := guidAndIndex[1]
+	processGuid, err := cfa.CheckAccess(logger, appGuid, string(password))
+	if err != nil {
+		return nil, err
+	}
+
+	permissions, err := cfa.permissionsBuilder.Build(processGuid, index, metadata)
+	if err != nil {
+		logger.Error("building-ssh-permissions-failed", err)
+	}
+
+	return permissions, err
+}
+
+func (cfa *CFAuthenticator) CheckAccess(logger lager.Logger, appGuid string, token string) (string, error) {
 	path := fmt.Sprintf("%s/internal/apps/%s/ssh_access", cfa.ccURL, appGuid)
 
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		logger.Error("creating-request-failed", InvalidRequestErr)
-		return nil, InvalidRequestErr
+		return "", InvalidRequestErr
 	}
-	req.Header.Add("Authorization", string(password))
+	req.Header.Add("Authorization", token)
 
 	resp, err := cfa.ccClient.Do(req)
 	if err != nil {
 		logger.Error("fetching-app-failed", err)
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -87,20 +97,15 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 			"StatusCode":   resp.Status,
 			"ResponseBody": resp.Body,
 		})
-		return nil, FetchAppFailedErr
+		return "", FetchAppFailedErr
 	}
 
 	var app AppSSHResponse
 	err = json.NewDecoder(resp.Body).Decode(&app)
 	if err != nil {
 		logger.Error("invalid-cc-response", err)
-		return nil, InvalidCCResponse
+		return "", InvalidCCResponse
 	}
 
-	permissions, err := sshPermissionsFromProcess(app.ProcessGuid, index, cfa.receptorClient, metadata.RemoteAddr())
-	if err != nil {
-		logger.Error("building-ssh-permissions-failed", err)
-	}
-
-	return permissions, err
+	return app.ProcessGuid, nil
 }

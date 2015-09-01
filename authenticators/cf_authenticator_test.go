@@ -1,19 +1,16 @@
 package authenticators_test
 
 import (
-	"encoding/json"
 	"math"
-	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/routes"
+	"github.com/cloudfoundry-incubator/diego-ssh/authenticators/fake_authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
-	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
@@ -23,11 +20,11 @@ import (
 
 var _ = Describe("CFAuthenticator", func() {
 	var (
-		authenticator   *authenticators.CFAuthenticator
-		logger          *lagertest.TestLogger
-		ccClient        *http.Client
-		ccClientTimeout time.Duration
-		receptorClient  *fake_receptor.FakeClient
+		authenticator      *authenticators.CFAuthenticator
+		logger             *lagertest.TestLogger
+		ccClient           *http.Client
+		ccClientTimeout    time.Duration
+		permissionsBuilder *fake_authenticators.FakePermissionsBuilder
 
 		permissions *ssh.Permissions
 		err         error
@@ -41,9 +38,12 @@ var _ = Describe("CFAuthenticator", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
+
 		ccClientTimeout = time.Second
 		ccClient = &http.Client{Timeout: ccClientTimeout}
-		receptorClient = new(fake_receptor.FakeClient)
+
+		permissionsBuilder = &fake_authenticators.FakePermissionsBuilder{}
+		permissionsBuilder.BuildReturns(&ssh.Permissions{}, nil)
 
 		metadata = &fake_ssh.FakeConnMetadata{}
 
@@ -53,20 +53,12 @@ var _ = Describe("CFAuthenticator", func() {
 
 	Describe("Authenticate", func() {
 		var (
-			expectedResponse   *authenticators.AppSSHResponse
-			responseCode       int
-			expectedRoute      routes.SSHRoute
-			desiredLRPResponse receptor.DesiredLRPResponse
-			actualLRPResponse  receptor.ActualLRPResponse
+			expectedResponse *authenticators.AppSSHResponse
+			responseCode     int
 		)
 
 		BeforeEach(func() {
 			metadata.UserReturns("cf:app-guid/1")
-
-			ipAddr, err := net.ResolveIPAddr("ip", "1.1.1.1")
-			Expect(err).NotTo(HaveOccurred())
-			metadata.RemoteAddrReturns(ipAddr)
-
 			password = []byte("bearer token")
 
 			expectedResponse = &authenticators.AppSSHResponse{
@@ -81,274 +73,144 @@ var _ = Describe("CFAuthenticator", func() {
 					ghttp.RespondWithJSONEncodedPtr(&responseCode, expectedResponse),
 				),
 			)
-
-			expectedRoute = routes.SSHRoute{
-				ContainerPort:   1111,
-				PrivateKey:      "pem-encoded-key",
-				HostFingerprint: "host-fingerprint",
-				User:            "user",
-				Password:        "password",
-			}
-
-			diegoSSHRoutePayload, err := json.Marshal(expectedRoute)
-			Expect(err).NotTo(HaveOccurred())
-
-			diegoSSHRouteMessage := json.RawMessage(diegoSSHRoutePayload)
-
-			desiredLRPResponse = receptor.DesiredLRPResponse{
-				ProcessGuid: "app-guid-app-version",
-				Instances:   2,
-				Routes: receptor.RoutingInfo{
-					routes.DIEGO_SSH: &diegoSSHRouteMessage,
-				},
-				LogGuid: "log-guid",
-			}
-
-			actualLRPResponse = receptor.ActualLRPResponse{
-				ProcessGuid:  "app-guid-app-version",
-				Index:        0,
-				InstanceGuid: "some-instance-guid",
-				Address:      "1.2.3.4",
-				Ports: []receptor.PortMapping{
-					{ContainerPort: 1111, HostPort: 3333},
-				},
-			}
-
-			receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLRPResponse, nil)
-			receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
 		})
 
 		JustBeforeEach(func() {
-			authenticator = authenticators.NewCFAuthenticator(logger, ccClient, ccURL, receptorClient)
+			authenticator = authenticators.NewCFAuthenticator(logger, ccClient, ccURL, permissionsBuilder)
 			permissions, err = authenticator.Authenticate(metadata, password)
 		})
 
-		Context("when a client has inavlid username or password", func() {
-			Context("and the guid is malformed", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("cf:%X%FF/1")
-				})
+		It("fetches the app from CC using the bearer token", func() {
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
+		})
 
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidRequestErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
+		It("builds permissions from the process guid of the app", func() {
+			Expect(permissionsBuilder.BuildCallCount()).To(Equal(1))
+
+			guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
+			Expect(guid).To(Equal("app-guid-app-version"))
+			Expect(index).To(Equal(1))
+			Expect(metadata).To(Equal(metadata))
+		})
+
+		Context("when the app guid is malformed", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("cf:%X%FF/1")
 			})
 
-			Context("when the index is not an integer", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("cf:app-guid/jim")
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("when the username is malformed", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("cf:app-guid")
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("when the index is too big", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("cf:app-guid/" + strconv.FormatInt(int64(math.MaxInt64), 10) + "0")
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("when the user realm is not cf", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("diego:1234")
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidDomainErr))
-				})
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidRequestErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
 
-		Context("when a client has valid username and password", func() {
-			It("fetches the app from CC using the bearer token", func() {
-				Expect(err).NotTo(HaveOccurred())
+		Context("when the index is not an integer", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("cf:app-guid/jim")
+			})
+
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the username is missing an index", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("cf:app-guid")
+			})
+
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the index is too big", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("cf:app-guid/" + strconv.FormatInt(int64(math.MaxInt64), 10) + "0")
+			})
+
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidCredentialsErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the cc ssh_access check returns a non-200 status code", func() {
+			BeforeEach(func() {
+				responseCode = http.StatusInternalServerError
+				expectedResponse = &authenticators.AppSSHResponse{}
+			})
+
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.FetchAppFailedErr))
 				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 			})
+		})
 
-			It("gets information about the desired lrp referenced in the username", func() {
-				Expect(receptorClient.GetDesiredLRPCallCount()).To(Equal(1))
-				Expect(receptorClient.GetDesiredLRPArgsForCall(0)).To(Equal("app-guid-app-version"))
+		Context("when the cc ssh_access response cannot be parsed", func() {
+			BeforeEach(func() {
+				fakeCC.SetHandler(0, ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+					ghttp.RespondWith(http.StatusOK, "{{"),
+				))
 			})
 
-			It("gets information about the the actual lrp from the username", func() {
-				Expect(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).To(Equal(1))
-
-				guid, index := receptorClient.ActualLRPByProcessGuidAndIndexArgsForCall(0)
-				Expect(guid).To(Equal("app-guid-app-version"))
-				Expect(index).To(Equal(1))
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidCCResponse))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 			})
+		})
 
-			It("saves container information in the critical options of the permissions", func() {
-				expectedConfig := `{
-								"address": "1.2.3.4:3333",
-								"host_fingerprint": "host-fingerprint",
-								"private_key": "pem-encoded-key",
-								"user": "user",
-								"password": "password"
-							}`
-
-				Expect(permissions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
-			})
-
-			It("saves log message information in the critical options of the permissions", func() {
-				expectedConfig := `{
-								"guid": "log-guid",
-								"message": "Successful remote access by 1.1.1.1",
-								"index": 1
-							}`
-
-				Expect(permissions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions["log-message"]).To(MatchJSON(expectedConfig))
-			})
-
-			Context("and fetching the ssh_access from cc returns a non-200 status code", func() {
-				BeforeEach(func() {
-					responseCode = http.StatusInternalServerError
-					expectedResponse = &authenticators.AppSSHResponse{}
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.FetchAppFailedErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
+		Context("the the cc ssh_access check times out", func() {
+			BeforeEach(func() {
+				ccTempClientTimeout := ccClientTimeout
+				fakeCC.SetHandler(0, func(w http.ResponseWriter, req *http.Request) {
+					time.Sleep(ccTempClientTimeout * 2)
+					w.Write([]byte(`[]`))
 				})
 			})
 
-			Context("and the response cannot be parsed", func() {
-				BeforeEach(func() {
-					fakeCC.SetHandler(0, ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
-						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
-						ghttp.RespondWith(http.StatusOK, "{{"),
-					))
-				})
+			It("fails to authenticate", func() {
+				Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
+			})
+		})
 
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidCCResponse))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-				})
+		Context("when the cc url is misconfigured", func() {
+			BeforeEach(func() {
+				ccURL = "http://%FF"
 			})
 
-			Context("and fetching the ssh_access from cc times out", func() {
-				BeforeEach(func() {
-					ccTempClientTimeout := ccClientTimeout
-					fakeCC.SetHandler(0, func(w http.ResponseWriter, req *http.Request) {
-						time.Sleep(ccTempClientTimeout * 2)
-						w.Write([]byte(`[]`))
-					})
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(BeAssignableToTypeOf(&url.Error{}))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-				})
-			})
-
-			Context("and the CC url is misconfigured", func() {
-				BeforeEach(func() {
-					ccURL = "http://%FF"
-				})
-
-				It("fails to authenticate", func() {
-					Expect(err).To(Equal(authenticators.InvalidRequestErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("when getting the desired LRP information fails", func() {
-				BeforeEach(func() {
-					receptorClient.GetDesiredLRPReturns(receptor.DesiredLRPResponse{}, &receptor.Error{})
-				})
-
-				It("returns the error", func() {
-					Expect(err).To(Equal(&receptor.Error{}))
-				})
-			})
-
-			Context("when getting the actual LRP information fails", func() {
-				BeforeEach(func() {
-					receptorClient.ActualLRPByProcessGuidAndIndexReturns(receptor.ActualLRPResponse{}, &receptor.Error{})
-				})
-
-				It("returns the error", func() {
-					Expect(err).To(Equal(&receptor.Error{}))
-				})
-			})
-
-			Context("when the container port cannot be found", func() {
-				BeforeEach(func() {
-					actualLRPResponse.Ports = []receptor.PortMapping{}
-					receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLRPResponse, nil)
-				})
-
-				It("returns an empty permission reference", func() {
-					Expect(permissions).To(Equal(&ssh.Permissions{}))
-				})
-			})
-
-			Context("when the ssh route is misconfigured", func() {
-				Context("when the desired LRP does not include routes", func() {
-					BeforeEach(func() {
-						desiredLRPResponse.Routes = nil
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
-
-					It("fails the authentication", func() {
-						Expect(err).To(Equal(authenticators.RouteNotFoundErr))
-					})
-				})
-
-				Context("when the desired LRP does not include an SSH route", func() {
-					BeforeEach(func() {
-						delete(desiredLRPResponse.Routes, routes.DIEGO_SSH)
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
-
-					It("fails the authentication", func() {
-						Expect(err).To(Equal(authenticators.RouteNotFoundErr))
-					})
-				})
-
-				Context("when the ssh route fails to unmarshal", func() {
-					BeforeEach(func() {
-						message := json.RawMessage([]byte(`{,:`))
-						desiredLRPResponse.Routes[routes.DIEGO_SSH] = &message
-						receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-					})
-
-					It("fails the authentication", func() {
-						Expect(err).To(HaveOccurred())
-					})
-				})
+			It("fails to authenticate", func() {
+				Expect(err).To(Equal(authenticators.InvalidRequestErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
 	})
 
-	Describe("Realm", func() {
-		It("is cf", func() {
-			Expect(authenticator.Realm()).To(Equal("cf"))
+	Describe("UserRegexp", func() {
+		var regexp *regexp.Regexp
+
+		BeforeEach(func() {
+			regexp = authenticator.UserRegexp()
+		})
+
+		It("matches diego patterns", func() {
+			Expect(regexp.MatchString("cf:guid/0")).To(BeTrue())
+			Expect(regexp.MatchString("cf:123-abc-def/00")).To(BeTrue())
+			Expect(regexp.MatchString("cf:guid/99")).To(BeTrue())
+		})
+
+		It("does not match other patterns", func() {
+			Expect(regexp.MatchString("cf:00")).To(BeFalse())
+			Expect(regexp.MatchString("cf:/00")).To(BeFalse())
+			Expect(regexp.MatchString("diego:guid/0")).To(BeFalse())
+			Expect(regexp.MatchString("diego:guid/99")).To(BeFalse())
+			Expect(regexp.MatchString("user@guid/0")).To(BeFalse())
 		})
 	})
 })

@@ -46,6 +46,12 @@ var ccAPIURL = flag.String(
 	"URL of Cloud Controller API",
 )
 
+var uaaURL = flag.String(
+	"uaaURL",
+	"",
+	"URL of the UAA that includes the oauth client ID and password",
+)
+
 var communicationTimeout = flag.Duration(
 	"communicationTimeout",
 	10*time.Second,
@@ -143,21 +149,27 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	receptorClient := receptor.NewClient(*diegoAPIURL)
+	permissionsBuilder := authenticators.NewPermissionsBuiler(receptorClient)
 
-	authenticatorMap := map[string]authenticators.PasswordAuthenticator{}
+	authens := []authenticators.PasswordAuthenticator{}
 
 	if *enableDiegoAuth {
-		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, []byte(diegoCreds))
-		authenticatorMap[diegoAuthenticator.Realm()] = diegoAuthenticator
+		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, []byte(diegoCreds), permissionsBuilder)
+		authens = append(authens, diegoAuthenticator)
 	}
 
 	if *ccAPIURL != "" && *enableCFAuth {
 		ccClient := cf_http.NewClient()
-		cfAuthenticator := authenticators.NewCFAuthenticator(logger, ccClient, *ccAPIURL, receptorClient)
-		authenticatorMap[cfAuthenticator.Realm()] = cfAuthenticator
+		cfAuthenticator := authenticators.NewCFAuthenticator(logger, ccClient, *ccAPIURL, permissionsBuilder)
+		authens = append(authens, cfAuthenticator)
+
+		if *uaaURL != "" {
+			uaaAuthenticator := authenticators.NewUAAAuthenticator(logger, ccClient, *uaaURL, cfAuthenticator, permissionsBuilder)
+			authens = append(authens, uaaAuthenticator)
+		}
 	}
 
-	authenticator := authenticators.NewCompositeAuthenticator(authenticatorMap)
+	authenticator := authenticators.NewCompositeAuthenticator(authens...)
 
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: authenticator.Authenticate,

@@ -2,6 +2,7 @@ package authenticators_test
 
 import (
 	"errors"
+	"regexp"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators/fake_authenticators"
@@ -14,20 +15,20 @@ import (
 var _ = Describe("CompositeAuthenticator", func() {
 	Describe("Authenticate", func() {
 		var (
-			authenticator    *authenticators.CompositeAuthenticator
-			authenticatorMap map[string]authenticators.PasswordAuthenticator
-			metadata         *fake_ssh.FakeConnMetadata
-			password         []byte
+			authenticator *authenticators.CompositeAuthenticator
+			authens       []authenticators.PasswordAuthenticator
+			metadata      *fake_ssh.FakeConnMetadata
+			password      []byte
 		)
 
 		BeforeEach(func() {
-			authenticatorMap = map[string]authenticators.PasswordAuthenticator{}
+			authens = []authenticators.PasswordAuthenticator{}
 			metadata = &fake_ssh.FakeConnMetadata{}
 			password = []byte{}
 		})
 
 		JustBeforeEach(func() {
-			authenticator = authenticators.NewCompositeAuthenticator(authenticatorMap)
+			authenticator = authenticators.NewCompositeAuthenticator(authens...)
 		})
 
 		Context("when no authenticators are specified", func() {
@@ -45,9 +46,15 @@ var _ = Describe("CompositeAuthenticator", func() {
 
 			BeforeEach(func() {
 				authenticatorOne = &fake_authenticators.FakePasswordAuthenticator{}
+				authenticatorOne.UserRegexpReturns(regexp.MustCompile("one:.*"))
+
 				authenticatorTwo = &fake_authenticators.FakePasswordAuthenticator{}
-				authenticatorMap["one"] = authenticatorOne
-				authenticatorMap["two"] = authenticatorOne
+				authenticatorTwo.UserRegexpReturns(regexp.MustCompile("two:.*"))
+
+				authens = []authenticators.PasswordAuthenticator{
+					authenticatorOne,
+					authenticatorTwo,
+				}
 			})
 
 			Context("and the users realm matches the first authenticator", func() {

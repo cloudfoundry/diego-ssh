@@ -2,6 +2,7 @@
 package fake_authenticators
 
 import (
+	"regexp"
 	"sync"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
@@ -9,6 +10,12 @@ import (
 )
 
 type FakePasswordAuthenticator struct {
+	UserRegexpStub        func() *regexp.Regexp
+	userRegexpMutex       sync.RWMutex
+	userRegexpArgsForCall []struct{}
+	userRegexpReturns     struct {
+		result1 *regexp.Regexp
+	}
 	AuthenticateStub        func(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
 	authenticateMutex       sync.RWMutex
 	authenticateArgsForCall []struct {
@@ -19,12 +26,30 @@ type FakePasswordAuthenticator struct {
 		result1 *ssh.Permissions
 		result2 error
 	}
-	RealmStub        func() string
-	realmMutex       sync.RWMutex
-	realmArgsForCall []struct{}
-	realmReturns     struct {
-		result1 string
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexp() *regexp.Regexp {
+	fake.userRegexpMutex.Lock()
+	fake.userRegexpArgsForCall = append(fake.userRegexpArgsForCall, struct{}{})
+	fake.userRegexpMutex.Unlock()
+	if fake.UserRegexpStub != nil {
+		return fake.UserRegexpStub()
+	} else {
+		return fake.userRegexpReturns.result1
 	}
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpCallCount() int {
+	fake.userRegexpMutex.RLock()
+	defer fake.userRegexpMutex.RUnlock()
+	return len(fake.userRegexpArgsForCall)
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpReturns(result1 *regexp.Regexp) {
+	fake.UserRegexpStub = nil
+	fake.userRegexpReturns = struct {
+		result1 *regexp.Regexp
+	}{result1}
 }
 
 func (fake *FakePasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
@@ -59,30 +84,6 @@ func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissi
 		result1 *ssh.Permissions
 		result2 error
 	}{result1, result2}
-}
-
-func (fake *FakePasswordAuthenticator) Realm() string {
-	fake.realmMutex.Lock()
-	fake.realmArgsForCall = append(fake.realmArgsForCall, struct{}{})
-	fake.realmMutex.Unlock()
-	if fake.RealmStub != nil {
-		return fake.RealmStub()
-	} else {
-		return fake.realmReturns.result1
-	}
-}
-
-func (fake *FakePasswordAuthenticator) RealmCallCount() int {
-	fake.realmMutex.RLock()
-	defer fake.realmMutex.RUnlock()
-	return len(fake.realmArgsForCall)
-}
-
-func (fake *FakePasswordAuthenticator) RealmReturns(result1 string) {
-	fake.RealmStub = nil
-	fake.realmReturns = struct {
-		result1 string
-	}{result1}
 }
 
 var _ authenticators.PasswordAuthenticator = new(FakePasswordAuthenticator)

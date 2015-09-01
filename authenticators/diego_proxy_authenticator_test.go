@@ -1,14 +1,11 @@
 package authenticators_test
 
 import (
-	"encoding/json"
-	"net"
+	"regexp"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/routes"
+	"github.com/cloudfoundry-incubator/diego-ssh/authenticators/fake_authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
-	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 
@@ -18,57 +15,19 @@ import (
 
 var _ = Describe("DiegoProxyAuthenticator", func() {
 	var (
-		receptorClient     *fake_receptor.FakeClient
-		expectedRoute      routes.SSHRoute
-		desiredLRPResponse receptor.DesiredLRPResponse
-		actualLrpResponse  receptor.ActualLRPResponse
-		authenticator      *authenticators.DiegoProxyAuthenticator
 		logger             *lagertest.TestLogger
 		receptorCreds      []byte
+		permissionsBuilder *fake_authenticators.FakePermissionsBuilder
+		authenticator      *authenticators.DiegoProxyAuthenticator
 		metadata           *fake_ssh.FakeConnMetadata
 	)
 
 	BeforeEach(func() {
-		receptorClient = new(fake_receptor.FakeClient)
-
-		expectedRoute = routes.SSHRoute{
-			ContainerPort:   1111,
-			PrivateKey:      "pem-encoded-key",
-			HostFingerprint: "host-fingerprint",
-			User:            "user",
-			Password:        "password",
-		}
-
-		diegoSSHRoutePayload, err := json.Marshal(expectedRoute)
-		Expect(err).NotTo(HaveOccurred())
-
-		diegoSSHRouteMessage := json.RawMessage(diegoSSHRoutePayload)
-
-		desiredLRPResponse = receptor.DesiredLRPResponse{
-			ProcessGuid: "some-guid",
-			Instances:   2,
-			Routes: receptor.RoutingInfo{
-				routes.DIEGO_SSH: &diegoSSHRouteMessage,
-			},
-			LogGuid: "log-guid",
-		}
-
-		actualLrpResponse = receptor.ActualLRPResponse{
-			ProcessGuid:  "some-guid",
-			Index:        0,
-			InstanceGuid: "some-instance-guid",
-			Address:      "1.2.3.4",
-			Ports: []receptor.PortMapping{
-				{ContainerPort: 1111, HostPort: 3333},
-			},
-		}
-
-		receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLrpResponse, nil)
-		receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-
 		logger = lagertest.NewTestLogger("test")
 		receptorCreds = []byte("receptor-user:receptor-password")
-		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorClient, receptorCreds)
+		permissionsBuilder = &fake_authenticators.FakePermissionsBuilder{}
+		permissionsBuilder.BuildReturns(&ssh.Permissions{}, nil)
+		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorCreds, permissionsBuilder)
 
 		metadata = &fake_ssh.FakeConnMetadata{}
 	})
@@ -81,10 +40,6 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		)
 
 		BeforeEach(func() {
-			ipAddr, err := net.ResolveIPAddr("ip", "1.1.1.1")
-			Expect(err).NotTo(HaveOccurred())
-			metadata.RemoteAddrReturns(ipAddr)
-
 			permissions = nil
 			password = []byte{}
 		})
@@ -93,162 +48,66 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			permissions, authErr = authenticator.Authenticate(metadata, password)
 		})
 
-		Context("when a client attempts to authenticate with a user and password", func() {
-			Context("when the user name starts with 'diego:'", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("diego:some-guid/0")
-					password = []byte("receptor-user:receptor-password")
-				})
-
-				It("authenticates the password against the receptor user:password", func() {
-					Expect(authErr).NotTo(HaveOccurred())
-				})
-			})
-
-			Context("when the user name doesn't start with 'diego:'", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("dora:some-guid")
-				})
-
-				It("fails the authentication", func() {
-					Expect(authErr).To(MatchError("Invalid authentication domain"))
-				})
-			})
-
-			Context("when the password doesn't match the receptor credentials", func() {
-				BeforeEach(func() {
-					metadata.UserReturns("diego:some-guid/0")
-					password = []byte("cf-user:cf-password")
-				})
-
-				It("fails the authentication", func() {
-					Expect(authErr).To(MatchError("Invalid credentials"))
-				})
-			})
-		})
-
-		Context("when authentication is successful", func() {
+		Context("when the user name matches the user regex and valid credentials are provided", func() {
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
 				password = []byte("receptor-user:receptor-password")
 			})
 
-			It("gets information about the desired lrp referenced in the username", func() {
-				Expect(receptorClient.GetDesiredLRPCallCount()).To(Equal(1))
-				Expect(receptorClient.GetDesiredLRPArgsForCall(0)).To(Equal("some-guid"))
+			It("authenticates the password against the receptor user:password", func() {
+				Expect(authErr).NotTo(HaveOccurred())
 			})
 
-			It("gets information about the the actual lrp from the username", func() {
-				Expect(receptorClient.ActualLRPByProcessGuidAndIndexCallCount()).To(Equal(1))
-
-				guid, index := receptorClient.ActualLRPByProcessGuidAndIndexArgsForCall(0)
+			It("builds permissions for the requested process", func() {
+				Expect(permissionsBuilder.BuildCallCount()).To(Equal(1))
+				guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
 				Expect(guid).To(Equal("some-guid"))
 				Expect(index).To(Equal(0))
-			})
-
-			It("saves container information in the critical options of the permissions", func() {
-				expectedConfig := `{
-					"address": "1.2.3.4:3333",
-					"host_fingerprint": "host-fingerprint",
-					"private_key": "pem-encoded-key",
-					"user": "user",
-					"password": "password"
-				}`
-
-				Expect(permissions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
-			})
-
-			It("saves log message information in the critical options of the permissions", func() {
-				expectedConfig := `{
-								"guid": "log-guid",
-								"message": "Successful remote access by 1.1.1.1",
-								"index": 0
-							}`
-
-				Expect(permissions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions["log-message"]).To(MatchJSON(expectedConfig))
-			})
-
-			Context("when getting the desired LRP information fails", func() {
-				BeforeEach(func() {
-					receptorClient.GetDesiredLRPReturns(receptor.DesiredLRPResponse{}, &receptor.Error{})
-				})
-
-				It("returns the error", func() {
-					Expect(authErr).To(Equal(&receptor.Error{}))
-				})
-			})
-
-			Context("when getting the actual LRP information fails", func() {
-				BeforeEach(func() {
-					receptorClient.ActualLRPByProcessGuidAndIndexReturns(receptor.ActualLRPResponse{}, &receptor.Error{})
-				})
-
-				It("returns the error", func() {
-					Expect(authErr).To(Equal(&receptor.Error{}))
-				})
-			})
-
-			Context("when the container port cannot be found", func() {
-				BeforeEach(func() {
-					actualLrpResponse.Ports = []receptor.PortMapping{}
-					receptorClient.ActualLRPByProcessGuidAndIndexReturns(actualLrpResponse, nil)
-				})
-
-				It("returns an empty permission reference", func() {
-					Expect(permissions).To(Equal(&ssh.Permissions{}))
-				})
+				Expect(metadata).To(Equal(metadata))
 			})
 		})
 
-		Context("when the ssh route is misconfigured", func() {
+		Context("when the user name doesn't match the user regex", func() {
+			BeforeEach(func() {
+				metadata.UserReturns("dora:some-guid")
+			})
+
+			It("fails the authentication", func() {
+				Expect(authErr).To(MatchError("Invalid authentication domain"))
+			})
+		})
+
+		Context("when the password doesn't match the receptor credentials", func() {
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
-				password = []byte("receptor-user:receptor-password")
+				password = []byte("cf-user:cf-password")
 			})
 
-			Context("when the desired LRP does not include routes", func() {
-				BeforeEach(func() {
-					desiredLRPResponse.Routes = nil
-					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-				})
-
-				It("fails the authentication", func() {
-					Expect(authErr).To(Equal(authenticators.RouteNotFoundErr))
-				})
-			})
-
-			Context("when the desired LRP does not include an SSH route", func() {
-				BeforeEach(func() {
-					delete(desiredLRPResponse.Routes, routes.DIEGO_SSH)
-					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-				})
-
-				It("fails the authentication", func() {
-					Expect(authErr).To(Equal(authenticators.RouteNotFoundErr))
-				})
-			})
-
-			Context("when the ssh route fails to unmarshal", func() {
-				BeforeEach(func() {
-					message := json.RawMessage([]byte(`{,:`))
-					desiredLRPResponse.Routes[routes.DIEGO_SSH] = &message
-					receptorClient.GetDesiredLRPReturns(desiredLRPResponse, nil)
-				})
-
-				It("fails the authentication", func() {
-					Expect(authErr).To(HaveOccurred())
-				})
+			It("fails the authentication", func() {
+				Expect(authErr).To(MatchError("Invalid credentials"))
 			})
 		})
 	})
 
-	Describe("Realm", func() {
-		It("is diego", func() {
-			Expect(authenticator.Realm()).To(Equal("diego"))
+	Describe("UserRegexp", func() {
+		var regexp *regexp.Regexp
+
+		BeforeEach(func() {
+			regexp = authenticator.UserRegexp()
+		})
+
+		It("matches diego patterns", func() {
+			Expect(regexp.MatchString("diego:guid/0")).To(BeTrue())
+			Expect(regexp.MatchString("diego:123-abc-def/00")).To(BeTrue())
+			Expect(regexp.MatchString("diego:guid/99")).To(BeTrue())
+		})
+
+		It("does not match other patterns", func() {
+			Expect(regexp.MatchString("diego:00")).To(BeFalse())
+			Expect(regexp.MatchString("diego:/00")).To(BeFalse())
+			Expect(regexp.MatchString("cf:guid/0")).To(BeFalse())
+			Expect(regexp.MatchString("cf:guid/99")).To(BeFalse())
+			Expect(regexp.MatchString("user@guid/0")).To(BeFalse())
 		})
 	})
 })

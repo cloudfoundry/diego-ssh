@@ -2,43 +2,35 @@ package authenticators
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
-	"net"
 	"regexp"
 	"strconv"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
-	"github.com/cloudfoundry-incubator/diego-ssh/routes"
-	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
 
-const DIEGO_REALM = "diego"
+var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.+)/(\d+)`)
 
 type DiegoProxyAuthenticator struct {
-	logger         lager.Logger
-	receptorCreds  []byte
-	receptorClient receptor.Client
+	logger             lager.Logger
+	receptorCreds      []byte
+	permissionsBuilder PermissionsBuilder
 }
-
-var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(DIEGO_REALM + `:(.*)/(\d+)`)
 
 func NewDiegoProxyAuthenticator(
 	logger lager.Logger,
-	receptorClient receptor.Client,
 	receptorCreds []byte,
+	permissionsBuilder PermissionsBuilder,
 ) *DiegoProxyAuthenticator {
 	return &DiegoProxyAuthenticator{
-		logger:         logger,
-		receptorCreds:  receptorCreds,
-		receptorClient: receptorClient,
+		logger:             logger,
+		receptorCreds:      receptorCreds,
+		permissionsBuilder: permissionsBuilder,
 	}
 }
 
-func (dpa *DiegoProxyAuthenticator) Realm() string {
-	return DIEGO_REALM
+func (dpa *DiegoProxyAuthenticator) UserRegexp() *regexp.Regexp {
+	return DiegoUserRegex
 }
 
 func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
@@ -65,102 +57,9 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	permissions, err := sshPermissionsFromProcess(processGuid, index, dpa.receptorClient, metadata.RemoteAddr())
+	permissions, err := dpa.permissionsBuilder.Build(processGuid, index, metadata)
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}
 	return permissions, err
-}
-
-func sshPermissionsFromProcess(
-	processGuid string,
-	index int,
-	receptorClient receptor.Client,
-	remoteAddr net.Addr,
-) (*ssh.Permissions, error) {
-	actual, err := receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
-	if err != nil {
-		return nil, err
-	}
-
-	desired, err := receptorClient.GetDesiredLRP(processGuid)
-	if err != nil {
-		return nil, err
-	}
-
-	sshRoute, err := getRoutingInfo(&desired)
-	if err != nil {
-		return nil, err
-	}
-
-	logMessage := fmt.Sprintf("Successful remote access by %s", remoteAddr.String())
-
-	return createPermissions(sshRoute, &actual, desired.LogGuid, logMessage, index)
-}
-
-func createPermissions(
-	sshRoute *routes.SSHRoute,
-	actual *receptor.ActualLRPResponse,
-	logGuid string,
-	logMessage string,
-	index int,
-) (*ssh.Permissions, error) {
-	var targetConfig *proxy.TargetConfig
-
-	for _, mapping := range actual.Ports {
-		if mapping.ContainerPort == sshRoute.ContainerPort {
-			targetConfig = &proxy.TargetConfig{
-				Address:         fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
-				HostFingerprint: sshRoute.HostFingerprint,
-				User:            sshRoute.User,
-				Password:        sshRoute.Password,
-				PrivateKey:      sshRoute.PrivateKey,
-			}
-			break
-		}
-	}
-
-	if targetConfig == nil {
-		return &ssh.Permissions{}, nil
-	}
-
-	targetConfigJson, err := json.Marshal(targetConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	logMessageJson, err := json.Marshal(proxy.LogMessage{
-		Guid:    logGuid,
-		Message: logMessage,
-		Index:   index,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &ssh.Permissions{
-		CriticalOptions: map[string]string{
-			"proxy-target-config": string(targetConfigJson),
-			"log-message":         string(logMessageJson),
-		},
-	}, nil
-}
-
-func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*routes.SSHRoute, error) {
-	if desired.Routes == nil {
-		return nil, RouteNotFoundErr
-	}
-
-	rawMessage := desired.Routes[routes.DIEGO_SSH]
-	if rawMessage == nil {
-		return nil, RouteNotFoundErr
-	}
-
-	var sshRoute routes.SSHRoute
-	err := json.Unmarshal(*rawMessage, &sshRoute)
-	if err != nil {
-		return nil, err
-	}
-
-	return &sshRoute, nil
 }
