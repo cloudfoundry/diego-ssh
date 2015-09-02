@@ -4,16 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
-	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/gogo/protobuf/proto"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"golang.org/x/crypto/ssh"
@@ -27,7 +29,7 @@ import (
 
 var _ = Describe("SSH proxy", func() {
 	var (
-		fakeReceptor *ghttp.Server
+		fakeBBS      *ghttp.Server
 		runner       ifrit.Runner
 		process      ifrit.Process
 		exitDuration = 3 * time.Second
@@ -43,7 +45,7 @@ var _ = Describe("SSH proxy", func() {
 	)
 
 	BeforeEach(func() {
-		fakeReceptor = ghttp.NewServer()
+		fakeBBS = ghttp.NewServer()
 
 		hostKey = hostKeyPem
 
@@ -52,7 +54,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint = helpers.MD5Fingerprint(privateKey.PublicKey())
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
-		diegoAPIURL = fakeReceptor.URL()
+		diegoAPIURL = fakeBBS.URL()
 
 		ccAPIURL = ""
 		uaaURL = ""
@@ -76,7 +78,7 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	AfterEach(func() {
-		fakeReceptor.Close()
+		fakeBBS.Close()
 		ginkgomon.Kill(process, exitDuration)
 	})
 
@@ -141,6 +143,12 @@ var _ = Describe("SSH proxy", func() {
 		var (
 			clientConfig *ssh.ClientConfig
 			processGuid  string
+
+			desiredLRPRequest  *models.DesiredLRPByProcessGuidRequest
+			desiredLRPResponse *models.DesiredLRPResponse
+
+			actualLRPRequest  *models.ActualLRPGroupByProcessGuidAndIndexRequest
+			actualLRPResponse *models.ActualLRPGroupResponse
 		)
 
 		BeforeEach(func() {
@@ -150,6 +158,29 @@ var _ = Describe("SSH proxy", func() {
 				Auth: []ssh.AuthMethod{ssh.Password("")},
 			}
 		})
+
+		VerifyProto := func(expectedProto proto.Message, protoType proto.Message) http.HandlerFunc {
+			return ghttp.CombineHandlers(
+				ghttp.VerifyContentType("application/x-protobuf"),
+				func(w http.ResponseWriter, req *http.Request) {
+					body, err := ioutil.ReadAll(req.Body)
+					Expect(err).ToNot(HaveOccurred())
+					req.Body.Close()
+					err = proto.Unmarshal(body, protoType)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(protoType).To(Equal(expectedProto), "ProtoBuf Mismatch")
+				},
+			)
+		}
+
+		RespondWithProto := func(message proto.Message) http.HandlerFunc {
+			data, err := proto.Marshal(message)
+			Expect(err).ToNot(HaveOccurred())
+
+			var headers = make(http.Header)
+			headers["Content-Type"] = []string{"application/x-protobuf"}
+			return ghttp.RespondWith(200, string(data), headers)
+		}
 
 		JustBeforeEach(func() {
 			sshRoute := routes.SSHRoute{
@@ -163,37 +194,31 @@ var _ = Describe("SSH proxy", func() {
 
 			diegoSSHRouteMessage := json.RawMessage(sshRoutePayload)
 
-			desiredLRP := receptor.DesiredLRPResponse{
+			desiredLRP := &models.DesiredLRP{
 				ProcessGuid: processGuid,
 				Instances:   1,
-				Routes: receptor.RoutingInfo{
+				Routes: &models.Routes{
 					routes.DIEGO_SSH: &diegoSSHRouteMessage,
 				},
 			}
 
-			actualLRP := receptor.ActualLRPResponse{
-				ProcessGuid:  processGuid,
-				Index:        0,
-				InstanceGuid: "some-instance-guid",
-				Address:      "127.0.0.1",
-				Ports: []receptor.PortMapping{
-					{ContainerPort: 9999, HostPort: uint16(sshdPort)},
-				},
+			desiredLRPRequest = &models.DesiredLRPByProcessGuidRequest{ProcessGuid: processGuid}
+			desiredLRPResponse = &models.DesiredLRPResponse{
+				Error:      nil,
+				DesiredLrp: desiredLRP,
 			}
 
-			fakeReceptor.RouteToHandler("GET", "/v1/desired_lrps/"+processGuid,
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v1/desired_lrps/"+processGuid),
-					ghttp.RespondWithJSONEncoded(http.StatusOK, desiredLRP),
-				),
-			)
+			actualLRP := &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "some-domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", models.NewPortMapping(uint32(sshdPort), 9999)),
+			}
 
-			fakeReceptor.RouteToHandler("GET", "/v1/actual_lrps/"+processGuid+"/index/0",
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/v1/actual_lrps/"+processGuid+"/index/0"),
-					ghttp.RespondWithJSONEncoded(http.StatusOK, actualLRP),
-				),
-			)
+			actualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{ProcessGuid: processGuid, Index: 0}
+			actualLRPResponse = &models.ActualLRPGroupResponse{
+				Error:          nil,
+				ActualLrpGroup: &models.ActualLRPGroup{Instance: actualLRP},
+			}
 
 			Expect(process).NotTo(BeNil())
 		})
@@ -206,6 +231,24 @@ var _ = Describe("SSH proxy", func() {
 					handshakeHostKey = key
 					return errors.New("fail")
 				}
+			})
+
+			JustBeforeEach(func() {
+				fakeBBS.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+						VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+						RespondWithProto(desiredLRPResponse),
+					),
+				)
+
+				fakeBBS.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+						VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+						RespondWithProto(actualLRPResponse),
+					),
+				)
 			})
 
 			It("receives the correct host key", func() {
@@ -250,13 +293,31 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			Context("when the client authenticates with the right data", func() {
-				It("acquires the lrp info from the receptor", func() {
+				JustBeforeEach(func() {
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
+						),
+					)
+
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+							VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+							RespondWithProto(desiredLRPResponse),
+						),
+					)
+				})
+
+				It("acquires the lrp info from the BBS", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).NotTo(HaveOccurred())
 
 					client.Close()
 
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
 				})
 
 				It("connects to the target daemon", func() {
@@ -284,6 +345,24 @@ var _ = Describe("SSH proxy", func() {
 					)
 				})
 
+				JustBeforeEach(func() {
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+							VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+							RespondWithProto(desiredLRPResponse),
+						),
+					)
+
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
+						),
+					)
+				})
+
 				It("logs the authentication failure", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
@@ -300,6 +379,24 @@ var _ = Describe("SSH proxy", func() {
 							ghttp.VerifyRequest("GET", "/internal/apps/bad-app-guid/ssh_access"),
 							ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
 							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+						),
+					)
+				})
+
+				JustBeforeEach(func() {
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+							VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+							RespondWithProto(desiredLRPResponse),
+						),
+					)
+
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
 						),
 					)
 				})
@@ -331,17 +428,45 @@ var _ = Describe("SSH proxy", func() {
 						),
 					)
 
-					fakeReceptor.AppendHandlers(
+					actualLRPRequest := &models.ActualLRPGroupByProcessGuidAndIndexRequest{
+						ProcessGuid: "bad-app-guid-app-version",
+						Index:       0,
+					}
+					actualLRPResponse := &models.ActualLRPGroupResponse{
+						Error:          models.ErrResourceNotFound,
+						ActualLrpGroup: nil,
+					}
+
+					fakeBBS.AppendHandlers(
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v1/actual_lrps/bad-app-guid-app-version/index/0"),
-							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
 						),
 					)
 				})
 
-				It("attempts to acquire the app info from receptor", func() {
+				JustBeforeEach(func() {
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+							VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+							RespondWithProto(desiredLRPResponse),
+						),
+					)
+
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
+						),
+					)
+				})
+
+				It("attempts to acquire the app info from BBS", func() {
 					ssh.Dial("tcp", address, clientConfig)
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(1))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(1))
 				})
 
 				It("fails the authentication", func() {
@@ -374,7 +499,7 @@ var _ = Describe("SSH proxy", func() {
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 		})
@@ -388,13 +513,31 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			Context("when the client authenticates with the right data", func() {
-				It("acquires the lrp info from the receptor", func() {
+				JustBeforeEach(func() {
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
+						),
+					)
+
+					fakeBBS.AppendHandlers(
+						ghttp.CombineHandlers(
+							ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+							VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+							RespondWithProto(desiredLRPResponse),
+						),
+					)
+				})
+
+				It("acquires the lrp info from the BBS", func() {
 					client, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).NotTo(HaveOccurred())
 
 					client.Close()
 
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
 				})
 
 				It("connects to the target daemon", func() {
@@ -426,17 +569,27 @@ var _ = Describe("SSH proxy", func() {
 				BeforeEach(func() {
 					clientConfig.User = "diego:bad-process-guid/0"
 
-					fakeReceptor.AppendHandlers(
+					actualLRPRequest := &models.ActualLRPGroupByProcessGuidAndIndexRequest{
+						ProcessGuid: "bad-process-guid",
+						Index:       0,
+					}
+					actualLRPResponse := &models.ActualLRPGroupResponse{
+						Error:          models.ErrResourceNotFound,
+						ActualLrpGroup: nil,
+					}
+
+					fakeBBS.AppendHandlers(
 						ghttp.CombineHandlers(
-							ghttp.VerifyRequest("GET", "/v1/actual_lrps/bad-process-guid/index/0"),
-							ghttp.RespondWithJSONEncoded(http.StatusNotFound, nil),
+							ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+							VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+							RespondWithProto(actualLRPResponse),
 						),
 					)
 				})
 
-				It("attempts to acquire the lrp info from the receptor", func() {
+				It("attempts to acquire the lrp info from the BBS", func() {
 					ssh.Dial("tcp", address, clientConfig)
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(1))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(1))
 				})
 
 				It("fails the authentication", func() {
@@ -453,7 +606,7 @@ var _ = Describe("SSH proxy", func() {
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 		})
@@ -505,6 +658,24 @@ var _ = Describe("SSH proxy", func() {
 				uaaURL = u.String()
 			})
 
+			JustBeforeEach(func() {
+				fakeBBS.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+						VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
+						RespondWithProto(actualLRPResponse),
+					),
+				)
+
+				fakeBBS.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+						VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
+						RespondWithProto(desiredLRPResponse),
+					),
+				)
+			})
+
 			AfterEach(func() {
 				fakeUAA.Close()
 				fakeCC.Close()
@@ -531,8 +702,8 @@ var _ = Describe("SSH proxy", func() {
 					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 				})
 
-				It("acquires the lrp info from the receptor", func() {
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
+				It("acquires the lrp info from the BBS", func() {
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
 				})
 
 				It("connects to the target daemon", func() {
@@ -554,7 +725,7 @@ var _ = Describe("SSH proxy", func() {
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 
@@ -566,7 +737,7 @@ var _ = Describe("SSH proxy", func() {
 				It("fails the authentication", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
 		})

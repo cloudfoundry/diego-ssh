@@ -4,44 +4,46 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cloudfoundry-incubator/bbs"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
-	"github.com/cloudfoundry-incubator/receptor"
 	"golang.org/x/crypto/ssh"
 )
 
 type permissionsBuilder struct {
-	receptorClient receptor.Client
+	bbsClient bbs.Client
 }
 
-func NewPermissionsBuiler(receptorClient receptor.Client) PermissionsBuilder {
-	return &permissionsBuilder{receptorClient}
+func NewPermissionsBuiler(bbsClient bbs.Client) PermissionsBuilder {
+	return &permissionsBuilder{bbsClient}
 }
 
 func (pb *permissionsBuilder) Build(processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
-	actual, err := pb.receptorClient.ActualLRPByProcessGuidAndIndex(processGuid, index)
+	actual, err := pb.bbsClient.ActualLRPGroupByProcessGuidAndIndex(processGuid, index)
 	if err != nil {
 		return nil, err
 	}
 
-	desired, err := pb.receptorClient.GetDesiredLRP(processGuid)
+	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(processGuid)
 	if err != nil {
 		return nil, err
 	}
 
-	sshRoute, err := getRoutingInfo(&desired)
+	sshRoute, err := getRoutingInfo(desired)
 	if err != nil {
 		return nil, err
 	}
 
 	logMessage := fmt.Sprintf("Successful remote access by %s", metadata.RemoteAddr().String())
 
-	return createPermissions(sshRoute, &actual, desired.LogGuid, logMessage, index)
+	actualLRP, _ := actual.Resolve()
+	return createPermissions(sshRoute, actualLRP, desired.LogGuid, logMessage, index)
 }
 
 func createPermissions(
 	sshRoute *routes.SSHRoute,
-	actual *receptor.ActualLRPResponse,
+	actual *models.ActualLRP,
 	logGuid string,
 	logMessage string,
 	index int,
@@ -87,12 +89,12 @@ func createPermissions(
 	}, nil
 }
 
-func getRoutingInfo(desired *receptor.DesiredLRPResponse) (*routes.SSHRoute, error) {
+func getRoutingInfo(desired *models.DesiredLRP) (*routes.SSHRoute, error) {
 	if desired.Routes == nil {
 		return nil, RouteNotFoundErr
 	}
 
-	rawMessage := desired.Routes[routes.DIEGO_SSH]
+	rawMessage := (*desired.Routes)[routes.DIEGO_SSH]
 	if rawMessage == nil {
 		return nil, RouteNotFoundErr
 	}

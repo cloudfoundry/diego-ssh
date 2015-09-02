@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
-	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -148,8 +148,8 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		diegoCreds = url.User.String()
 	}
 
-	receptorClient := receptor.NewClient(*diegoAPIURL)
-	permissionsBuilder := authenticators.NewPermissionsBuiler(receptorClient)
+	bbsClient := bbs.NewClient(*diegoAPIURL)
+	permissionsBuilder := authenticators.NewPermissionsBuiler(bbsClient)
 
 	authens := []authenticators.PasswordAuthenticator{}
 

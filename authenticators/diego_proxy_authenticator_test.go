@@ -16,7 +16,7 @@ import (
 var _ = Describe("DiegoProxyAuthenticator", func() {
 	var (
 		logger             *lagertest.TestLogger
-		receptorCreds      []byte
+		credentials        []byte
 		permissionsBuilder *fake_authenticators.FakePermissionsBuilder
 		authenticator      *authenticators.DiegoProxyAuthenticator
 		metadata           *fake_ssh.FakeConnMetadata
@@ -24,10 +24,10 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
-		receptorCreds = []byte("receptor-user:receptor-password")
+		credentials = []byte("some-user:some-password")
 		permissionsBuilder = &fake_authenticators.FakePermissionsBuilder{}
 		permissionsBuilder.BuildReturns(&ssh.Permissions{}, nil)
-		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, receptorCreds, permissionsBuilder)
+		authenticator = authenticators.NewDiegoProxyAuthenticator(logger, credentials, permissionsBuilder)
 
 		metadata = &fake_ssh.FakeConnMetadata{}
 	})
@@ -51,10 +51,10 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		Context("when the user name matches the user regex and valid credentials are provided", func() {
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
-				password = []byte("receptor-user:receptor-password")
+				password = []byte("some-user:some-password")
 			})
 
-			It("authenticates the password against the receptor user:password", func() {
+			It("authenticates the password against the provided user:password", func() {
 				Expect(authErr).NotTo(HaveOccurred())
 			})
 
@@ -77,7 +77,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 			})
 		})
 
-		Context("when the password doesn't match the receptor credentials", func() {
+		Context("when the password doesn't match the provided credentials", func() {
 			BeforeEach(func() {
 				metadata.UserReturns("diego:some-guid/0")
 				password = []byte("cf-user:cf-password")

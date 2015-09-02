@@ -13,18 +13,18 @@ var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.+)/(\d+)`)
 
 type DiegoProxyAuthenticator struct {
 	logger             lager.Logger
-	receptorCreds      []byte
+	credentials        []byte
 	permissionsBuilder PermissionsBuilder
 }
 
 func NewDiegoProxyAuthenticator(
 	logger lager.Logger,
-	receptorCreds []byte,
+	credentials []byte,
 	permissionsBuilder PermissionsBuilder,
 ) *DiegoProxyAuthenticator {
 	return &DiegoProxyAuthenticator{
 		logger:             logger,
-		receptorCreds:      receptorCreds,
+		credentials:        credentials,
 		permissionsBuilder: permissionsBuilder,
 	}
 }
@@ -43,7 +43,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, InvalidDomainErr
 	}
 
-	if !bytes.Equal(dpa.receptorCreds, password) {
+	if !bytes.Equal(dpa.credentials, password) {
 		logger.Error("invalid-credentials", InvalidCredentialsErr)
 		return nil, InvalidCredentialsErr
 	}
