@@ -1,25 +1,29 @@
 package authenticators
 
 import (
-	"strings"
+	"regexp"
 
 	"golang.org/x/crypto/ssh"
 )
 
 type CompositeAuthenticator struct {
-	authenticatorMap map[string]PasswordAuthenticator
+	authenticators map[*regexp.Regexp]PasswordAuthenticator
 }
 
-func NewCompositeAuthenticator(authenticatorMap map[string]PasswordAuthenticator) *CompositeAuthenticator {
-	return &CompositeAuthenticator{authenticatorMap: authenticatorMap}
+func NewCompositeAuthenticator(passwordAuthenticators ...PasswordAuthenticator) *CompositeAuthenticator {
+	authenticators := map[*regexp.Regexp]PasswordAuthenticator{}
+	for _, a := range passwordAuthenticators {
+		authenticators[a.UserRegexp()] = a
+	}
+	return &CompositeAuthenticator{authenticators: authenticators}
 }
 
 func (a *CompositeAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	if parts := strings.SplitN(metadata.User(), ":", 2); len(parts) == 2 {
-		authenticator := a.authenticatorMap[parts[0]]
-		if authenticator != nil {
+	for userRegexp, authenticator := range a.authenticators {
+		if userRegexp.MatchString(metadata.User()) {
 			return authenticator.Authenticate(metadata, password)
 		}
 	}
+
 	return nil, InvalidCredentialsErr
 }

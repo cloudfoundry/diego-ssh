@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
@@ -36,6 +37,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint string
 		diegoAPIURL        string
 		ccAPIURL           string
+		uaaURL             string
 		enableCFAuth       bool
 		enableDiegoAuth    bool
 	)
@@ -53,6 +55,7 @@ var _ = Describe("SSH proxy", func() {
 		diegoAPIURL = fakeReceptor.URL()
 
 		ccAPIURL = ""
+		uaaURL = ""
 		enableCFAuth = true
 		enableDiegoAuth = true
 	})
@@ -63,6 +66,7 @@ var _ = Describe("SSH proxy", func() {
 			HostKey:         hostKey,
 			DiegoAPIURL:     diegoAPIURL,
 			CCAPIURL:        ccAPIURL,
+			UAAURL:          uaaURL,
 			EnableCFAuth:    enableCFAuth,
 			EnableDiegoAuth: enableDiegoAuth,
 		}
@@ -72,6 +76,7 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	AfterEach(func() {
+		fakeReceptor.Close()
 		ginkgomon.Kill(process, exitDuration)
 	})
 
@@ -227,19 +232,21 @@ var _ = Describe("SSH proxy", func() {
 				}
 
 				fakeCC = ghttp.NewServer()
-				ccAPIURL = fakeCC.URL()
-
-				ccAppResponse := authenticators.AppSSHResponse{
-					ProcessGuid: "app-guid-app-version",
-				}
-
 				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
 						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, ccAppResponse),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.AppSSHResponse{
+							ProcessGuid: processGuid,
+						}),
 					),
 				)
+
+				ccAPIURL = fakeCC.URL()
+			})
+
+			AfterEach(func() {
+				fakeCC.Close()
 			})
 
 			Context("when the client authenticates with the right data", func() {
@@ -441,6 +448,119 @@ var _ = Describe("SSH proxy", func() {
 			Context("and the enableDiegoAuth flag is set to false", func() {
 				BeforeEach(func() {
 					enableDiegoAuth = false
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+				})
+			})
+		})
+
+		Context("when the client uses the user@ form without a realm", func() {
+			var fakeCC *ghttp.Server
+			var fakeUAA *ghttp.Server
+
+			BeforeEach(func() {
+				processGuid = "app-guid-app-version"
+
+				clientConfig = &ssh.ClientConfig{
+					User: "ssh-client@app-guid/0",
+					Auth: []ssh.AuthMethod{ssh.Password("ssh-client-password")},
+				}
+
+				fakeCC = ghttp.NewServer()
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer access-token"}}),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.AppSSHResponse{
+							ProcessGuid: processGuid,
+						}),
+					),
+				)
+
+				fakeUAA = ghttp.NewServer()
+				fakeUAA.RouteToHandler("POST", "/oauth/token",
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/oauth/token"),
+						ghttp.VerifyBasicAuth("uaa-client", "uaa-client-password"),
+						ghttp.VerifyContentType("application/x-www-form-urlencoded"),
+						ghttp.VerifyHeaderKV("accept", "application/json"),
+						ghttp.VerifyFormKV("grant_type", "password"),
+						ghttp.VerifyFormKV("username", "ssh-client"),
+						ghttp.VerifyFormKV("password", "ssh-client-password"),
+						ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.UAAAuthTokenResponse{
+							AccessToken: "access-token",
+							TokenType:   "bearer",
+						}),
+					),
+				)
+
+				ccAPIURL = fakeCC.URL()
+				u, err := url.Parse(fakeUAA.URL())
+				Expect(err).NotTo(HaveOccurred())
+				u.User = url.UserPassword("uaa-client", "uaa-client-password")
+				uaaURL = u.String()
+			})
+
+			AfterEach(func() {
+				fakeUAA.Close()
+				fakeCC.Close()
+			})
+
+			Context("when authentication is successful", func() {
+				var client *ssh.Client
+
+				JustBeforeEach(func() {
+					var err error
+					client, err = ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				AfterEach(func() {
+					client.Close()
+				})
+
+				It("acquires an access token from the uaa", func() {
+					Expect(fakeUAA.ReceivedRequests()).To(HaveLen(1))
+				})
+
+				It("verifies access against the cloud controller", func() {
+					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
+				})
+
+				It("acquires the lrp info from the receptor", func() {
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(2))
+				})
+
+				It("connects to the target daemon", func() {
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+
+					output, err := session.Output("echo -n hello")
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(string(output)).To(Equal("hello"))
+				})
+			})
+
+			Context("when the uaa url is not set", func() {
+				BeforeEach(func() {
+					uaaURL = ""
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
+					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+				})
+			})
+
+			Context("when cf authentication is disabled", func() {
+				BeforeEach(func() {
+					enableCFAuth = false
 				})
 
 				It("fails the authentication", func() {

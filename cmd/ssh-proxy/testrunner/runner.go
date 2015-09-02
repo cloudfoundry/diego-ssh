@@ -13,6 +13,7 @@ type Args struct {
 	HostKey         string
 	DiegoAPIURL     string
 	CCAPIURL        string
+	UAAURL          string
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
 }
@@ -23,6 +24,7 @@ func (args Args) ArgSlice() []string {
 		"-hostKey=" + args.HostKey,
 		"-diegoAPIURL=" + args.DiegoAPIURL,
 		"-ccAPIURL=" + args.CCAPIURL,
+		"-uaaURL=" + args.UAAURL,
 		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
 		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),
 	}
