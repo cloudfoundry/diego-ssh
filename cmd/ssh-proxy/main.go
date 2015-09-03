@@ -10,13 +10,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
-	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -37,10 +37,10 @@ var hostKey = flag.String(
 	"PEM encoded RSA host key",
 )
 
-var diegoAPIURL = flag.String(
-	"diegoAPIURL",
+var bbsAddress = flag.String(
+	"bbsAddress",
 	"",
-	"URL of diego API",
+	"Address of the BBS API Server",
 )
 
 var ccAPIURL = flag.String(
@@ -77,6 +77,12 @@ var enableDiegoAuth = flag.Bool(
 	"enableDiegoAuth",
 	false,
 	"Allow authentication with diego",
+)
+
+var diegoCredentials = flag.String(
+	"diegoCredentials",
+	"",
+	"Diego Credentials to be used with the Diego authentication method",
 )
 
 const (
@@ -137,14 +143,14 @@ func initializeDropsonde(logger lager.Logger) {
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	cf_http.Initialize(*communicationTimeout)
 
-	if *diegoAPIURL == "" {
-		err := errors.New("diegoAPIURL is required")
-		logger.Fatal("diego-api-url-required", err)
+	if *bbsAddress == "" {
+		err := errors.New("bbsAddress is required")
+		logger.Fatal("bbs-address-required", err)
 	}
 
-	url, err := url.Parse(*diegoAPIURL)
+	url, err := url.Parse(*bbsAddress)
 	if err != nil {
-		logger.Fatal("failed-to-parse-diego-api-url", err)
+		logger.Fatal("failed-to-parse-bbs-address", err)
 	}
 
 	_, err = url.Parse(*ccAPIURL)
@@ -152,18 +158,13 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		logger.Fatal("failed-to-parse-cc-api-url", err)
 	}
 
-	var diegoCreds string
-	if url.User != nil {
-		diegoCreds = url.User.String()
-	}
-
-	receptorClient := receptor.NewClient(*diegoAPIURL)
-	permissionsBuilder := authenticators.NewPermissionsBuiler(receptorClient)
+	bbsClient := bbs.NewClient(*bbsAddress)
+	permissionsBuilder := authenticators.NewPermissionsBuiler(bbsClient)
 
 	authens := []authenticators.PasswordAuthenticator{}
 
 	if *enableDiegoAuth {
-		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, []byte(diegoCreds), permissionsBuilder)
+		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, []byte(*diegoCredentials), permissionsBuilder)
 		authens = append(authens, diegoAuthenticator)
 	}
 

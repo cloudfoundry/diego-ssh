@@ -25,11 +25,11 @@ The proxy currently supports authentication against a `diego` domain and a
 `cf` domain. Each authentication domain can be enabled independently via
 command line arguments.
 
-#### Diego via the Receptor API
+#### Diego via custom credentials
 
 
 For Diego, the user is of the form `diego:`_process-guid_/_index_ and the
-password must hold the receptor credentials in the form _user_:_password_.
+password must hold the configured credentials.
 
 Client example:
 ```
@@ -37,10 +37,9 @@ $ ssh -p 2222 'diego:my-process-guid/1'@ssh.10.244.0.34.xip.io
 $ scp -P 2222 -oUser='diego:ssh-process-guid/0' my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
 ```
 
-The receptor credentials checked by the proxy are extracted from the
-diegoAPIURL provided on the command line. The password provided by the client
-to the proxy must match what is present in the URL for a successful
-authentication.
+The credentials checked by the proxy are configurable via the
+`--diegoCredentials` flag.  The password provided by the client to the proxy
+must match what is present in the flag for successful authentication.
 
 This support is enabled with the `--enableDiegoAuth` flag.
 

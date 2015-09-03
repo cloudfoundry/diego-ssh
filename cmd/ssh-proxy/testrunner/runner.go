@@ -11,24 +11,27 @@ import (
 type Args struct {
 	Address         string
 	HostKey         string
-	DiegoAPIURL     string
+	BBSAddress      string
 	CCAPIURL        string
 	UAAURL          string
 	SkipCertVerify  bool
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
+
+	DiegoCredentials string
 }
 
 func (args Args) ArgSlice() []string {
 	return []string{
 		"-address=" + args.Address,
 		"-hostKey=" + args.HostKey,
-		"-diegoAPIURL=" + args.DiegoAPIURL,
+		"-bbsAddress=" + args.BBSAddress,
 		"-ccAPIURL=" + args.CCAPIURL,
 		"-uaaURL=" + args.UAAURL,
 		"-skipCertVerify=" + strconv.FormatBool(args.SkipCertVerify),
 		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
 		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),
+		"-diegoCredentials=" + args.DiegoCredentials,
 	}
 }
 
