@@ -14,6 +14,7 @@ type Args struct {
 	DiegoAPIURL     string
 	CCAPIURL        string
 	UAAURL          string
+	SkipCertVerify  bool
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
 }
@@ -25,6 +26,7 @@ func (args Args) ArgSlice() []string {
 		"-diegoAPIURL=" + args.DiegoAPIURL,
 		"-ccAPIURL=" + args.CCAPIURL,
 		"-uaaURL=" + args.UAAURL,
+		"-skipCertVerify=" + strconv.FormatBool(args.SkipCertVerify),
 		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
 		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),
 	}

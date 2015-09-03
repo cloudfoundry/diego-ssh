@@ -40,6 +40,7 @@ var _ = Describe("SSH proxy", func() {
 		uaaURL             string
 		enableCFAuth       bool
 		enableDiegoAuth    bool
+		skipCertVerify     bool
 	)
 
 	BeforeEach(func() {
@@ -58,6 +59,7 @@ var _ = Describe("SSH proxy", func() {
 		uaaURL = ""
 		enableCFAuth = true
 		enableDiegoAuth = true
+		skipCertVerify = true
 	})
 
 	JustBeforeEach(func() {
@@ -67,6 +69,7 @@ var _ = Describe("SSH proxy", func() {
 			DiegoAPIURL:     diegoAPIURL,
 			CCAPIURL:        ccAPIURL,
 			UAAURL:          uaaURL,
+			SkipCertVerify:  skipCertVerify,
 			EnableCFAuth:    enableCFAuth,
 			EnableDiegoAuth: enableDiegoAuth,
 		}
@@ -231,7 +234,7 @@ var _ = Describe("SSH proxy", func() {
 					Auth: []ssh.AuthMethod{ssh.Password("bearer token")},
 				}
 
-				fakeCC = ghttp.NewServer()
+				fakeCC = ghttp.NewTLSServer()
 				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
@@ -270,6 +273,17 @@ var _ = Describe("SSH proxy", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(string(output)).To(Equal("hello"))
+				})
+			})
+
+			Context("when skipCertVerify is false and the CC does not have a valid certificate", func() {
+				BeforeEach(func() {
+					skipCertVerify = false
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
@@ -481,7 +495,7 @@ var _ = Describe("SSH proxy", func() {
 					),
 				)
 
-				fakeUAA = ghttp.NewServer()
+				fakeUAA = ghttp.NewTLSServer()
 				fakeUAA.RouteToHandler("POST", "/oauth/token",
 					ghttp.CombineHandlers(
 						ghttp.VerifyRequest("POST", "/oauth/token"),
@@ -555,6 +569,17 @@ var _ = Describe("SSH proxy", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
 					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 					Expect(fakeReceptor.ReceivedRequests()).To(HaveLen(0))
+				})
+			})
+
+			Context("when skipCertVerify is false and the UAA does not have a valid certificate", func() {
+				BeforeEach(func() {
+					skipCertVerify = false
+				})
+
+				It("fails the authentication", func() {
+					_, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
 				})
 			})
 
