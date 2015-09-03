@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"flag"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -50,6 +53,12 @@ var uaaURL = flag.String(
 	"uaaURL",
 	"",
 	"URL of the UAA that includes the oauth client ID and password",
+)
+
+var skipCertVerify = flag.Bool(
+	"skipCertVerify",
+	false,
+	"skip SSL certificate verification",
 )
 
 var communicationTimeout = flag.Duration(
@@ -159,12 +168,12 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	if *ccAPIURL != "" && *enableCFAuth {
-		ccClient := cf_http.NewClient()
-		cfAuthenticator := authenticators.NewCFAuthenticator(logger, ccClient, *ccAPIURL, permissionsBuilder)
+		client := NewHttpClient()
+		cfAuthenticator := authenticators.NewCFAuthenticator(logger, client, *ccAPIURL, permissionsBuilder)
 		authens = append(authens, cfAuthenticator)
 
 		if *uaaURL != "" {
-			uaaAuthenticator := authenticators.NewUAAAuthenticator(logger, ccClient, *uaaURL, cfAuthenticator, permissionsBuilder)
+			uaaAuthenticator := authenticators.NewUAAAuthenticator(logger, client, *uaaURL, cfAuthenticator, permissionsBuilder)
 			authens = append(authens, uaaAuthenticator)
 		}
 	}
@@ -200,4 +209,16 @@ func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error)
 		return nil, err
 	}
 	return key, nil
+}
+
+func NewHttpClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	tlsConfig := &tls.Config{InsecureSkipVerify: *skipCertVerify}
+	return &http.Client{
+		Transport: &http.Transport{
+			Dial:            dialer.Dial,
+			TLSClientConfig: tlsConfig,
+		},
+		Timeout: *communicationTimeout,
+	}
 }
