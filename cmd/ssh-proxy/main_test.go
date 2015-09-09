@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
@@ -43,7 +42,6 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint string
 		bbsAddress         string
 		ccAPIURL           string
-		uaaURL             string
 		enableCFAuth       bool
 		enableDiegoAuth    bool
 		skipCertVerify     bool
@@ -63,7 +61,6 @@ var _ = Describe("SSH proxy", func() {
 
 		diegoCredentials = "some-creds"
 		ccAPIURL = ""
-		uaaURL = ""
 		enableCFAuth = true
 		enableDiegoAuth = true
 		skipCertVerify = true
@@ -76,7 +73,6 @@ var _ = Describe("SSH proxy", func() {
 			HostKey:          hostKey,
 			BBSAddress:       bbsAddress,
 			CCAPIURL:         ccAPIURL,
-			UAAURL:           uaaURL,
 			SkipCertVerify:   skipCertVerify,
 			EnableCFAuth:     enableCFAuth,
 			EnableDiegoAuth:  enableDiegoAuth,
@@ -621,148 +617,6 @@ var _ = Describe("SSH proxy", func() {
 			Context("and the enableDiegoAuth flag is set to false", func() {
 				BeforeEach(func() {
 					enableDiegoAuth = false
-				})
-
-				It("fails the authentication", func() {
-					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-		})
-
-		Context("when the client uses the user@ form without a realm", func() {
-			var fakeCC *ghttp.Server
-			var fakeUAA *ghttp.Server
-
-			BeforeEach(func() {
-				processGuid = "app-guid-app-version"
-
-				clientConfig = &ssh.ClientConfig{
-					User: "ssh-client@app-guid/0",
-					Auth: []ssh.AuthMethod{ssh.Password("ssh-client-password")},
-				}
-
-				fakeCC = ghttp.NewServer()
-				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
-						ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer access-token"}}),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.AppSSHResponse{
-							ProcessGuid: processGuid,
-						}),
-					),
-				)
-
-				fakeUAA = ghttp.NewTLSServer()
-				fakeUAA.RouteToHandler("POST", "/oauth/token",
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("POST", "/oauth/token"),
-						ghttp.VerifyBasicAuth("uaa-client", "uaa-client-password"),
-						ghttp.VerifyContentType("application/x-www-form-urlencoded"),
-						ghttp.VerifyHeaderKV("accept", "application/json"),
-						ghttp.VerifyFormKV("grant_type", "password"),
-						ghttp.VerifyFormKV("username", "ssh-client"),
-						ghttp.VerifyFormKV("password", "ssh-client-password"),
-						ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.UAAAuthTokenResponse{
-							AccessToken: "access-token",
-							TokenType:   "bearer",
-						}),
-					),
-				)
-
-				ccAPIURL = fakeCC.URL()
-				u, err := url.Parse(fakeUAA.URL())
-				Expect(err).NotTo(HaveOccurred())
-				u.User = url.UserPassword("uaa-client", "uaa-client-password")
-				uaaURL = u.String()
-			})
-
-			JustBeforeEach(func() {
-				fakeBBS.AppendHandlers(
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
-						VerifyProto(actualLRPRequest, &models.ActualLRPGroupByProcessGuidAndIndexRequest{}),
-						RespondWithProto(actualLRPResponse),
-					),
-				)
-
-				fakeBBS.AppendHandlers(
-					ghttp.CombineHandlers(
-						ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
-						VerifyProto(desiredLRPRequest, &models.DesiredLRPByProcessGuidRequest{}),
-						RespondWithProto(desiredLRPResponse),
-					),
-				)
-			})
-
-			AfterEach(func() {
-				fakeUAA.Close()
-				fakeCC.Close()
-			})
-
-			Context("when authentication is successful", func() {
-				var client *ssh.Client
-
-				JustBeforeEach(func() {
-					var err error
-					client, err = ssh.Dial("tcp", address, clientConfig)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				AfterEach(func() {
-					client.Close()
-				})
-
-				It("acquires an access token from the uaa", func() {
-					Expect(fakeUAA.ReceivedRequests()).To(HaveLen(1))
-				})
-
-				It("verifies access against the cloud controller", func() {
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-				})
-
-				It("acquires the lrp info from the BBS", func() {
-					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
-				})
-
-				It("connects to the target daemon", func() {
-					session, err := client.NewSession()
-					Expect(err).NotTo(HaveOccurred())
-
-					output, err := session.Output("echo -n hello")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(output)).To(Equal("hello"))
-				})
-			})
-
-			Context("when the uaa url is not set", func() {
-				BeforeEach(func() {
-					uaaURL = ""
-				})
-
-				It("fails the authentication", func() {
-					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
-				})
-			})
-
-			Context("when skipCertVerify is false and the UAA does not have a valid certificate", func() {
-				BeforeEach(func() {
-					skipCertVerify = false
-				})
-
-				It("fails the authentication", func() {
-					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError(ContainSubstring("ssh: handshake failed")))
-				})
-			})
-
-			Context("when cf authentication is disabled", func() {
-				BeforeEach(func() {
-					enableCFAuth = false
 				})
 
 				It("fails the authentication", func() {

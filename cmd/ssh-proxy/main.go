@@ -49,12 +49,6 @@ var ccAPIURL = flag.String(
 	"URL of Cloud Controller API",
 )
 
-var uaaURL = flag.String(
-	"uaaURL",
-	"",
-	"URL of the UAA that includes the oauth client ID and password",
-)
-
 var skipCertVerify = flag.Bool(
 	"skipCertVerify",
 	false,
@@ -172,11 +166,6 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		client := NewHttpClient()
 		cfAuthenticator := authenticators.NewCFAuthenticator(logger, client, *ccAPIURL, permissionsBuilder)
 		authens = append(authens, cfAuthenticator)
-
-		if *uaaURL != "" {
-			uaaAuthenticator := authenticators.NewUAAAuthenticator(logger, client, *uaaURL, cfAuthenticator, permissionsBuilder)
-			authens = append(authens, uaaAuthenticator)
-		}
 	}
 
 	authenticator := authenticators.NewCompositeAuthenticator(authens...)
