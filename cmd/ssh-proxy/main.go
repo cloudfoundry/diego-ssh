@@ -79,6 +79,24 @@ var diegoCredentials = flag.String(
 	"Diego Credentials to be used with the Diego authentication method",
 )
 
+var bbsCACert = flag.String(
+	"bbsCACert",
+	"",
+	"path to certificate authority cert used for mutually authenticated TLS BBS communication",
+)
+
+var bbsClientCert = flag.String(
+	"bbsClientCert",
+	"",
+	"path to client cert used for mutually authenticated TLS BBS communication",
+)
+
+var bbsClientKey = flag.String(
+	"bbsClientKey",
+	"",
+	"path to client key used for mutually authenticated TLS BBS communication",
+)
+
 const (
 	dropsondeDestination = "localhost:3457"
 	dropsondeOrigin      = "ssh-proxy"
@@ -152,8 +170,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		logger.Fatal("failed-to-parse-cc-api-url", err)
 	}
 
-	bbsClient := bbs.NewClient(*bbsAddress)
-	permissionsBuilder := authenticators.NewPermissionsBuiler(bbsClient)
+	permissionsBuilder := authenticators.NewPermissionsBuiler(initializeBBSClient(logger))
 
 	authens := []authenticators.PasswordAuthenticator{}
 
@@ -211,4 +228,21 @@ func NewHttpClient() *http.Client {
 		},
 		Timeout: *communicationTimeout,
 	}
+}
+
+func initializeBBSClient(logger lager.Logger) bbs.Client {
+	bbsURL, err := url.Parse(*bbsAddress)
+	if err != nil {
+		logger.Fatal("Invalid BBS URL", err)
+	}
+
+	if bbsURL.Scheme != "https" {
+		return bbs.NewClient(*bbsAddress)
+	}
+
+	bbsClient, err := bbs.NewSecureClient(*bbsAddress, *bbsCACert, *bbsClientCert, *bbsClientKey)
+	if err != nil {
+		logger.Fatal("Failed to configure secure BBS client", err)
+	}
+	return bbsClient
 }
