@@ -3,8 +3,6 @@ package authenticators
 import (
 	"regexp"
 
-	"github.com/pivotal-golang/lager"
-
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,11 +16,6 @@ type PublicKeyAuthenticator interface {
 type PasswordAuthenticator interface {
 	UserRegexp() *regexp.Regexp
 	Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
-}
-
-//go:generate counterfeiter -o fake_authenticators/fake_cc_access_checker.go . CCAccessChecker
-type CCAccessChecker interface {
-	CheckAccess(logger lager.Logger, appGuid string, token string) (string, error)
 }
 
 //go:generate counterfeiter -o fake_authenticators/fake_permissions_builder.go . PermissionsBuilder

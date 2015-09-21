@@ -49,6 +49,12 @@ var ccAPIURL = flag.String(
 	"URL of Cloud Controller API",
 )
 
+var uaaTokenURL = flag.String(
+	"uaaTokenURL",
+	"",
+	"URL of the UAA OAuth2 token endpoint that includes the oauth client ID and password",
+)
+
 var skipCertVerify = flag.Bool(
 	"skipCertVerify",
 	false,
@@ -107,11 +113,16 @@ func main() {
 	cf_lager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
+	cf_http.Initialize(*communicationTimeout)
+
 	logger, reconfigurableSink := cf_lager.New("ssh-proxy")
 
-	initializeDropsonde(logger)
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
+	if err != nil {
+		logger.Error("failed-to-initialize-dropsonde", err)
+	}
 
-	proxyConfig, err := configure(logger)
+	proxyConfig, err := configureProxy(logger)
 	if err != nil {
 		logger.Error("configure-failed", err)
 		os.Exit(1)
@@ -145,16 +156,7 @@ func main() {
 	os.Exit(0)
 }
 
-func initializeDropsonde(logger lager.Logger) {
-	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
-	if err != nil {
-		logger.Error("failed-to-initialize-dropsonde", err)
-	}
-}
-
-func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
-	cf_http.Initialize(*communicationTimeout)
-
+func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *bbsAddress == "" {
 		err := errors.New("bbsAddress is required")
 		logger.Fatal("bbs-address-required", err)
@@ -165,12 +167,8 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		logger.Fatal("failed-to-parse-bbs-address", err)
 	}
 
-	_, err = url.Parse(*ccAPIURL)
-	if *ccAPIURL != "" && err != nil {
-		logger.Fatal("failed-to-parse-cc-api-url", err)
-	}
-
-	permissionsBuilder := authenticators.NewPermissionsBuiler(initializeBBSClient(logger))
+	bbsClient := initializeBBSClient(logger)
+	permissionsBuilder := authenticators.NewPermissionsBuiler(bbsClient)
 
 	authens := []authenticators.PasswordAuthenticator{}
 
@@ -179,9 +177,29 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		authens = append(authens, diegoAuthenticator)
 	}
 
-	if *ccAPIURL != "" && *enableCFAuth {
+	if *enableCFAuth {
+		if *ccAPIURL == "" {
+			err := errors.New("ccAPIURL is required for Cloud Foundry authentication")
+			logger.Fatal("uaa-url-required", err)
+		}
+
+		_, err = url.Parse(*ccAPIURL)
+		if *ccAPIURL != "" && err != nil {
+			logger.Fatal("failed-to-parse-cc-api-url", err)
+		}
+
+		if *uaaTokenURL == "" {
+			err := errors.New("uaaTokenURL is required for Cloud Foundry authentication")
+			logger.Fatal("uaa-url-required", err)
+		}
+
+		_, err = url.Parse(*uaaTokenURL)
+		if *uaaTokenURL != "" && err != nil {
+			logger.Fatal("failed-to-parse-uaa-url", err)
+		}
+
 		client := NewHttpClient()
-		cfAuthenticator := authenticators.NewCFAuthenticator(logger, client, *ccAPIURL, permissionsBuilder)
+		cfAuthenticator := authenticators.NewCFAuthenticator(logger, client, *ccAPIURL, *uaaTokenURL, permissionsBuilder)
 		authens = append(authens, cfAuthenticator)
 	}
 

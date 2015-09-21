@@ -34,9 +34,9 @@ func (dpa *DiegoProxyAuthenticator) UserRegexp() *regexp.Regexp {
 }
 
 func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	logger := dpa.logger.Session("authenticate")
-	logger.Info("authentication-starting")
-	defer logger.Info("authentication-finished")
+	logger := dpa.logger.Session("diego-authenticate")
+	logger.Info("authenticate-starting")
+	defer logger.Info("authenticate-finished")
 
 	if !DiegoUserRegex.MatchString(metadata.User()) {
 		logger.Error("regex-match-fail", InvalidDomainErr)

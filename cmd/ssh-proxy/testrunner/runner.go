@@ -13,6 +13,7 @@ type Args struct {
 	HostKey         string
 	BBSAddress      string
 	CCAPIURL        string
+	UAATokenURL     string
 	SkipCertVerify  bool
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
@@ -26,6 +27,7 @@ func (args Args) ArgSlice() []string {
 		"-hostKey=" + args.HostKey,
 		"-bbsAddress=" + args.BBSAddress,
 		"-ccAPIURL=" + args.CCAPIURL,
+		"-uaaTokenURL=" + args.UAATokenURL,
 		"-skipCertVerify=" + strconv.FormatBool(args.SkipCertVerify),
 		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
 		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),

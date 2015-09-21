@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
@@ -13,8 +15,9 @@ import (
 
 type CFAuthenticator struct {
 	logger             lager.Logger
-	ccClient           *http.Client
+	httpClient         *http.Client
 	ccURL              string
+	uaaTokenURL        string
 	permissionsBuilder PermissionsBuilder
 }
 
@@ -22,18 +25,25 @@ type AppSSHResponse struct {
 	ProcessGuid string `json:"process_guid"`
 }
 
+type UAAAuthTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+}
+
 var CFUserRegex *regexp.Regexp = regexp.MustCompile(`cf:(.+)/(\d+)`)
 
 func NewCFAuthenticator(
 	logger lager.Logger,
-	ccClient *http.Client,
+	httpClient *http.Client,
 	ccURL string,
+	uaaTokenURL string,
 	permissionsBuilder PermissionsBuilder,
 ) *CFAuthenticator {
 	return &CFAuthenticator{
 		logger:             logger,
-		ccClient:           ccClient,
+		httpClient:         httpClient,
 		ccURL:              ccURL,
+		uaaTokenURL:        uaaTokenURL,
 		permissionsBuilder: permissionsBuilder,
 	}
 }
@@ -43,9 +53,9 @@ func (cfa *CFAuthenticator) UserRegexp() *regexp.Regexp {
 }
 
 func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	logger := cfa.logger.Session("authenticate")
-	logger.Info("authentication-starting")
-	defer logger.Info("authentication-finished")
+	logger := cfa.logger.Session("cf-authenticate")
+	logger.Info("authenticate-starting")
+	defer logger.Info("authenticate-finished")
 
 	if !CFUserRegex.MatchString(metadata.User()) {
 		logger.Error("regex-match-fail", InvalidCredentialsErr)
@@ -62,7 +72,15 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, InvalidCredentialsErr
 	}
 
-	processGuid, err := cfa.CheckAccess(logger, appGuid, string(password))
+	cred := string(password)
+	if !isBearerToken(cred) {
+		cred, err = cfa.exchangeAccessCodeForToken(logger, cred)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	processGuid, err := cfa.checkAccess(logger, appGuid, string(cred))
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +93,54 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	return permissions, err
 }
 
-func (cfa *CFAuthenticator) CheckAccess(logger lager.Logger, appGuid string, token string) (string, error) {
+func isBearerToken(cred string) bool {
+	fields := strings.Fields(cred)
+	if len(fields) > 1 && strings.ToLower(fields[0]) == "bearer" {
+		return true
+	}
+
+	return false
+}
+
+func (cfa *CFAuthenticator) exchangeAccessCodeForToken(logger lager.Logger, code string) (string, error) {
+	logger = logger.Session("exchange-access-code-for-token")
+
+	formValues := make(url.Values)
+	formValues.Set("grant_type", "authorization_code")
+	formValues.Set("code", code)
+
+	req, err := http.NewRequest("POST", cfa.uaaTokenURL, strings.NewReader(formValues.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := cfa.httpClient.Do(req)
+	if err != nil {
+		logger.Error("request-failed", err)
+		return "", AuthenticationFailedErr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Error("response-status-not-ok", AuthenticationFailedErr, lager.Data{
+			"status-code": resp.StatusCode,
+		})
+		return "", AuthenticationFailedErr
+	}
+
+	var tokenResponse UAAAuthTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(&tokenResponse)
+	if err != nil {
+		logger.Error("decode-token-response-failed", err)
+		return "", AuthenticationFailedErr
+	}
+
+	return fmt.Sprintf("%s %s", tokenResponse.TokenType, tokenResponse.AccessToken), nil
+}
+
+func (cfa *CFAuthenticator) checkAccess(logger lager.Logger, appGuid string, token string) (string, error) {
 	path := fmt.Sprintf("%s/internal/apps/%s/ssh_access", cfa.ccURL, appGuid)
 
 	req, err := http.NewRequest("GET", path, nil)
@@ -85,7 +150,7 @@ func (cfa *CFAuthenticator) CheckAccess(logger lager.Logger, appGuid string, tok
 	}
 	req.Header.Add("Authorization", token)
 
-	resp, err := cfa.ccClient.Do(req)
+	resp, err := cfa.httpClient.Do(req)
 	if err != nil {
 		logger.Error("fetching-app-failed", err)
 		return "", err
