@@ -22,6 +22,8 @@ func NewInfoFactory(cli plugin.CliConnection) InfoFactory {
 type Info struct {
 	SSHEndpoint            string `json:"app_ssh_endpoint"`
 	SSHEndpointFingerprint string `json:"app_ssh_host_key_fingerprint"`
+	SSHOAuthClient         string `json:"app_ssh_oauth_client"`
+	TokenEndpoint          string `json:"token_endpoint"`
 }
 
 func (ifactory *infoFactory) Get() (Info, error) {

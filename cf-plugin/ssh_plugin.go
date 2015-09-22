@@ -80,6 +80,13 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 					Usage: cmd.SSHAllowedUsage,
 				},
 			},
+			{
+				Name:     "get-ssh-code",
+				HelpText: "get a one time password for ssh clients",
+				UsageDetails: plugin.Usage{
+					Usage: cmd.GetSSHCodeUsage,
+				},
+			},
 		},
 	}
 }
@@ -87,7 +94,9 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
 	appFactory := app.NewAppFactory(cli, models.Curl)
+	credFactory := credential.NewCredentialFactory(cli)
 	spaceFactory := space.NewSpaceFactory(cli, models.Curl)
+	infoFactory := info.NewInfoFactory(cli)
 
 	switch args[0] {
 	case "CLI-MESSAGE-UNINSTALL":
@@ -122,6 +131,15 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 		if err != nil {
 			p.Fatal(err)
 		}
+	case "get-ssh-code":
+		skipCertVerify, err := cli.IsSSLDisabled()
+		if err != nil {
+			p.Fatal(err)
+		}
+		err = cmd.GetSSHCode(args, infoFactory, credFactory, skipCertVerify, p.OutputWriter)
+		if err != nil {
+			p.Fatal(err)
+		}
 	case "ssh":
 		opts := options.NewSSHOptions()
 		err := opts.Parse(args)
@@ -137,8 +155,8 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			cmd.DefaultListenerFactory(),
 			30*time.Second,
 			appFactory,
-			info.NewInfoFactory(cli),
-			credential.NewCredentialFactory(cli),
+			infoFactory,
+			credFactory,
 		)
 
 		err = secureShell.Connect(opts)

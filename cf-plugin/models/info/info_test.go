@@ -32,7 +32,9 @@ var _ = Describe("Info", func() {
 			BeforeEach(func() {
 				expectedJson = `{
 					"app_ssh_endpoint": "ssh.example.com:1234",
-					"app_ssh_host_key_fingerprint": "00:11:22:33:44:55:66:77:88"
+					"app_ssh_host_key_fingerprint": "00:11:22:33:44:55:66:77:88",
+					"app_ssh_oauth_client": "ssh-proxy",
+					"token_endpoint": "https://uaa.example.com"
 				}`
 
 				fakeCliConnection.CliCommandWithoutTerminalOutputReturns([]string{expectedJson}, nil)
@@ -47,6 +49,8 @@ var _ = Describe("Info", func() {
 
 				Expect(model.SSHEndpoint).To(Equal("ssh.example.com:1234"))
 				Expect(model.SSHEndpointFingerprint).To(Equal("00:11:22:33:44:55:66:77:88"))
+				Expect(model.SSHOAuthClient).To(Equal("ssh-proxy"))
+				Expect(model.TokenEndpoint).To(Equal("https://uaa.example.com"))
 			})
 		})
 
