@@ -73,11 +73,11 @@ $ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
     grep Location: | \
     cut -f2 -d'?' | \
     cut -f2 -d'=' | \
-    pbcopy # paste oauth token when prompted for password
+    pbcopy # paste authoriztion code when prompted for password
 ```
 or, if you have a recent level of the ssh plugin
 ```
-$ cf get-ssh-code | pbcopy
+$ cf get-ssh-code | pbcopy # paste authorization code when prompted for password
 ```
 
 Use the token or one-time authorization code as the password:
@@ -210,6 +210,7 @@ The [cf CLI](https://github.com/cloudfoundry/cli) plugin adds the following comm
 - **allow-space-ssh** - allow SSH access for the space
 - **disallow-space-ssh** - disallow SSH access for the space
 - **space-ssh-allowed** - reports whether SSH is allowed in a space
+- **get-ssh-code** - obtain a one-time authorization code that can be used as an ssh password
 
 To build and install the plugin:
 ```
