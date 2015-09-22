@@ -94,9 +94,9 @@ func (p *SSHPlugin) GetMetadata() plugin.PluginMetadata {
 func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 	p.OutputWriter = os.Stdout
 	appFactory := app.NewAppFactory(cli, models.Curl)
-	credFactory := credential.NewCredentialFactory(cli)
-	spaceFactory := space.NewSpaceFactory(cli, models.Curl)
 	infoFactory := info.NewInfoFactory(cli)
+	credFactory := credential.NewCredentialFactory(cli, infoFactory)
+	spaceFactory := space.NewSpaceFactory(cli, models.Curl)
 
 	switch args[0] {
 	case "CLI-MESSAGE-UNINSTALL":
@@ -132,11 +132,7 @@ func (p *SSHPlugin) Run(cli plugin.CliConnection, args []string) {
 			p.Fatal(err)
 		}
 	case "get-ssh-code":
-		skipCertVerify, err := cli.IsSSLDisabled()
-		if err != nil {
-			p.Fatal(err)
-		}
-		err = cmd.GetSSHCode(args, infoFactory, credFactory, skipCertVerify, p.OutputWriter)
+		err := cmd.GetSSHCode(args, credFactory, p.OutputWriter)
 		if err != nil {
 			p.Fatal(err)
 		}

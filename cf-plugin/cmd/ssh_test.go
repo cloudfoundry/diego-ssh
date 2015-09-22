@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/cmd/fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/app"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/app/app_fakes"
-	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/credential"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/credential/credential_fakes"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/info"
 	"github.com/cloudfoundry-incubator/diego-ssh/cf-plugin/models/info/info_fakes"
@@ -169,20 +168,20 @@ var _ = Describe("Diego SSH Plugin", func() {
 					Diego: true,
 				}, nil)
 				fakeInfoFactory.GetReturns(info.Info{}, nil)
-				fakeCredFactory.GetReturns(credential.Credential{}, nil)
+				fakeCredFactory.AuthorizationTokenReturns("", nil)
 			})
 
 			It("gets the current oauth token credential", func() {
-				Expect(fakeCredFactory.GetCallCount()).To(Equal(1))
+				Expect(fakeCredFactory.AuthorizationTokenCallCount()).To(Equal(1))
 			})
 
 			Context("when getting the credential fails", func() {
 				BeforeEach(func() {
-					fakeCredFactory.GetReturns(credential.Credential{}, errors.New("woops"))
+					fakeCredFactory.AuthorizationTokenReturns("", errors.New("woops"))
 				})
 
 				It("returns the error", func() {
-					Expect(fakeCredFactory.GetCallCount()).To(Equal(1))
+					Expect(fakeCredFactory.AuthorizationTokenCallCount()).To(Equal(1))
 					Expect(connectErr).To(Equal(errors.New("woops")))
 				})
 			})
@@ -248,17 +247,13 @@ var _ = Describe("Diego SSH Plugin", func() {
 				State:     "STARTED",
 			}
 
-			cred := credential.Credential{
-				Token: "bearer token",
-			}
-
 			opts = &options.SSHOptions{
 				AppName: "app-name",
 				Index:   2,
 			}
 
 			fakeAppFactory.GetReturns(app, nil)
-			fakeCredFactory.GetReturns(cred, nil)
+			fakeCredFactory.AuthorizationTokenReturns("bearer token", nil)
 			fakeInfoFactory.GetReturns(sshInfo, nil)
 		})
 
@@ -912,7 +907,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+			fakeCredFactory.AuthorizationTokenReturns("", nil)
 
 			fakeSecureClient.DialStub = net.Dial
 		})
@@ -1175,7 +1170,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+			fakeCredFactory.AuthorizationTokenReturns("", nil)
 		})
 
 		JustBeforeEach(func() {
@@ -1204,7 +1199,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.GetReturns(credential.Credential{}, nil)
+			fakeCredFactory.AuthorizationTokenReturns("", nil)
 		})
 
 		JustBeforeEach(func() {

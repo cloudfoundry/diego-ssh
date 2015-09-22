@@ -111,7 +111,7 @@ func (c *secureShell) Connect(opts *options.SSHOptions) error {
 		return err
 	}
 
-	cred, err := c.credFactory.Get()
+	cred, err := c.credFactory.AuthorizationToken()
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (c *secureShell) Connect(opts *options.SSHOptions) error {
 	clientConfig := &ssh.ClientConfig{
 		User: fmt.Sprintf("cf:%s/%d", app.Guid, opts.Index),
 		Auth: []ssh.AuthMethod{
-			ssh.Password(cred.Token),
+			ssh.Password(cred),
 		},
 		HostKeyCallback: fingerprintCallback(opts, info.SSHEndpointFingerprint),
 	}
