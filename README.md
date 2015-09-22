@@ -27,14 +27,13 @@ command line arguments.
 
 #### Diego via custom credentials
 
-
 For Diego, the user is of the form `diego:`_process-guid_/_index_ and the
 password must hold the configured credentials.
 
 Client example:
 ```
-$ ssh -p 2222 'diego:my-process-guid/1'@ssh.10.244.0.34.xip.io
-$ scp -P 2222 -oUser='diego:ssh-process-guid/0' my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
+$ ssh -p 2222 'diego:my-process-guid/1'@ssh.bosh-lite.com
+$ scp -P 2222 -oUser='diego:ssh-process-guid/0' my-local-file.json ssh.bosh-lite.com:my-remote-file.json
 ```
 
 The credentials checked by the proxy are configurable via the
@@ -46,15 +45,42 @@ This support is enabled with the `--enableDiegoAuth` flag.
 #### Cloud Foundry via Cloud Controller and UAA
 
 For Cloud Foundry, the user is of the form `cf:`_app-guid_/_instance_ and the
-password must be a valid OAuth 2 bearer token that represents the end user.
+password must be either a valid OAuth 2 bearer token that represents the end
+user or an authorization code that the ssh proxy server can exchange for an
+authorization token.
+
+In some environments, the oauth token length exceeds the limits of standard
+ssh clients. When this happens, a one-time authorization code can be used as
+an alternative. If the authorization code flow is used, the SSH proxy must be
+configured with an OAuth client id and secret. The client id used by the proxy
+must be advertised in the `/v2/info` endpoint under the `app_ssh_oauth_client`
+key.  Please see the [UAA][non-standard-oauth-auth-code] documentation for
+details on how to allocate an authorization code.
+
 The proxy will contact the Cloud Controller as the user to determine if the
 policy allows the user to access application containers via SSH.
 
 Client example:
 ```
 $ cf oauth-token | tail -1 | pbcopy # paste oauth token when prompted for password
-$ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.10.244.0.34.xip.io
-$ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0 my-local-file.json ssh.10.244.0.34.xip.io:my-remote-file.json
+```
+or
+```
+$ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
+    https://uaa.bosh-lite.com/oauth/authorize \
+    --data-urlencode  "client_id=$(cf curl /v2/info | jq -r .app_ssh_oauth_client)" \
+    --data-urlencode 'response_type=code' 2>&1 | \
+    grep Location: | \
+    cut -f2 -d'?' | \
+    cut -f2 -d'=' | \
+    pbcopy # paste oauth token when prompted for password
+```
+
+Use the token or one-time authorization code as the password:
+
+```
+$ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.bosh-lite.com
+$ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0 my-local-file.json ssh.bosh-lite.com:my-remote-file.json
 ```
 
 Cloud Foundry `cf` client example that uses the [ssh][ssh-plugin] plugin:
@@ -188,3 +214,5 @@ go build
 cf uninstall-plugin Diego-SSH
 cf install-plugin cf-plugin
 ```
+
+[non-standard-oauth-auth-code]: https://github.com/cloudfoundry/uaa/blob/master/docs/UAA-APIs.rst#api-authorization-requests-code-get-oauth-authorize-non-standard-oauth-authorize
