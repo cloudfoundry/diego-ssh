@@ -75,6 +75,10 @@ $ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
     cut -f2 -d'=' | \
     pbcopy # paste oauth token when prompted for password
 ```
+or, if you have a recent level of the ssh plugin
+```
+$ cf get-ssh-code | pbcopy
+```
 
 Use the token or one-time authorization code as the password:
 
