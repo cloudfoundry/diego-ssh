@@ -13,7 +13,6 @@ import (
 
 //go:generate counterfeiter -o credential_fakes/fake_credential_factory.go . CredentialFactory
 type CredentialFactory interface {
-	AuthorizationToken() (string, error)
 	AuthorizationCode() (string, error)
 }
 
@@ -31,22 +30,8 @@ func NewCredentialFactory(cli plugin.CliConnection, infoFactory info.InfoFactory
 	}
 }
 
-func (c *credFactory) AuthorizationToken() (string, error) {
-	_, err := c.cli.CliCommandWithoutTerminalOutput("oauth-token")
-	if err != nil {
-		return "", err
-	}
-
-	return c.cli.AccessToken()
-}
-
 func (c *credFactory) AuthorizationCode() (string, error) {
-	v2Info, err := c.infoFactory.Get()
-	if err != nil {
-		return "", err
-	}
-
-	authzToken, err := c.AuthorizationToken()
+	authzToken, err := c.authorizationToken()
 	if err != nil {
 		return "", err
 	}
@@ -70,20 +55,12 @@ func (c *credFactory) AuthorizationCode() (string, error) {
 		},
 	}
 
-	authorizeURL, err := url.Parse(v2Info.TokenEndpoint)
+	authorizeURL, err := c.authorizeURL()
 	if err != nil {
 		return "", err
 	}
 
-	values := url.Values{}
-	values.Set("response_type", "code")
-	values.Set("grant_type", "authorization_code")
-	values.Set("client_id", v2Info.SSHOAuthClient)
-
-	authorizeURL.Path = "/oauth/authorize"
-	authorizeURL.RawQuery = values.Encode()
-
-	authorizeReq, err := http.NewRequest("GET", authorizeURL.String(), nil)
+	authorizeReq, err := http.NewRequest("GET", authorizeURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -109,4 +86,35 @@ func (c *credFactory) AuthorizationCode() (string, error) {
 	}
 
 	return codes[0], nil
+}
+
+func (c *credFactory) authorizeURL() (string, error) {
+	v2Info, err := c.infoFactory.Get()
+	if err != nil {
+		return "", err
+	}
+
+	authorizeURL, err := url.Parse(v2Info.TokenEndpoint)
+	if err != nil {
+		return "", err
+	}
+
+	values := url.Values{}
+	values.Set("response_type", "code")
+	values.Set("grant_type", "authorization_code")
+	values.Set("client_id", v2Info.SSHOAuthClient)
+
+	authorizeURL.Path = "/oauth/authorize"
+	authorizeURL.RawQuery = values.Encode()
+
+	return authorizeURL.String(), nil
+}
+
+func (c *credFactory) authorizationToken() (string, error) {
+	_, err := c.cli.CliCommandWithoutTerminalOutput("oauth-token")
+	if err != nil {
+		return "", err
+	}
+
+	return c.cli.AccessToken()
 }

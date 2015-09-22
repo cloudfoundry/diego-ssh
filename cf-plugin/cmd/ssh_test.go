@@ -168,20 +168,20 @@ var _ = Describe("Diego SSH Plugin", func() {
 					Diego: true,
 				}, nil)
 				fakeInfoFactory.GetReturns(info.Info{}, nil)
-				fakeCredFactory.AuthorizationTokenReturns("", nil)
+				fakeCredFactory.AuthorizationCodeReturns("", nil)
 			})
 
 			It("gets the current oauth token credential", func() {
-				Expect(fakeCredFactory.AuthorizationTokenCallCount()).To(Equal(1))
+				Expect(fakeCredFactory.AuthorizationCodeCallCount()).To(Equal(1))
 			})
 
 			Context("when getting the credential fails", func() {
 				BeforeEach(func() {
-					fakeCredFactory.AuthorizationTokenReturns("", errors.New("woops"))
+					fakeCredFactory.AuthorizationCodeReturns("", errors.New("woops"))
 				})
 
 				It("returns the error", func() {
-					Expect(fakeCredFactory.AuthorizationTokenCallCount()).To(Equal(1))
+					Expect(fakeCredFactory.AuthorizationCodeCallCount()).To(Equal(1))
 					Expect(connectErr).To(Equal(errors.New("woops")))
 				})
 			})
@@ -253,7 +253,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 			}
 
 			fakeAppFactory.GetReturns(app, nil)
-			fakeCredFactory.AuthorizationTokenReturns("bearer token", nil)
+			fakeCredFactory.AuthorizationCodeReturns("abc123", nil)
 			fakeInfoFactory.GetReturns(sshInfo, nil)
 		})
 
@@ -907,7 +907,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.AuthorizationTokenReturns("", nil)
+			fakeCredFactory.AuthorizationCodeReturns("", nil)
 
 			fakeSecureClient.DialStub = net.Dial
 		})
@@ -1170,7 +1170,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.AuthorizationTokenReturns("", nil)
+			fakeCredFactory.AuthorizationCodeReturns("", nil)
 		})
 
 		JustBeforeEach(func() {
@@ -1199,7 +1199,7 @@ var _ = Describe("Diego SSH Plugin", func() {
 				Diego: true,
 			}, nil)
 			fakeInfoFactory.GetReturns(info.Info{}, nil)
-			fakeCredFactory.AuthorizationTokenReturns("", nil)
+			fakeCredFactory.AuthorizationCodeReturns("", nil)
 		})
 
 		JustBeforeEach(func() {

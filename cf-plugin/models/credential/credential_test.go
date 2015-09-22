@@ -32,39 +32,6 @@ var _ = Describe("Credential", func() {
 		credFactory = credential.NewCredentialFactory(fakeCliConnection, fakeInfoFactory)
 	})
 
-	Describe("AuthorizationToken", func() {
-		It("returns a credential token", func() {
-			fakeCliConnection.AccessTokenReturns("bearer lives_in_a_man_cave", nil)
-
-			cred, err := credFactory.AuthorizationToken()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
-			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputArgsForCall(0)).To(ConsistOf("oauth-token"))
-			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(1))
-			Expect(cred).To(Equal("bearer lives_in_a_man_cave"))
-		})
-
-		It("returns the error when refreshing the access token fails", func() {
-			fakeCliConnection.CliCommandWithoutTerminalOutputReturns([]string{}, errors.New("woops"))
-
-			_, err := credFactory.AuthorizationToken()
-			Expect(err).To(MatchError("woops"))
-
-			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
-			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(0))
-		})
-
-		It("returns the error when getting the access token fails", func() {
-			fakeCliConnection.AccessTokenReturns("", errors.New("woops"))
-
-			_, err := credFactory.AuthorizationToken()
-			Expect(err).To(MatchError("woops"))
-
-			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(1))
-		})
-	})
-
 	Describe("AuthorizationCode", func() {
 		var v2Info info.Info
 		var fakeUAA *ghttp.Server
@@ -91,6 +58,15 @@ var _ = Describe("Credential", func() {
 			))
 		})
 
+		It("forces the cli to refresh the access token used to acquire the access code", func() {
+			_, err := credFactory.AuthorizationCode()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
+			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputArgsForCall(0)).To(ConsistOf("oauth-token"))
+			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(1))
+		})
+
 		It("gets the access code from the token endpoint", func() {
 			code, err := credFactory.AuthorizationCode()
 			Expect(err).NotTo(HaveOccurred())
@@ -110,6 +86,25 @@ var _ = Describe("Credential", func() {
 			Expect(urlErr.Err).To(MatchError(ContainSubstring("signed by unknown authority")))
 
 			Expect(fakeUAA.ReceivedRequests()).To(HaveLen(0))
+		})
+
+		It("returns the error from the cli when refreshing the access token fails", func() {
+			fakeCliConnection.CliCommandWithoutTerminalOutputReturns([]string{}, errors.New("woops"))
+
+			_, err := credFactory.AuthorizationCode()
+			Expect(err).To(MatchError("woops"))
+
+			Expect(fakeCliConnection.CliCommandWithoutTerminalOutputCallCount()).To(Equal(1))
+			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(0))
+		})
+
+		It("returns the error from the cli when getting the access token fails", func() {
+			fakeCliConnection.AccessTokenReturns("", errors.New("woops"))
+
+			_, err := credFactory.AuthorizationCode()
+			Expect(err).To(MatchError("woops"))
+
+			Expect(fakeCliConnection.AccessTokenCallCount()).To(Equal(1))
 		})
 
 		It("returns the error from the info factory when getting /v2/info fails", func() {

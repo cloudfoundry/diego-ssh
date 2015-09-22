@@ -111,7 +111,7 @@ func (c *secureShell) Connect(opts *options.SSHOptions) error {
 		return err
 	}
 
-	cred, err := c.credFactory.AuthorizationToken()
+	cred, err := c.credFactory.AuthorizationCode()
 	if err != nil {
 		return err
 	}
