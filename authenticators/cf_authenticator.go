@@ -77,7 +77,7 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, err
 	}
 
-	processGuid, err := cfa.checkAccess(logger, appGuid, string(cred))
+	processGuid, err := cfa.checkAccess(logger, appGuid, index, string(cred))
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +128,8 @@ func (cfa *CFAuthenticator) exchangeAccessCodeForToken(logger lager.Logger, code
 	return fmt.Sprintf("%s %s", tokenResponse.TokenType, tokenResponse.AccessToken), nil
 }
 
-func (cfa *CFAuthenticator) checkAccess(logger lager.Logger, appGuid string, token string) (string, error) {
-	path := fmt.Sprintf("%s/internal/apps/%s/ssh_access", cfa.ccURL, appGuid)
+func (cfa *CFAuthenticator) checkAccess(logger lager.Logger, appGuid string, index int, token string) (string, error) {
+	path := fmt.Sprintf("%s/internal/apps/%s/ssh_access/%d", cfa.ccURL, appGuid, index)
 
 	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {

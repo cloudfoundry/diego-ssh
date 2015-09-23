@@ -126,7 +126,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/1"),
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWithJSONEncodedPtr(&sshAccessResponseCode, sshAccessResponse),
 				),
@@ -220,8 +220,8 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the cc ssh_access response cannot be parsed", func() {
 			BeforeEach(func() {
-				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access", ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/1", ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/1"),
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWith(http.StatusOK, "{{"),
 				))
@@ -236,7 +236,7 @@ var _ = Describe("CFAuthenticator", func() {
 		Context("the the cc ssh_access check times out", func() {
 			BeforeEach(func() {
 				ccTempClientTimeout := httpClientTimeout
-				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/1",
 					func(w http.ResponseWriter, req *http.Request) {
 						time.Sleep(ccTempClientTimeout * 2)
 						w.Write([]byte(`[]`))

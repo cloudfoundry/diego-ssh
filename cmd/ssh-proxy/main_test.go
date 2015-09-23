@@ -400,8 +400,8 @@ var _ = Describe("SSH proxy", func() {
 				}),
 			))
 
-			fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access", ghttp.CombineHandlers(
-				ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
+			fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/99", ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/99"),
 				ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer proxy-token"}}),
 				ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.AppSSHResponse{
 					ProcessGuid: processGuid,
