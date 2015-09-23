@@ -32,10 +32,10 @@ var _ = Describe("CFAuthenticator", func() {
 		metadata *fake_ssh.FakeConnMetadata
 		password []byte
 
-		fakeCC  *ghttp.Server
-		fakeUAA *ghttp.Server
-		ccURL   string
-		uaaURL  string
+		fakeCC      *ghttp.Server
+		fakeUAA     *ghttp.Server
+		ccURL       string
+		uaaTokenURL string
 	)
 
 	BeforeEach(func() {
@@ -53,11 +53,16 @@ var _ = Describe("CFAuthenticator", func() {
 		ccURL = fakeCC.URL()
 
 		fakeUAA = ghttp.NewServer()
-		uaaURL = fakeUAA.URL()
+		u, err := url.Parse(fakeUAA.URL())
+		Expect(err).NotTo(HaveOccurred())
+
+		u.User = url.UserPassword("diego-ssh", "diego-ssh-secret")
+		u.Path = "/oauth/token"
+		uaaTokenURL = u.String()
 	})
 
 	JustBeforeEach(func() {
-		authenticator = authenticators.NewCFAuthenticator(logger, httpClient, ccURL, uaaURL, permissionsBuilder)
+		authenticator = authenticators.NewCFAuthenticator(logger, httpClient, ccURL, uaaTokenURL, permissionsBuilder)
 		permissions, authenErr = authenticator.Authenticate(metadata, password)
 	})
 
@@ -96,39 +101,45 @@ var _ = Describe("CFAuthenticator", func() {
 
 		BeforeEach(func() {
 			metadata.UserReturns("cf:app-guid/1")
-			password = []byte("bearer token")
+			password = []byte(expectedOneTimeCode)
 
 			uaaTokenResponseCode = http.StatusOK
 			uaaTokenResponse = &authenticators.UAAAuthTokenResponse{
-				AccessToken: "token",
+				AccessToken: "exchanged-token",
 				TokenType:   "bearer",
-			}
-			sshAccessResponseCode = http.StatusOK
-			sshAccessResponse = &authenticators.AppSSHResponse{
-				ProcessGuid: "app-guid-app-version",
 			}
 
 			fakeUAA.AppendHandlers(
 				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("POST", "/oauth/token"),
+					ghttp.VerifyBasicAuth("diego-ssh", "diego-ssh-secret"),
 					ghttp.VerifyFormKV("grant_type", "authorization_code"),
 					ghttp.VerifyFormKV("code", expectedOneTimeCode),
 					ghttp.RespondWithJSONEncodedPtr(&uaaTokenResponseCode, uaaTokenResponse),
 				),
 			)
 
+			sshAccessResponseCode = http.StatusOK
+			sshAccessResponse = &authenticators.AppSSHResponse{
+				ProcessGuid: "app-guid-app-version",
+			}
+
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
-					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWithJSONEncodedPtr(&sshAccessResponseCode, sshAccessResponse),
 				),
 			)
 		})
 
+		It("uses the client password as a one time code with the UAA", func() {
+			Expect(fakeUAA.ReceivedRequests()).To(HaveLen(1))
+		})
+
 		It("fetches the app from CC using the bearer token", func() {
 			Expect(authenErr).NotTo(HaveOccurred())
 			Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-			Expect(fakeUAA.ReceivedRequests()).To(HaveLen(0))
 		})
 
 		It("builds permissions from the process guid of the app", func() {
@@ -140,25 +151,14 @@ var _ = Describe("CFAuthenticator", func() {
 			Expect(metadata).To(Equal(metadata))
 		})
 
-		Context("when the client password is not a bearer token", func() {
+		Context("when the token exchange fails", func() {
 			BeforeEach(func() {
-				password = []byte(expectedOneTimeCode)
+				uaaTokenResponseCode = http.StatusBadRequest
 			})
 
-			It("attempts to use the password as a one time code with the UAA", func() {
-				Expect(fakeUAA.ReceivedRequests()).To(HaveLen(1))
-				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
-			})
-
-			Context("when the token exchange fails", func() {
-				BeforeEach(func() {
-					uaaTokenResponseCode = http.StatusBadRequest
-				})
-
-				It("fails to authenticate", func() {
-					Expect(authenErr).To(Equal(authenticators.AuthenticationFailedErr))
-					Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
-				})
+			It("fails to authenticate", func() {
+				Expect(authenErr).To(Equal(authenticators.AuthenticationFailedErr))
+				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
 
@@ -220,9 +220,9 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the cc ssh_access response cannot be parsed", func() {
 			BeforeEach(func() {
-				fakeCC.SetHandler(0, ghttp.CombineHandlers(
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access", ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access"),
-					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer token"}}),
+					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWith(http.StatusOK, "{{"),
 				))
 			})
@@ -236,10 +236,12 @@ var _ = Describe("CFAuthenticator", func() {
 		Context("the the cc ssh_access check times out", func() {
 			BeforeEach(func() {
 				ccTempClientTimeout := httpClientTimeout
-				fakeCC.SetHandler(0, func(w http.ResponseWriter, req *http.Request) {
-					time.Sleep(ccTempClientTimeout * 2)
-					w.Write([]byte(`[]`))
-				})
+				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access",
+					func(w http.ResponseWriter, req *http.Request) {
+						time.Sleep(ccTempClientTimeout * 2)
+						w.Write([]byte(`[]`))
+					},
+				)
 			})
 
 			It("fails to authenticate", func() {

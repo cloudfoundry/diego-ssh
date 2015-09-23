@@ -72,12 +72,9 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, InvalidCredentialsErr
 	}
 
-	cred := string(password)
-	if !isBearerToken(cred) {
-		cred, err = cfa.exchangeAccessCodeForToken(logger, cred)
-		if err != nil {
-			return nil, err
-		}
+	cred, err := cfa.exchangeAccessCodeForToken(logger, string(password))
+	if err != nil {
+		return nil, err
 	}
 
 	processGuid, err := cfa.checkAccess(logger, appGuid, string(cred))
@@ -91,15 +88,6 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	}
 
 	return permissions, err
-}
-
-func isBearerToken(cred string) bool {
-	fields := strings.Fields(cred)
-	if len(fields) > 1 && strings.ToLower(fields[0]) == "bearer" {
-		return true
-	}
-
-	return false
 }
 
 func (cfa *CFAuthenticator) exchangeAccessCodeForToken(logger lager.Logger, code string) (string, error) {

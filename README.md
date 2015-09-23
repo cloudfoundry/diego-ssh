@@ -45,14 +45,9 @@ This support is enabled with the `--enableDiegoAuth` flag.
 #### Cloud Foundry via Cloud Controller and UAA
 
 For Cloud Foundry, the user is of the form `cf:`_app-guid_/_instance_ and the
-password must be either a valid OAuth 2 bearer token that represents the end
-user or an authorization code that the ssh proxy server can exchange for an
-authorization token.
-
-In some environments, the oauth token length exceeds the limits of standard
-ssh clients. When this happens, a one-time authorization code can be used as
-an alternative. If the authorization code flow is used, the SSH proxy must be
-configured with an OAuth client id and secret. The client id used by the proxy
+password must be an authorization code that the ssh proxy server can exchange
+for an authorization token. The SSH proxy must be configured to use an OAuth
+client id that has been defined in the UAA. The client id used by the proxy
 must be advertised in the `/v2/info` endpoint under the `app_ssh_oauth_client`
 key.  Please see the [UAA][non-standard-oauth-auth-code] documentation for
 details on how to allocate an authorization code.
@@ -61,10 +56,6 @@ The proxy will contact the Cloud Controller as the user to determine if the
 policy allows the user to access application containers via SSH.
 
 Client example:
-```
-$ cf oauth-token | tail -1 | pbcopy # paste oauth token when prompted for password
-```
-or
 ```
 $ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
     https://uaa.bosh-lite.com/oauth/authorize \
@@ -75,12 +66,12 @@ $ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
     cut -f2 -d'=' | \
     pbcopy # paste authoriztion code when prompted for password
 ```
-or, if you have a recent level of the ssh plugin
+or, with the ssh plugin
 ```
 $ cf get-ssh-code | pbcopy # paste authorization code when prompted for password
 ```
 
-Use the token or one-time authorization code as the password:
+The authorization code can then be used as the password:
 
 ```
 $ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.bosh-lite.com
