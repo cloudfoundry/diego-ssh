@@ -27,18 +27,25 @@ type TestCopier interface {
 	ReceiveFile(path string, pathIsDir bool, timeMessage *scp.TimeMessage) error
 }
 
+var fileInfos map[string]os.FileInfo
+
 var _ = Describe("scp", func() {
 	var (
 		stdin, stdoutSource io.ReadCloser
 		stdinSource, stdout io.WriteCloser
 		stderr              io.Writer
 
-		sourceDir               string
-		targetDir               string
-		nestedTempDir           string
-		generatedTextFile       string
-		generatedNestedTextFile string
-		generatedBinaryFile     string
+		sourceDir                   string
+		sourceDirInfo               os.FileInfo
+		targetDir                   string
+		nestedTempDir               string
+		nestedTempDirInfo           os.FileInfo
+		generatedTextFile           string
+		generatedTextFileInfo       os.FileInfo
+		generatedNestedTextFile     string
+		generatedNestedTextFileInfo os.FileInfo
+		generatedBinaryFile         string
+		generatedBinaryFileInfo     os.FileInfo
 
 		secureCopier scp.SecureCopier
 		logger       *lagertest.TestLogger
@@ -57,6 +64,8 @@ var _ = Describe("scp", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
+
+		fileInfos = make(map[string]os.FileInfo)
 
 		stdin, stdinSource = io.Pipe()
 		stdoutSource, stdout = io.Pipe()
@@ -89,6 +98,27 @@ var _ = Describe("scp", func() {
 
 		err = ioutil.WriteFile(generatedNestedTextFile, nestedFileContents, 0664)
 		Expect(err).NotTo(HaveOccurred())
+
+		// save off file infos
+		sourceDirInfo, err = os.Stat(sourceDir)
+		Expect(err).NotTo(HaveOccurred())
+		fileInfos[sourceDir] = sourceDirInfo
+
+		generatedTextFileInfo, err = os.Stat(generatedTextFile)
+		Expect(err).NotTo(HaveOccurred())
+		fileInfos[generatedTextFile] = generatedTextFileInfo
+
+		generatedBinaryFileInfo, err = os.Stat(generatedBinaryFile)
+		Expect(err).NotTo(HaveOccurred())
+		fileInfos[generatedBinaryFile] = generatedBinaryFileInfo
+
+		nestedTempDirInfo, err = os.Stat(nestedTempDir)
+		Expect(err).NotTo(HaveOccurred())
+		fileInfos[nestedTempDir] = nestedTempDirInfo
+
+		generatedNestedTextFileInfo, err = os.Stat(generatedNestedTextFile)
+		Expect(err).NotTo(HaveOccurred())
+		fileInfos[generatedNestedTextFile] = generatedNestedTextFileInfo
 
 		targetDir, err = ioutil.TempDir("", "scp-target")
 		Expect(err).NotTo(HaveOccurred())
@@ -366,6 +396,10 @@ var _ = Describe("scp", func() {
 					err := ioutil.WriteFile(generatedBadGlobFile, fileContents, 0664)
 					Expect(err).NotTo(HaveOccurred())
 
+					generatedBadGlobFileInfo, err := os.Stat(generatedBadGlobFile)
+					Expect(err).NotTo(HaveOccurred())
+					fileInfos[generatedBadGlobFile] = generatedBadGlobFileInfo
+
 					command = fmt.Sprintf("scp -f %s", generatedBadGlobFile)
 					secureCopier, err := scp.NewFromCommand(command, stdin, stdout, stderr, logger)
 					Expect(err).NotTo(HaveOccurred())
@@ -459,9 +493,6 @@ var _ = Describe("scp", func() {
 
 			BeforeEach(func() {
 				preserveTimestamps = false
-			})
-
-			BeforeEach(func() {
 				targetFile = filepath.Join(targetDir, "targetFile")
 			})
 
@@ -530,7 +561,9 @@ var _ = Describe("scp", func() {
 					})
 
 					It("sets the mode and timestamp", func() {
-						compareFile(targetFile, generatedTextFile, preserveTimestamps)
+						targetFileInfo, err := os.Stat(targetFile)
+						Expect(err).NotTo(HaveOccurred())
+						compareFileInfo(targetFileInfo, generatedTextFileInfo, preserveTimestamps)
 					})
 				})
 			})
@@ -671,8 +704,8 @@ func compareDir(actualDir, expectedDir string, compareTimestamps bool) {
 	actualDirInfo, err := os.Stat(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedDirInfo, err := os.Stat(expectedDir)
-	Expect(err).NotTo(HaveOccurred())
+	expectedDirInfo, ok := fileInfos[expectedDir]
+	Expect(ok).To(BeTrue())
 
 	Expect(actualDirInfo.Mode()).To(Equal(expectedDirInfo.Mode()))
 	if compareTimestamps {
@@ -682,7 +715,7 @@ func compareDir(actualDir, expectedDir string, compareTimestamps bool) {
 	actualFiles, err := ioutil.ReadDir(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedFiles, err := ioutil.ReadDir(actualDir)
+	expectedFiles, err := ioutil.ReadDir(expectedDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(len(actualFiles)).To(Equal(len(expectedFiles)))
@@ -700,14 +733,10 @@ func compareFile(actualFile, expectedFile string, compareTimestamps bool) {
 	actualFileInfo, err := os.Stat(actualFile)
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedFileInfo, err := os.Stat(expectedFile)
-	Expect(err).NotTo(HaveOccurred())
+	expectedFileInfo, ok := fileInfos[expectedFile]
+	Expect(ok).To(BeTrue())
 
-	Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
-	Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
-	if compareTimestamps {
-		compareTimestampsFromInfo(actualFileInfo, expectedFileInfo)
-	}
+	compareFileInfo(actualFileInfo, expectedFileInfo, compareTimestamps)
 
 	actualContents, err := ioutil.ReadFile(actualFile)
 	Expect(err).NotTo(HaveOccurred())
@@ -716,6 +745,14 @@ func compareFile(actualFile, expectedFile string, compareTimestamps bool) {
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(actualContents).To(Equal(expectedContents))
+}
+
+func compareFileInfo(actualFileInfo os.FileInfo, expectedFileInfo os.FileInfo, compareTimestamps bool) {
+	Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
+	Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
+	if compareTimestamps {
+		compareTimestampsFromInfo(actualFileInfo, expectedFileInfo)
+	}
 }
 
 func compareTimestampsFromInfo(actualInfo, expectedInfo os.FileInfo) {
