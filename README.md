@@ -1,6 +1,6 @@
 # diego-ssh
 
-**This plugin is for CLI v6.12.4 and older. [CLI v6.13.0+](https://github.com/cloudfoundry/cli/releases) does not require this plugin as the Diego SSH functions are now core functions in the CLI.**
+**The Diego-SSH CLI plugin is intended only for CLI v6.12.4 and older. [CLI v6.13.0+](https://github.com/cloudfoundry/cli/releases) does not require this plugin as the Diego SSH functions are now core functions in the CLI.**
 
 Diego-ssh is an implementation of an ssh proxy server, a lightweight ssh
 daemon, and a Cloud Foundry cli plugin. When deployed and configured
