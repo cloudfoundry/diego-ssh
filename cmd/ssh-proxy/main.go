@@ -192,7 +192,7 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *enableCFAuth {
 		if *ccAPIURL == "" {
 			err := errors.New("ccAPIURL is required for Cloud Foundry authentication")
-			logger.Fatal("uaa-url-required", err)
+			logger.Fatal("api-url-required", err)
 		}
 
 		_, err = url.Parse(*ccAPIURL)
