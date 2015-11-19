@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -67,6 +68,12 @@ var communicationTimeout = flag.Duration(
 	"Timeout applied to all HTTP requests.",
 )
 
+var dropsondePort = flag.Int(
+	"dropsondePort",
+	3457,
+	"port the local metron agent is listening on",
+)
+
 var enableCFAuth = flag.Bool(
 	"enableCFAuth",
 	false,
@@ -116,8 +123,7 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 )
 
 const (
-	dropsondeDestination = "localhost:3457"
-	dropsondeOrigin      = "ssh-proxy"
+	dropsondeOrigin = "ssh-proxy"
 )
 
 func main() {
@@ -129,10 +135,7 @@ func main() {
 
 	logger, reconfigurableSink := cf_lager.New("ssh-proxy")
 
-	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
-	if err != nil {
-		logger.Error("failed-to-initialize-dropsonde", err)
-	}
+	initializeDropsonde(logger)
 
 	proxyConfig, err := configureProxy(logger)
 	if err != nil {
@@ -237,6 +240,14 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	sshConfig.AddHostKey(key)
 
 	return sshConfig, err
+}
+
+func initializeDropsonde(logger lager.Logger) {
+	dropsondeDestination := fmt.Sprint("localhost:", *dropsondePort)
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
+	if err != nil {
+		logger.Error("failed to initialize dropsonde: %v", err)
+	}
 }
 
 func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error) {
