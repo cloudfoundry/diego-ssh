@@ -65,11 +65,14 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 
 	emitLogMessage(logger, serverConn.Permissions)
 
-	go ProxyGlobalRequests(logger, clientConn, serverRequests)
-	go ProxyGlobalRequests(logger, serverConn, clientRequests)
+	fromClientLogger := logger.Session("from-client")
+	fromDaemonLogger := logger.Session("from-daemon")
 
-	go ProxyChannels(logger, clientConn, serverChannels)
-	go ProxyChannels(logger, serverConn, clientChannels)
+	go ProxyGlobalRequests(fromClientLogger, clientConn, serverRequests)
+	go ProxyGlobalRequests(fromDaemonLogger, serverConn, clientRequests)
+
+	go ProxyChannels(fromClientLogger, clientConn, serverChannels)
+	go ProxyChannels(fromDaemonLogger, serverConn, clientChannels)
 
 	Wait(logger, serverConn, clientConn)
 }
@@ -102,6 +105,7 @@ func ProxyGlobalRequests(logger lager.Logger, conn ssh.Conn, reqs <-chan *ssh.Re
 			"wantReply": req.WantReply,
 			"payload":   req.Payload,
 		})
+
 		success, reply, err := conn.SendRequest(req.Type, req.WantReply, req.Payload)
 		if err != nil {
 			logger.Error("send-request-failed", err)
@@ -144,17 +148,20 @@ func ProxyChannels(logger lager.Logger, conn ssh.Conn, channels <-chan ssh.NewCh
 			continue
 		}
 
+		toTargetLogger := logger.Session("to-target")
+		toSourceLogger := logger.Session("to-source")
+
 		go func() {
-			helpers.Copy(logger.Session("to-target"), nil, targetChan, sourceChan)
+			helpers.Copy(toTargetLogger, nil, targetChan, sourceChan)
 			targetChan.CloseWrite()
 		}()
 		go func() {
-			helpers.Copy(logger.Session("to-source"), nil, sourceChan, targetChan)
+			helpers.Copy(toSourceLogger, nil, sourceChan, targetChan)
 			sourceChan.CloseWrite()
 		}()
 
-		go ProxyRequests(logger, newChannel.ChannelType(), sourceReqs, targetChan)
-		go ProxyRequests(logger, newChannel.ChannelType(), targetReqs, sourceChan)
+		go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan)
+		go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan)
 	}
 }
 
