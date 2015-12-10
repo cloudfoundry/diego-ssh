@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
 	"github.com/pivotal-golang/lager"
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -120,6 +121,8 @@ func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
 			sess.handleExecRequest(req)
 		case "shell":
 			sess.handleShellRequest(req)
+		case "subsystem":
+			sess.handleSubsystemRequest(req)
 		default:
 			if req.WantReply {
 				req.Reply(false, nil)
@@ -281,6 +284,56 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 
 func (sess *session) handleShellRequest(request *ssh.Request) {
 	sess.executeShell(request)
+}
+
+func (sess *session) handleSubsystemRequest(request *ssh.Request) {
+	logger := sess.logger.Session("handle-subsystem-request")
+	logger.Info("starting")
+	defer logger.Info("finished")
+
+	type subsysMsg struct {
+		Subsystem string
+	}
+	var subsystemMessage subsysMsg
+
+	err := ssh.Unmarshal(request.Payload, &subsystemMessage)
+	if err != nil {
+		logger.Error("unmarshal-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	if subsystemMessage.Subsystem != "sftp" {
+		logger.Info("unsupported-subsystem", lager.Data{"subsystem": subsystemMessage.Subsystem})
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
+	if request.WantReply {
+		request.Reply(true, nil)
+	}
+
+	sftpServer, err := sftp.NewServer(
+		sess.channel,
+		sess.channel,
+		helpers.NewLagerWriter(logger.Session("sftp-server")),
+		1,
+		false,
+		os.Getenv("HOME"),
+	)
+
+	logger.Info("starting-server")
+	go func() {
+		defer sess.destroy()
+		err = sftpServer.Serve()
+		if err != nil {
+			logger.Error("sftp-serve-error", err)
+		}
+	}()
 }
 
 func (sess *session) executeShell(request *ssh.Request, args ...string) {
@@ -557,6 +610,10 @@ func (sess *session) wait(command *exec.Cmd) error {
 }
 
 func (sess *session) destroy() {
+	logger := sess.logger.Session("destroy")
+	logger.Info("started")
+	defer logger.Info("done")
+
 	sess.Lock()
 	defer sess.Unlock()
 
@@ -564,8 +621,8 @@ func (sess *session) destroy() {
 		return
 	}
 
-	sess.wg.Wait()
 	sess.complete = true
+	sess.wg.Wait()
 
 	if sess.channel != nil {
 		sess.channel.Close()
