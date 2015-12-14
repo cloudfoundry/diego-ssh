@@ -4,6 +4,7 @@ package handlers_test
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -755,7 +757,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and a StarterFunc is provided", func() {
+		Context("and a command is provided", func() {
 			BeforeEach(func() {
 				err := session.Run("true")
 				Expect(err).NotTo(HaveOccurred())
@@ -838,9 +840,89 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(response).To(Equal([]byte("Hello")))
 			})
 		})
+
+		Context("when an unknown subsystem is requested", func() {
+			var accepted bool
+
+			BeforeEach(func() {
+				type subsysMsg struct{ Subsystem string }
+
+				var err error
+				accepted, err = session.SendRequest("subsystem", true, ssh.Marshal(subsysMsg{Subsystem: "unknown"}))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("rejects the request", func() {
+				Expect(accepted).To(BeFalse())
+			})
+
+			It("does not terminate the session", func() {
+				response, err := session.Output("/bin/echo -n Hello")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response).To(Equal([]byte("Hello")))
+			})
+		})
 	})
 
-	Context("when a session channel is opened", func() {
+	Context("when the sftp subystem is requested", func() {
+		It("accepts the request", func() {
+			type subsysMsg struct{ Subsystem string }
+			session, err := client.NewSession()
+			Expect(err).NotTo(HaveOccurred())
+			defer session.Close()
+
+			accepted, err := session.SendRequest("subsystem", true, ssh.Marshal(subsysMsg{Subsystem: "sftp"}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(accepted).To(BeTrue())
+		})
+
+		It("starts an sftp server in write mode", func() {
+			tempDir, err := ioutil.TempDir("", "sftp")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.RemoveAll(tempDir)
+
+			sftp, err := sftp.NewClient(client)
+			Expect(err).NotTo(HaveOccurred())
+			defer sftp.Close()
+
+			By("creating the file")
+			target := filepath.Join(tempDir, "textfile.txt")
+			file, err := sftp.Create(target)
+			Expect(err).NotTo(HaveOccurred())
+
+			fileContents := []byte("---\nthis is a simple file\n\n")
+			_, err = file.Write(fileContents)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = file.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(ioutil.ReadFile(target)).To(Equal(fileContents))
+
+			By("reading the file")
+			file, err = sftp.Open(target)
+			Expect(err).NotTo(HaveOccurred())
+
+			buffer := &bytes.Buffer{}
+			_, err = buffer.ReadFrom(file)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = file.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(buffer.Bytes()).To(Equal(fileContents))
+
+			By("removing the file")
+			err = sftp.Remove(target)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = os.Stat(target)
+			Expect(err).To(HaveOccurred())
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+	})
+
+	Describe("invalid session channel requests", func() {
 		var channel ssh.Channel
 		var requests <-chan *ssh.Request
 
@@ -858,7 +940,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			}
 		})
 
-		Context("and an exec request fails to unmarshal", func() {
+		Context("when an exec request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("exec", true, ssh.Marshal(struct{ Bogus uint32 }{Bogus: 1138}))
 				Expect(err).NotTo(HaveOccurred())
@@ -866,7 +948,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and an env request fails to unmarshal", func() {
+		Context("when an env request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("env", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Expect(err).NotTo(HaveOccurred())
@@ -874,7 +956,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and a signal request fails to unmarshal", func() {
+		Context("when a signal request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("signal", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Expect(err).NotTo(HaveOccurred())
@@ -882,7 +964,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and a pty request fails to unmarshal", func() {
+		Context("when a pty request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("pty-req", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Expect(err).NotTo(HaveOccurred())
@@ -890,9 +972,17 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("and a window change request fails to unmarshal", func() {
+		Context("when a window change request fails to unmarshal", func() {
 			It("rejects the request", func() {
 				accepted, err := channel.SendRequest("window-change", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(accepted).To(BeFalse())
+			})
+		})
+
+		Context("when a subsystem request fails to unmarshal", func() {
+			It("rejects the request", func() {
+				accepted, err := channel.SendRequest("subsystem", true, ssh.Marshal(struct{ Bogus int }{Bogus: 1234}))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(accepted).To(BeFalse())
 			})
