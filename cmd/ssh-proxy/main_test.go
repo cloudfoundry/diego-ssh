@@ -130,8 +130,8 @@ var _ = Describe("SSH proxy", func() {
 			VerifyProto(expectedGetActualLRPRequest),
 			RespondWithProto(actualLRPGroupResponse),
 		))
-		fakeBBS.RouteToHandler("POST", "/v1/desired_lrps/get_by_process_guid", ghttp.CombineHandlers(
-			ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid"),
+		fakeBBS.RouteToHandler("POST", "/v2/desired_lrps/get_by_process_guid", ghttp.CombineHandlers(
+			ghttp.VerifyRequest("POST", "/v2/desired_lrps/get_by_process_guid"),
 			VerifyProto(getDesiredLRPRequest),
 			RespondWithProto(desiredLRPResponse),
 		))
