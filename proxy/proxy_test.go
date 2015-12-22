@@ -19,6 +19,8 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
 	fake_logs "github.com/cloudfoundry/dropsonde/log_sender/fake"
 	"github.com/cloudfoundry/dropsonde/logs"
+	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
@@ -513,6 +515,58 @@ var _ = Describe("Proxy", func() {
 
 						channel.Write([]byte("goodbye"))
 						channel.Close()
+					})
+				})
+			})
+
+			Describe("connection metrics", func() {
+				var (
+					sender *fake.FakeMetricSender
+				)
+
+				BeforeEach(func() {
+					sender = fake.NewFakeMetricSender()
+					metrics.Initialize(sender, nil)
+				})
+
+				Context("when a connection is received", func() {
+					It("emit a metric for the total number of connections", func() {
+						_, err := ssh.Dial("tcp", proxyAddress, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(
+							func() float64 {
+								return sender.GetValue("ssh-connections").Value
+							},
+						).Should(Equal(float64(1)))
+
+						_, err = ssh.Dial("tcp", proxyAddress, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(
+							func() float64 {
+								return sender.GetValue("ssh-connections").Value
+							},
+						).Should(Equal(float64(2)))
+					})
+				})
+
+				Context("when a connection is closed", func() {
+					It("emit a metric for the total number of connections", func() {
+						conn, err := ssh.Dial("tcp", proxyAddress, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(
+							func() float64 {
+								return sender.GetValue("ssh-connections").Value
+							},
+						).Should(Equal(float64(1)))
+
+						conn.Close()
+						Eventually(
+							func() float64 {
+								return sender.GetValue("ssh-connections").Value
+							},
+						).Should(Equal(float64(0)))
 					})
 				})
 			})

@@ -9,9 +9,14 @@ import (
 	"unicode/utf8"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/dropsonde/logs"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
+)
+
+const (
+	sshConnections = metric.Metric("ssh-connections")
 )
 
 type Waiter interface {
@@ -35,6 +40,9 @@ type LogMessage struct {
 type Proxy struct {
 	logger       lager.Logger
 	serverConfig *ssh.ServerConfig
+
+	connectionLock *sync.Mutex
+	connections    int
 }
 
 func New(
@@ -42,8 +50,9 @@ func New(
 	serverConfig *ssh.ServerConfig,
 ) *Proxy {
 	return &Proxy{
-		logger:       logger,
-		serverConfig: serverConfig,
+		logger:         logger,
+		serverConfig:   serverConfig,
+		connectionLock: &sync.Mutex{},
 	}
 }
 
@@ -74,7 +83,21 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	go ProxyChannels(fromClientLogger, clientConn, serverChannels)
 	go ProxyChannels(fromDaemonLogger, serverConn, clientChannels)
 
+	p.connectionLock.Lock()
+	p.connections++
+	sshConnections.Send(p.connections)
+	p.connectionLock.Unlock()
+
+	defer p.emitConnectionClosing()
+
 	Wait(logger, serverConn, clientConn)
+}
+
+func (p *Proxy) emitConnectionClosing() {
+	p.connectionLock.Lock()
+	p.connections--
+	sshConnections.Send(p.connections)
+	p.connectionLock.Unlock()
 }
 
 func emitLogMessage(logger lager.Logger, perms *ssh.Permissions) {
