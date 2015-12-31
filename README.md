@@ -1,14 +1,10 @@
 # diego-ssh
 
-**The Diego-SSH CLI plugin is intended only for CLI v6.12.4 and older.
-[CLI v6.13.0+](https://github.com/cloudfoundry/cli/releases) does not
-require this plugin as the Diego SSH functions are now core functions
-in the CLI.**
-
-Diego-ssh is an implementation of an ssh proxy server, a lightweight ssh
-daemon, and a Cloud Foundry cli plugin. When deployed and configured
-correctly, they provide a simple and scalable way to access containers
-associated with Diego long running processes.
+Diego-ssh is an implementation of an ssh proxy server and a lightweight ssh
+daemon that supports command execution, secure file copies via `scp`, and
+secure file transfer via `sftp`. When deployed and configured correctly, these
+provide a simple and scalable way to access containers associated with Diego
+long running processes.
 
 ## Proxy
 
@@ -71,9 +67,9 @@ $ curl -k -v -H "Authorization: $(cf oauth-token | tail -1)" \
     cut -f2 -d'=' | \
     pbcopy # paste authoriztion code when prompted for password
 ```
-or, with the ssh plugin
+or, with the Cloud Foundry `cf` [command line interface][cli];
 ```
-$ cf get-ssh-code | pbcopy # paste authorization code when prompted for password
+$ cf ssh-code | pbcopy # paste authorization code when prompted for password
 ```
 
 The authorization code can then be used as the password:
@@ -81,12 +77,14 @@ The authorization code can then be used as the password:
 ```
 $ ssh -p 2222 cf:$(cf app app-name --guid)/0@ssh.bosh-lite.com
 $ scp -P 2222 -oUser=cf:$(cf app app-name --guid)/0 my-local-file.json ssh.bosh-lite.com:my-remote-file.json
+$ sftp -P 2222 cf:$(cf app app-name --guid)/0@ssh.bosh-lite.com
 ```
 
-Cloud Foundry `cf` client example that uses the [ssh][ssh-plugin] plugin:
+The Cloud Foundry `cf` [command line interface][cli] (v6.13 and newer) can
+also be used to access an interactive shell in an application container:
 ```
-$ cf install-plugin https://github.com/cloudfoundry-incubator/diego-ssh/releases/download/${version}/ssh-plugin-${platform}-${arch}
 $ cf ssh app-name
+$ cf ssh app-name -i 3 # access the container hosting index 3 of the app
 ```
 
 This support is enabled with the `--enableCFAuth` flag.
@@ -194,26 +192,5 @@ part of the lifecycle bundle.
 
 [bridge]: https://github.com/cloudfoundry-incubator/diego-design-notes#cc-bridge-components
 [cflinuxfs2]: https://github.com/cloudfoundry/stacks/tree/master/cflinuxfs2
-[ssh-plugin]: https://github.com/cloudfoundry-incubator/diego-ssh/releases
-
-## CF CLI Plugin
-
-The [cf CLI](https://github.com/cloudfoundry/cli) plugin adds the following commands:
-- **ssh** - ssh to an application container instance
-- **enable-ssh** - enable ssh for the application
-- **disable-ssh** - disable ssh for the application
-- **ssh-enabled** - reports whether SSH is enabled on an application container instance
-- **allow-space-ssh** - allow SSH access for the space
-- **disallow-space-ssh** - disallow SSH access for the space
-- **space-ssh-allowed** - reports whether SSH is allowed in a space
-- **get-ssh-code** - obtain a one-time authorization code that can be used as an ssh password
-
-To build and install the plugin:
-```
-cd ~/workspace/diego-release/src/github.com/cloudfoundry-incubator/diego-ssh/cf-plugin
-go build
-cf uninstall-plugin Diego-SSH
-cf install-plugin cf-plugin
-```
-
+[cli]: https://github.com/cloudfoundry/cli
 [non-standard-oauth-auth-code]: https://github.com/cloudfoundry/uaa/blob/master/docs/UAA-APIs.rst#api-authorization-requests-code-get-oauth-authorize-non-standard-oauth-authorize
