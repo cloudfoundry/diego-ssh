@@ -85,19 +85,28 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 
 	p.connectionLock.Lock()
 	p.connections++
-	sshConnections.Send(p.connections)
+	err = sshConnections.Send(p.connections)
+	if err != nil {
+		logger.Error("failed-to-send-ssh-connections-metric", err)
+	}
 	p.connectionLock.Unlock()
 
-	defer p.emitConnectionClosing()
+	defer func() {
+		p.emitConnectionClosing(logger)
+	}()
 
 	Wait(logger, serverConn, clientConn)
 }
 
-func (p *Proxy) emitConnectionClosing() {
+func (p *Proxy) emitConnectionClosing(logger lager.Logger) {
 	p.connectionLock.Lock()
 	p.connections--
-	sshConnections.Send(p.connections)
+	err := sshConnections.Send(p.connections)
 	p.connectionLock.Unlock()
+
+	if err != nil {
+		logger.Error("failed-to-send-ssh-connections-metric", err)
+	}
 }
 
 func emitLogMessage(logger lager.Logger, perms *ssh.Permissions) {
