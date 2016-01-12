@@ -97,12 +97,11 @@ func getDaemonEnvironment() map[string]string {
 		envs := os.Environ()
 		for _, env := range envs {
 			nvp := strings.SplitN(env, "=", 2)
-			if len(nvp) == 2 {
+			if len(nvp) == 2 && nvp[0] != "PATH" {
 				dameonEnv[nvp[0]] = nvp[1]
 			}
 		}
 	}
-
 	return dameonEnv
 }
 
