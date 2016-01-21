@@ -15,10 +15,14 @@ import (
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
+	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"
+	"github.com/cloudfoundry-incubator/locket"
 	"github.com/cloudfoundry/dropsonde"
+	"github.com/hashicorp/consul/api"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -134,6 +138,12 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
 )
 
+var consulCluster = flag.String(
+	"consulCluster",
+	"",
+	"Consul Agent URL",
+)
+
 const (
 	dropsondeOrigin = "ssh-proxy"
 )
@@ -158,8 +168,16 @@ func main() {
 	sshProxy := proxy.New(logger, proxyConfig)
 	server := server.NewServer(logger, *address, sshProxy)
 
+	consulClient, err := consuladapter.NewClient(*consulCluster)
+	if err != nil {
+		logger.Fatal("new-client-failed", err)
+	}
+
+	registrationRunner := initializeRegistrationRunner(logger, consulClient, *address, clock.NewClock())
+
 	members := grouper.Members{
 		{"ssh-proxy", server},
+		{"registration-runner", registrationRunner},
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
@@ -312,4 +330,25 @@ func initializeBBSClient(logger lager.Logger) bbs.Client {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
 	return bbsClient
+}
+
+func initializeRegistrationRunner(logger lager.Logger, consulClient *api.Client, listenAddress string, clock clock.Clock) ifrit.Runner {
+	_, portString, err := net.SplitHostPort(listenAddress)
+	if err != nil {
+		logger.Fatal("failed-invalid-listen-address", err)
+	}
+	portNum, err := net.LookupPort("tcp", portString)
+	if err != nil {
+		logger.Fatal("failed-invalid-listen-port", err)
+	}
+
+	registration := &api.AgentServiceRegistration{
+		Name: "ssh-proxy",
+		Port: portNum,
+		Check: &api.AgentServiceCheck{
+			TTL: "3s",
+		},
+	}
+
+	return locket.NewRegistrationRunner(logger, registration, consuladapter.NewConsulClient(consulClient), locket.RetryInterval, clock)
 }

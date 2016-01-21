@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/ifrit"
@@ -27,6 +29,7 @@ var (
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
+	consulRunner        *consulrunner.ClusterRunner
 )
 
 func TestSSHProxy(t *testing.T) {
@@ -73,9 +76,20 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	sshProxyPort = 7100 + GinkgoParallelNode()
 	sshProxyPath = context["ssh-proxy"]
+
+	consulRunner = consulrunner.NewClusterRunner(
+		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+		1,
+		"http",
+	)
+
+	consulRunner.Start()
+	consulRunner.WaitUntilReady()
 })
 
 var _ = BeforeEach(func() {
+	consulRunner.Reset()
+
 	sshdArgs := testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", sshdPort),
 		HostKey:       hostKeyPem,
@@ -91,6 +105,7 @@ var _ = AfterEach(func() {
 })
 
 var _ = SynchronizedAfterSuite(func() {
+	consulRunner.Stop()
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })

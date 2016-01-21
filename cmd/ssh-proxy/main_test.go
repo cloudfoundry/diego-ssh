@@ -19,6 +19,7 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
 	"github.com/gogo/protobuf/proto"
+	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"golang.org/x/crypto/ssh"
@@ -150,6 +151,7 @@ var _ = Describe("SSH proxy", func() {
 			UAATokenURL:      uaaTokenURL,
 			UAAPassword:      uaaPassword,
 			UAAUsername:      uaaUsername,
+			ConsulCluster:    consulRunner.URL(),
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -282,6 +284,32 @@ var _ = Describe("SSH proxy", func() {
 		})
 	})
 
+	Describe("Initialization", func() {
+		It("registers itself with consul", func() {
+			services, err := consulRunner.NewConsulClient().Agent().Services()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(services).Should(HaveKeyWithValue("ssh-proxy",
+				&api.AgentService{
+					Service: "ssh-proxy",
+					ID:      "ssh-proxy",
+					Port:    sshProxyPort,
+				}))
+		})
+
+		It("registers a TTL healthcheck", func() {
+			checks, err := consulRunner.NewConsulClient().Agent().Checks()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(checks).Should(HaveKeyWithValue("service:ssh-proxy",
+				&api.AgentCheck{
+					Node:        "0",
+					CheckID:     "service:ssh-proxy",
+					Name:        "Service 'ssh-proxy' check",
+					Status:      "passing",
+					ServiceID:   "ssh-proxy",
+					ServiceName: "ssh-proxy",
+				}))
+		})
+	})
 	It("presents the correct host key", func() {
 		var handshakeHostKey ssh.PublicKey
 		_, err := ssh.Dial("tcp", address, &ssh.ClientConfig{
