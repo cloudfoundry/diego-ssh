@@ -38,17 +38,18 @@ var _ = Describe("SSH proxy", func() {
 		runner  ifrit.Runner
 		process ifrit.Process
 
-		address            string
-		bbsAddress         string
-		ccAPIURL           string
-		diegoCredentials   string
-		enableCFAuth       bool
-		enableDiegoAuth    bool
-		hostKey            string
-		hostKeyFingerprint string
-		skipCertVerify     bool
-		uaaTokenURL        string
-
+		address                     string
+		bbsAddress                  string
+		ccAPIURL                    string
+		diegoCredentials            string
+		enableCFAuth                bool
+		enableDiegoAuth             bool
+		hostKey                     string
+		hostKeyFingerprint          string
+		skipCertVerify              bool
+		uaaTokenURL                 string
+		uaaPassword                 string
+		uaaUsername                 string
 		expectedGetActualLRPRequest *models.ActualLRPGroupByProcessGuidAndIndexRequest
 		actualLRPGroupResponse      *models.ActualLRPGroupResponse
 		getDesiredLRPRequest        *models.DesiredLRPByProcessGuidRequest
@@ -83,6 +84,8 @@ var _ = Describe("SSH proxy", func() {
 		u.User = url.UserPassword("ssh-proxy", "ssh-proxy-secret")
 		u.Path = "/oauth/token"
 		uaaTokenURL = u.String()
+		uaaPassword = "password1"
+		uaaUsername = "amandaplease"
 
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
@@ -146,6 +149,8 @@ var _ = Describe("SSH proxy", func() {
 			HostKey:          hostKey,
 			SkipCertVerify:   skipCertVerify,
 			UAATokenURL:      uaaTokenURL,
+			UAAPassword:      uaaPassword,
+			UAAUsername:      uaaUsername,
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -227,8 +232,8 @@ var _ = Describe("SSH proxy", func() {
 				})
 
 				It("reports the problem and terminates", func() {
-					Expect(runner).To(gbytes.Say("failed-to-parse-cc-api-url"))
-					Expect(runner).NotTo(gexec.Exit(0))
+					Expect(runner).To(gbytes.Say("configure-failed"))
+					Expect(runner).To(gexec.Exit(1))
 				})
 			})
 
@@ -239,7 +244,29 @@ var _ = Describe("SSH proxy", func() {
 
 				It("reports the problem and terminates", func() {
 					Expect(runner).To(gbytes.Say("uaaTokenURL is required for Cloud Foundry authentication"))
-					Expect(runner).NotTo(gexec.Exit(0))
+					Expect(runner).To(gexec.Exit(1))
+				})
+			})
+
+			Context("when the UAA password is missing", func() {
+				BeforeEach(func() {
+					uaaPassword = ""
+				})
+
+				It("exits with an error", func() {
+					Expect(runner).To(gbytes.Say("UAA password is required for Cloud Foundry authentication"))
+					Expect(runner).To(gexec.Exit(1))
+				})
+			})
+
+			Context("when the UAA username is missing", func() {
+				BeforeEach(func() {
+					uaaUsername = ""
+				})
+
+				It("exits with an error", func() {
+					Expect(runner).To(gbytes.Say("UAA username is required for Cloud Foundry authentication"))
+					Expect(runner).To(gexec.Exit(1))
 				})
 			})
 
@@ -249,8 +276,8 @@ var _ = Describe("SSH proxy", func() {
 				})
 
 				It("reports the problem and terminates", func() {
-					Expect(runner).To(gbytes.Say("failed-to-parse-uaa-url"))
-					Expect(runner).NotTo(gexec.Exit(0))
+					Expect(runner).To(gbytes.Say("configure-failed"))
+					Expect(runner).To(gexec.Exit(1))
 				})
 			})
 		})

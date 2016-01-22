@@ -56,6 +56,18 @@ var uaaTokenURL = flag.String(
 	"URL of the UAA OAuth2 token endpoint that includes the oauth client ID and password",
 )
 
+var uaaPassword = flag.String(
+	"uaaPassword",
+	"",
+	"Basic auth password for UAA.",
+)
+
+var uaaUsername = flag.String(
+	"uaaUsername",
+	"",
+	"Username for UAA",
+)
+
 var skipCertVerify = flag.Bool(
 	"skipCertVerify",
 	false,
@@ -194,27 +206,41 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	if *enableCFAuth {
 		if *ccAPIURL == "" {
-			err := errors.New("ccAPIURL is required for Cloud Foundry authentication")
-			logger.Fatal("api-url-required", err)
+			return nil, errors.New("ccAPIURL is required for Cloud Foundry authentication")
 		}
 
 		_, err = url.Parse(*ccAPIURL)
 		if *ccAPIURL != "" && err != nil {
-			logger.Fatal("failed-to-parse-cc-api-url", err)
+			return nil, err
+		}
+
+		if *uaaPassword == "" {
+			return nil, errors.New("UAA password is required for Cloud Foundry authentication")
+		}
+
+		if *uaaUsername == "" {
+			return nil, errors.New("UAA username is required for Cloud Foundry authentication")
 		}
 
 		if *uaaTokenURL == "" {
-			err := errors.New("uaaTokenURL is required for Cloud Foundry authentication")
-			logger.Fatal("uaa-url-required", err)
+			return nil, errors.New("uaaTokenURL is required for Cloud Foundry authentication")
 		}
 
 		_, err = url.Parse(*uaaTokenURL)
 		if *uaaTokenURL != "" && err != nil {
-			logger.Fatal("failed-to-parse-uaa-url", err)
+			return nil, err
 		}
 
 		client := NewHttpClient()
-		cfAuthenticator := authenticators.NewCFAuthenticator(logger, client, *ccAPIURL, *uaaTokenURL, permissionsBuilder)
+		cfAuthenticator := authenticators.NewCFAuthenticator(
+			logger,
+			client,
+			*ccAPIURL,
+			*uaaTokenURL,
+			*uaaUsername,
+			*uaaPassword,
+			permissionsBuilder,
+		)
 		authens = append(authens, cfAuthenticator)
 	}
 

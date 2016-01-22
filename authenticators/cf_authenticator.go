@@ -18,6 +18,8 @@ type CFAuthenticator struct {
 	httpClient         *http.Client
 	ccURL              string
 	uaaTokenURL        string
+	uaaPassword        string
+	uaaUsername        string
 	permissionsBuilder PermissionsBuilder
 }
 
@@ -37,6 +39,8 @@ func NewCFAuthenticator(
 	httpClient *http.Client,
 	ccURL string,
 	uaaTokenURL string,
+	uaaUsername string,
+	uaaPassword string,
 	permissionsBuilder PermissionsBuilder,
 ) *CFAuthenticator {
 	return &CFAuthenticator{
@@ -44,6 +48,8 @@ func NewCFAuthenticator(
 		httpClient:         httpClient,
 		ccURL:              ccURL,
 		uaaTokenURL:        uaaTokenURL,
+		uaaUsername:        uaaUsername,
+		uaaPassword:        uaaPassword,
 		permissionsBuilder: permissionsBuilder,
 	}
 }
@@ -102,6 +108,7 @@ func (cfa *CFAuthenticator) exchangeAccessCodeForToken(logger lager.Logger, code
 		return "", err
 	}
 
+	req.SetBasicAuth(cfa.uaaUsername, cfa.uaaPassword)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := cfa.httpClient.Do(req)

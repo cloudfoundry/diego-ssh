@@ -14,6 +14,8 @@ type Args struct {
 	BBSAddress      string
 	CCAPIURL        string
 	UAATokenURL     string
+	UAAPassword     string
+	UAAUsername     string
 	SkipCertVerify  bool
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
@@ -32,6 +34,8 @@ func (args Args) ArgSlice() []string {
 		"-enableCFAuth=" + strconv.FormatBool(args.EnableCFAuth),
 		"-enableDiegoAuth=" + strconv.FormatBool(args.EnableDiegoAuth),
 		"-diegoCredentials=" + args.DiegoCredentials,
+		"-uaaPassword=" + args.UAAPassword,
+		"-uaaUsername=" + args.UAAUsername,
 	}
 }
 

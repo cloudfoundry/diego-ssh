@@ -36,6 +36,8 @@ var _ = Describe("CFAuthenticator", func() {
 		fakeUAA     *ghttp.Server
 		ccURL       string
 		uaaTokenURL string
+		uaaUsername string
+		uaaPassword string
 	)
 
 	BeforeEach(func() {
@@ -55,14 +57,15 @@ var _ = Describe("CFAuthenticator", func() {
 		fakeUAA = ghttp.NewServer()
 		u, err := url.Parse(fakeUAA.URL())
 		Expect(err).NotTo(HaveOccurred())
+		uaaUsername = "diego-ssh"
+		uaaPassword = "diego-ssh-secret-$\"^&'"
 
-		u.User = url.UserPassword("diego-ssh", "diego-ssh-secret")
 		u.Path = "/oauth/token"
 		uaaTokenURL = u.String()
 	})
 
 	JustBeforeEach(func() {
-		authenticator = authenticators.NewCFAuthenticator(logger, httpClient, ccURL, uaaTokenURL, permissionsBuilder)
+		authenticator = authenticators.NewCFAuthenticator(logger, httpClient, ccURL, uaaTokenURL, uaaUsername, uaaPassword, permissionsBuilder)
 		permissions, authenErr = authenticator.Authenticate(metadata, password)
 	})
 
@@ -112,7 +115,7 @@ var _ = Describe("CFAuthenticator", func() {
 			fakeUAA.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/oauth/token"),
-					ghttp.VerifyBasicAuth("diego-ssh", "diego-ssh-secret"),
+					ghttp.VerifyBasicAuth("diego-ssh", "diego-ssh-secret-$\"^&'"),
 					ghttp.VerifyFormKV("grant_type", "authorization_code"),
 					ghttp.VerifyFormKV("code", expectedOneTimeCode),
 					ghttp.RespondWithJSONEncodedPtr(&uaaTokenResponseCode, uaaTokenResponse),
