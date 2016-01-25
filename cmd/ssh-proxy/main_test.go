@@ -81,7 +81,6 @@ var _ = Describe("SSH proxy", func() {
 		u, err := url.Parse(fakeUAA.URL())
 		Expect(err).NotTo(HaveOccurred())
 
-		u.User = url.UserPassword("ssh-proxy", "ssh-proxy-secret")
 		u.Path = "/oauth/token"
 		uaaTokenURL = u.String()
 		uaaPassword = "password1"
