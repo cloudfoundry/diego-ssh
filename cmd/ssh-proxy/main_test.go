@@ -417,7 +417,7 @@ var _ = Describe("SSH proxy", func() {
 
 			fakeUAA.RouteToHandler("POST", "/oauth/token", ghttp.CombineHandlers(
 				ghttp.VerifyRequest("POST", "/oauth/token"),
-				ghttp.VerifyBasicAuth("ssh-proxy", "ssh-proxy-secret"),
+				ghttp.VerifyBasicAuth("amandaplease", "password1"),
 				ghttp.VerifyContentType("application/x-www-form-urlencoded"),
 				ghttp.VerifyFormKV("grant_type", "authorization_code"),
 				ghttp.VerifyFormKV("code", "abc123"),
