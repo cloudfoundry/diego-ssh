@@ -286,7 +286,7 @@ var _ = Describe("SSH proxy", func() {
 
 	Describe("Initialization", func() {
 		It("registers itself with consul", func() {
-			services, err := consulRunner.NewConsulClient().Agent().Services()
+			services, err := consulRunner.NewClient().Agent().Services()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(services).Should(HaveKeyWithValue("ssh-proxy",
 				&api.AgentService{
@@ -297,7 +297,7 @@ var _ = Describe("SSH proxy", func() {
 		})
 
 		It("registers a TTL healthcheck", func() {
-			checks, err := consulRunner.NewConsulClient().Agent().Checks()
+			checks, err := consulRunner.NewClient().Agent().Checks()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(checks).Should(HaveKeyWithValue("service:ssh-proxy",
 				&api.AgentCheck{
