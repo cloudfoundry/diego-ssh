@@ -4,6 +4,7 @@ package main_test
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
@@ -16,58 +17,50 @@ import (
 	"github.com/onsi/gomega/ghttp"
 )
 
-var _ = Describe("SSH daemon", func() {
-	var (
-		runner  ifrit.Runner
-		process ifrit.Process
+func startSshd(address string) ifrit.Process {
+	args := testrunner.Args{
+		Address:       address,
+		HostKey:       string(privateKeyPem),
+		AuthorizedKey: string(publicAuthorizedKey),
 
-		address       string
-		hostKey       string
-		privateKey    string
-		authorizedKey string
+		AllowUnauthenticatedClients: true,
+		InheritDaemonEnv:            false,
+	}
 
-		allowUnauthenticatedClients bool
-		inheritDaemonEnv            bool
+	runner := testrunner.New(sshdPath, args)
+	runner.Command.Env = append(
+		os.Environ(),
+		fmt.Sprintf(`CF_INSTANCE_PORTS=[{"external":%d,"internal":%d}]`, sshdPort, 2222),
 	)
+	process := ifrit.Invoke(runner)
+	return process
+}
 
-	BeforeEach(func() {
-		hostKey = hostKeyPem
-		privateKey = privateKeyPem
-		authorizedKey = publicAuthorizedKey
+var _ = Describe("SSH daemon", func() {
+	It("maps the internal port to the external port", func() {
+		process := startSshd("127.0.0.1:2222")
+		defer ginkgomon.Kill(process, 3*time.Second)
 
-		allowUnauthenticatedClients = false
-		inheritDaemonEnv = false
-		address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
-	})
+		clientConfig := &ssh.ClientConfig{}
+		Expect(process).NotTo(BeNil())
 
-	JustBeforeEach(func() {
-		args := testrunner.Args{
-			Address:       address,
-			HostKey:       string(hostKey),
-			AuthorizedKey: string(authorizedKey),
-
-			AllowUnauthenticatedClients: allowUnauthenticatedClients,
-			InheritDaemonEnv:            inheritDaemonEnv,
-		}
-
-		runner = testrunner.New(sshdPath, args)
-		process = ifrit.Invoke(runner)
-	})
-
-	AfterEach(func() {
-		ginkgomon.Kill(process, 3*time.Second)
+		client, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", sshdPort), clientConfig)
+		Expect(err).NotTo(HaveOccurred())
+		client.Close()
 	})
 
 	Describe("SSH features", func() {
-		var clientConfig *ssh.ClientConfig
-		var client *ssh.Client
+		var (
+			process      ifrit.Process
+			address      string
+			clientConfig *ssh.ClientConfig
+			client       *ssh.Client
+		)
 
 		BeforeEach(func() {
-			allowUnauthenticatedClients = true
+			address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
+			process = startSshd(address)
 			clientConfig = &ssh.ClientConfig{}
-		})
-
-		JustBeforeEach(func() {
 			Expect(process).NotTo(BeNil())
 
 			var dialErr error
@@ -76,6 +69,7 @@ var _ = Describe("SSH daemon", func() {
 		})
 
 		AfterEach(func() {
+			ginkgomon.Kill(process, 3*time.Second)
 			client.Close()
 		})
 

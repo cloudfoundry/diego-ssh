@@ -11,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/keys"
-	"github.com/cloudfoundry-incubator/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -63,7 +62,7 @@ func main() {
 	}
 
 	sshDaemon := daemon.New(logger, serverConfig, nil, newChannelHandlers())
-	server := server.NewServer(logger, *address, sshDaemon)
+	server, err := createServer(logger, *address, sshDaemon)
 
 	members := grouper.Members{
 		{"sshd", server},
