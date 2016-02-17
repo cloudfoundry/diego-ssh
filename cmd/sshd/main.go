@@ -48,6 +48,24 @@ var inheritDaemonEnv = flag.Bool(
 	"Inherit daemon's environment",
 )
 
+var allowedCiphers = flag.String(
+	"allowedCiphers",
+	"",
+	"Limit cipher algorithms to those provided (comma separated)",
+)
+
+var allowedMACs = flag.String(
+	"allowedMACs",
+	"",
+	"Limit MAC algorithms to those provided (comma separated)",
+)
+
+var allowedKeyExchanges = flag.String(
+	"allowedKeyExchanges",
+	"",
+	"Limit key exchanges algorithms to those provided (comma separated)",
+)
+
 func main() {
 	cf_debug_server.AddFlags(flag.CommandLine)
 	cf_lager.AddFlags(flag.CommandLine)
@@ -90,18 +108,18 @@ func main() {
 }
 
 func getDaemonEnvironment() map[string]string {
-	dameonEnv := map[string]string{}
+	daemonEnv := map[string]string{}
 
 	if *inheritDaemonEnv {
 		envs := os.Environ()
 		for _, env := range envs {
 			nvp := strings.SplitN(env, "=", 2)
 			if len(nvp) == 2 && nvp[0] != "PATH" {
-				dameonEnv[nvp[0]] = nvp[1]
+				daemonEnv[nvp[0]] = nvp[1]
 			}
 		}
 	}
-	return dameonEnv
+	return daemonEnv
 }
 
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
@@ -130,6 +148,16 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 		} else {
 			errorStrings = append(errorStrings, err.Error())
 		}
+	}
+
+	if *allowedCiphers != "" {
+		sshConfig.Config.Ciphers = strings.Split(*allowedCiphers, ",")
+	}
+	if *allowedMACs != "" {
+		sshConfig.Config.MACs = strings.Split(*allowedMACs, ",")
+	}
+	if *allowedKeyExchanges != "" {
+		sshConfig.Config.KeyExchanges = strings.Split(*allowedKeyExchanges, ",")
 	}
 
 	err = nil

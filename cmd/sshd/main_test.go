@@ -34,6 +34,10 @@ var _ = Describe("SSH daemon", func() {
 		privateKey    string
 		authorizedKey string
 
+		allowedCiphers      string
+		allowedMACs         string
+		allowedKeyExchanges string
+
 		allowUnauthenticatedClients bool
 		inheritDaemonEnv            bool
 	)
@@ -42,6 +46,10 @@ var _ = Describe("SSH daemon", func() {
 		hostKey = hostKeyPem
 		privateKey = privateKeyPem
 		authorizedKey = publicAuthorizedKey
+
+		allowedCiphers = ""
+		allowedMACs = ""
+		allowedKeyExchanges = ""
 
 		allowUnauthenticatedClients = false
 		inheritDaemonEnv = false
@@ -53,6 +61,10 @@ var _ = Describe("SSH daemon", func() {
 			Address:       address,
 			HostKey:       string(hostKey),
 			AuthorizedKey: string(authorizedKey),
+
+			AllowedCiphers:      string(allowedCiphers),
+			AllowedMACs:         string(allowedMACs),
+			AllowedKeyExchanges: string(allowedKeyExchanges),
 
 			AllowUnauthenticatedClients: allowUnauthenticatedClients,
 			InheritDaemonEnv:            inheritDaemonEnv,
@@ -220,6 +232,105 @@ var _ = Describe("SSH daemon", func() {
 				Expect(client).NotTo(BeNil())
 			})
 
+		})
+
+		Context("when the daemon provides an unsupported cipher algorithm", func() {
+			BeforeEach(func() {
+				allowedCiphers = "unsupported"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("rejects the cipher algorithm", func() {
+				Expect(dialErr).To(MatchError(ContainSubstring("ssh: no common algorithm for client to server cipher")))
+				Expect(client).To(BeNil())
+			})
+		})
+
+		Context("when the daemon provides a supported cipher algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				allowedCiphers = "aes128-ctr,aes256-ctr"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("allows a client to complete a handshake", func() {
+				Expect(dialErr).NotTo(HaveOccurred())
+				Expect(client).NotTo(BeNil())
+			})
+		})
+
+		Context("when the daemon provides an unsupported MAC algorithm", func() {
+			BeforeEach(func() {
+				allowedMACs = "unsupported"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("rejects the MAC algorithm", func() {
+				Expect(dialErr).To(MatchError(ContainSubstring("ssh: no common algorithm for client to server MAC")))
+				Expect(client).To(BeNil())
+			})
+		})
+
+		Context("when the daemon provides a supported MAC algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				allowedMACs = "hmac-sha2-256,hmac-sha1"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("allows a client to complete a handshake", func() {
+				Expect(dialErr).NotTo(HaveOccurred())
+				Expect(client).NotTo(BeNil())
+			})
+		})
+
+		Context("when the daemon provides an unsupported key exchange algorithm", func() {
+			BeforeEach(func() {
+				allowedKeyExchanges = "unsupported"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("rejects the key exchange algorithm", func() {
+				Expect(dialErr).To(MatchError(ContainSubstring("ssh: no common algorithm for key exchange")))
+				Expect(client).To(BeNil())
+			})
+		})
+
+		Context("when the daemon provides a supported key exchange algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				allowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
+				clientConfig = &ssh.ClientConfig{}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("allows a client to complete a handshake", func() {
+				Expect(dialErr).NotTo(HaveOccurred())
+				Expect(client).NotTo(BeNil())
+			})
 		})
 	})
 
