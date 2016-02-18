@@ -61,9 +61,15 @@ var _ = Describe("Proxy", func() {
 
 			proxyServer *server.Server
 			sshdServer  *server.Server
+
+			proxyDone  chan struct{}
+			daemonDone chan struct{}
 		)
 
 		BeforeEach(func() {
+			proxyDone = make(chan struct{})
+			daemonDone = make(chan struct{})
+
 			fakeLogSender = fake_logs.NewFakeLogSender()
 			logs.Initialize(fakeLogSender)
 
@@ -121,17 +127,26 @@ var _ = Describe("Proxy", func() {
 			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig)
 			proxyServer = server.NewServer(logger, "127.0.0.1:0", sshProxy)
 			proxyServer.SetListener(proxyListener)
-			go proxyServer.Serve()
+			go func() {
+				proxyServer.Serve()
+				close(proxyDone)
+			}()
 
 			sshDaemon = daemon.New(logger.Session("sshd"), daemonSSHConfig, daemonGlobalRequestHandlers, daemonNewChannelHandlers)
 			sshdServer = server.NewServer(logger, "127.0.0.1:0", sshDaemon)
 			sshdServer.SetListener(sshdListener)
-			go sshdServer.Serve()
+			go func() {
+				sshdServer.Serve()
+				close(daemonDone)
+			}()
 		})
 
 		AfterEach(func() {
 			proxyServer.Shutdown()
 			sshdServer.Shutdown()
+
+			Eventually(proxyDone).Should(BeClosed())
+			Eventually(daemonDone).Should(BeClosed())
 		})
 
 		Context("when a new connection arrives", func() {
@@ -474,7 +489,11 @@ var _ = Describe("Proxy", func() {
 				})
 
 				Context("when the target requests a new channel", func() {
+					var done chan struct{}
+
 					BeforeEach(func() {
+						done = make(chan struct{})
+
 						connectionHandler.HandleConnectionStub = func(conn net.Conn) {
 							defer GinkgoRecover()
 
@@ -494,7 +513,13 @@ var _ = Describe("Proxy", func() {
 
 							channel.Close()
 							serverConn.Close()
+
+							close(done)
 						}
+					})
+
+					AfterEach(func() {
+						Eventually(done).Should(BeClosed())
 					})
 
 					It("gets forwarded to the client", func() {

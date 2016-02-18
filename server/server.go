@@ -24,6 +24,10 @@ type Server struct {
 	listener net.Listener
 	mutex    *sync.Mutex
 	stopping bool
+
+	connections          map[net.Conn]struct{}
+	connectionsMutex     *sync.Mutex
+	connectionsWaitGroup *sync.WaitGroup
 }
 
 func NewServer(
@@ -32,10 +36,13 @@ func NewServer(
 	connectionHandler ConnectionHandler,
 ) *Server {
 	return &Server{
-		logger:            logger,
-		listenAddress:     listenAddress,
-		connectionHandler: connectionHandler,
-		mutex:             &sync.Mutex{},
+		logger:               logger,
+		listenAddress:        listenAddress,
+		connectionHandler:    connectionHandler,
+		mutex:                &sync.Mutex{},
+		connections:          make(map[net.Conn]struct{}),
+		connectionsMutex:     &sync.Mutex{},
+		connectionsWaitGroup: &sync.WaitGroup{},
 	}
 }
 
@@ -66,7 +73,15 @@ func (s *Server) Shutdown() {
 		s.logger.Info("stopping-server")
 		s.stopping = true
 		s.listener.Close()
+
+		s.connectionsMutex.Lock()
+		for conn, _ := range s.connections {
+			conn.Close()
+		}
+		s.connectionsMutex.Unlock()
 	}
+
+	s.connectionsWaitGroup.Wait()
 }
 
 func (s *Server) IsStopping() bool {
@@ -118,6 +133,18 @@ func (s *Server) Serve() {
 			return
 		}
 
-		go s.connectionHandler.HandleConnection(netConn)
+		s.connectionsMutex.Lock()
+		s.connections[netConn] = struct{}{}
+		s.connectionsWaitGroup.Add(1)
+		s.connectionsMutex.Unlock()
+
+		go func() {
+			s.connectionHandler.HandleConnection(netConn)
+
+			s.connectionsMutex.Lock()
+			delete(s.connections, netConn)
+			s.connectionsWaitGroup.Done()
+			s.connectionsMutex.Unlock()
+		}()
 	}
 }
