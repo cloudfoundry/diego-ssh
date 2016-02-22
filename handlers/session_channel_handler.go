@@ -313,18 +313,19 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 		return
 	}
 
+	lagerWriter := helpers.NewLagerWriter(logger.Session("sftp-server"))
+	sftpServer, err := sftp.NewServer(sess.channel, sess.channel, sftp.WithDebug(lagerWriter))
+	if err != nil {
+		logger.Error("sftp-new-server-failed", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
 	if request.WantReply {
 		request.Reply(true, nil)
 	}
-
-	sftpServer, err := sftp.NewServer(
-		sess.channel,
-		sess.channel,
-		helpers.NewLagerWriter(logger.Session("sftp-server")),
-		1,
-		false,
-		os.Getenv("HOME"),
-	)
 
 	logger.Info("starting-server")
 	go func() {
