@@ -32,7 +32,7 @@ type UAAAuthTokenResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
-var CFUserRegex *regexp.Regexp = regexp.MustCompile(`cf:(.+)/(\d+)`)
+var CFUserRegex *regexp.Regexp = regexp.MustCompile(`cf:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/(\d+)`)
 
 func NewCFAuthenticator(
 	logger lager.Logger,

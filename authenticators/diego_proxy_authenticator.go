@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(`diego:(.+)/(\d+)`)
+var DiegoUserRegex *regexp.Regexp = regexp.MustCompile(`diego:([a-zA-Z0-9_-]+)/(\d+)`)
 
 type DiegoProxyAuthenticator struct {
 	logger             lager.Logger

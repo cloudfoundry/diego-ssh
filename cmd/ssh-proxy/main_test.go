@@ -436,7 +436,7 @@ var _ = Describe("SSH proxy", func() {
 	Describe("authenticating with the cf realm with a one time code", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
-				User: "cf:app-guid/99",
+				User: "cf:60f0f26e-86b3-4487-8f19-9e94f848f3d2/99",
 				Auth: []ssh.AuthMethod{ssh.Password("abc123")},
 			}
 
@@ -452,8 +452,8 @@ var _ = Describe("SSH proxy", func() {
 				}),
 			))
 
-			fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/99", ghttp.CombineHandlers(
-				ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/99"),
+			fakeCC.RouteToHandler("GET", "/internal/apps/60f0f26e-86b3-4487-8f19-9e94f848f3d2/ssh_access/99", ghttp.CombineHandlers(
+				ghttp.VerifyRequest("GET", "/internal/apps/60f0f26e-86b3-4487-8f19-9e94f848f3d2/ssh_access/99"),
 				ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer proxy-token"}}),
 				ghttp.RespondWithJSONEncoded(http.StatusOK, authenticators.AppSSHResponse{
 					ProcessGuid: processGuid,

@@ -76,14 +76,16 @@ var _ = Describe("CFAuthenticator", func() {
 			regexp = authenticator.UserRegexp()
 		})
 
-		It("matches diego patterns", func() {
-			Expect(regexp.MatchString("cf:guid/0")).To(BeTrue())
-			Expect(regexp.MatchString("cf:123-abc-def/00")).To(BeTrue())
-			Expect(regexp.MatchString("cf:guid/99")).To(BeTrue())
+		It("matches cf:<app-guid>/<instance> patterns", func() {
+			Expect(regexp.MatchString("cf:986fedf8-6b74-45af-827c-a4464e6aa05c/00")).To(BeTrue())
+			Expect(regexp.MatchString("cf:986FEDF8-6B74-45AF-827C-A4464E6AA05C/00")).To(BeTrue())
 		})
 
 		It("does not match other patterns", func() {
-			Expect(regexp.MatchString("cf:00")).To(BeFalse())
+			Expect(regexp.MatchString("cf:hhhhhhhh-6b74-45af-827c-a4464e6aa05c/00")).To(BeFalse())
+			Expect(regexp.MatchString("cf:986fedf81-6b74-45af-827c-a4464e6aa05c/00")).To(BeFalse())
+			Expect(regexp.MatchString("cf:986fedf8-6b74-45af-827c-a4464e6aa05c/")).To(BeFalse())
+			Expect(regexp.MatchString("cf:guid/1")).To(BeFalse())
 			Expect(regexp.MatchString("cf:/00")).To(BeFalse())
 			Expect(regexp.MatchString("diego:guid/0")).To(BeFalse())
 			Expect(regexp.MatchString("diego:guid/99")).To(BeFalse())
@@ -103,7 +105,7 @@ var _ = Describe("CFAuthenticator", func() {
 		)
 
 		BeforeEach(func() {
-			metadata.UserReturns("cf:app-guid/1")
+			metadata.UserReturns("cf:1e051b88-a210-40b7-bcca-df645b24b634/1")
 			password = []byte(expectedOneTimeCode)
 
 			uaaTokenResponseCode = http.StatusOK
@@ -129,7 +131,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/1"),
+					ghttp.VerifyRequest("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1"),
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWithJSONEncodedPtr(&sshAccessResponseCode, sshAccessResponse),
 				),
@@ -171,14 +173,14 @@ var _ = Describe("CFAuthenticator", func() {
 			})
 
 			It("fails to authenticate", func() {
-				Expect(authenErr).To(Equal(authenticators.InvalidRequestErr))
+				Expect(authenErr).To(Equal(authenticators.InvalidCredentialsErr))
 				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
 
 		Context("when the index is not an integer", func() {
 			BeforeEach(func() {
-				metadata.UserReturns("cf:app-guid/jim")
+				metadata.UserReturns("cf:1e051b88-a210-40b7-bcca-df645b24b634/jim")
 			})
 
 			It("fails to authenticate", func() {
@@ -189,7 +191,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the username is missing an index", func() {
 			BeforeEach(func() {
-				metadata.UserReturns("cf:app-guid")
+				metadata.UserReturns("cf:1e051b88-a210-40b7-bcca-df645b24b634")
 			})
 
 			It("fails to authenticate", func() {
@@ -200,7 +202,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the index is too big", func() {
 			BeforeEach(func() {
-				metadata.UserReturns("cf:app-guid/" + strconv.FormatInt(int64(math.MaxInt64), 10) + "0")
+				metadata.UserReturns("cf:1e051b88-a210-40b7-bcca-df645b24b634/" + strconv.FormatInt(int64(math.MaxInt64), 10) + "0")
 			})
 
 			It("fails to authenticate", func() {
@@ -223,8 +225,8 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the cc ssh_access response cannot be parsed", func() {
 			BeforeEach(func() {
-				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/1", ghttp.CombineHandlers(
-					ghttp.VerifyRequest("GET", "/internal/apps/app-guid/ssh_access/1"),
+				fakeCC.RouteToHandler("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1", ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1"),
 					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
 					ghttp.RespondWith(http.StatusOK, "{{"),
 				))
@@ -239,7 +241,7 @@ var _ = Describe("CFAuthenticator", func() {
 		Context("the the cc ssh_access check times out", func() {
 			BeforeEach(func() {
 				ccTempClientTimeout := httpClientTimeout
-				fakeCC.RouteToHandler("GET", "/internal/apps/app-guid/ssh_access/1",
+				fakeCC.RouteToHandler("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1",
 					func(w http.ResponseWriter, req *http.Request) {
 						time.Sleep(ccTempClientTimeout * 2)
 						w.Write([]byte(`[]`))

@@ -103,6 +103,9 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 		})
 
 		It("does not match other patterns", func() {
+			Expect(regexp.MatchString("diego:some+guid/99")).To(BeFalse())
+			Expect(regexp.MatchString("diego:..\\/something/99")).To(BeFalse())
+			Expect(regexp.MatchString("diego:guid/")).To(BeFalse())
 			Expect(regexp.MatchString("diego:00")).To(BeFalse())
 			Expect(regexp.MatchString("diego:/00")).To(BeFalse())
 			Expect(regexp.MatchString("cf:guid/0")).To(BeFalse())
