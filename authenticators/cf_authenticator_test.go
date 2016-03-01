@@ -257,7 +257,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 		Context("when the cc url is misconfigured", func() {
 			BeforeEach(func() {
-				ccURL = "http://%FF"
+				ccURL = "://%FF"
 			})
 
 			It("fails to authenticate", func() {
