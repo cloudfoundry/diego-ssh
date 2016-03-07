@@ -21,6 +21,10 @@ type Args struct {
 	EnableCFAuth    bool
 	EnableDiegoAuth bool
 
+	AllowedCiphers      string
+	AllowedMACs         string
+	AllowedKeyExchanges string
+
 	DiegoCredentials string
 }
 
@@ -38,6 +42,9 @@ func (args Args) ArgSlice() []string {
 		"-diegoCredentials=" + args.DiegoCredentials,
 		"-uaaPassword=" + args.UAAPassword,
 		"-uaaUsername=" + args.UAAUsername,
+		"-allowedCiphers=" + args.AllowedCiphers,
+		"-allowedMACs=" + args.AllowedMACs,
+		"-allowedKeyExchanges=" + args.AllowedKeyExchanges,
 	}
 }
 

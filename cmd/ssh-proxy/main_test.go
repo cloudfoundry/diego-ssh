@@ -49,6 +49,9 @@ var _ = Describe("SSH proxy", func() {
 		uaaTokenURL                 string
 		uaaPassword                 string
 		uaaUsername                 string
+		allowedCiphers              string
+		allowedMACs                 string
+		allowedKeyExchanges         string
 		expectedGetActualLRPRequest *models.ActualLRPGroupByProcessGuidAndIndexRequest
 		actualLRPGroupResponse      *models.ActualLRPGroupResponse
 		getDesiredLRPRequest        *models.DesiredLRPByProcessGuidRequest
@@ -84,6 +87,10 @@ var _ = Describe("SSH proxy", func() {
 		uaaTokenURL = u.String()
 		uaaPassword = "password1"
 		uaaUsername = "amandaplease"
+
+		allowedCiphers = ""
+		allowedMACs = ""
+		allowedKeyExchanges = ""
 
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
@@ -138,18 +145,21 @@ var _ = Describe("SSH proxy", func() {
 		))
 
 		args := testrunner.Args{
-			Address:          address,
-			BBSAddress:       bbsAddress,
-			CCAPIURL:         ccAPIURL,
-			DiegoCredentials: diegoCredentials,
-			EnableCFAuth:     enableCFAuth,
-			EnableDiegoAuth:  enableDiegoAuth,
-			HostKey:          hostKey,
-			SkipCertVerify:   skipCertVerify,
-			UAATokenURL:      uaaTokenURL,
-			UAAPassword:      uaaPassword,
-			UAAUsername:      uaaUsername,
-			ConsulCluster:    consulRunner.URL(),
+			Address:             address,
+			BBSAddress:          bbsAddress,
+			CCAPIURL:            ccAPIURL,
+			DiegoCredentials:    diegoCredentials,
+			EnableCFAuth:        enableCFAuth,
+			EnableDiegoAuth:     enableDiegoAuth,
+			HostKey:             hostKey,
+			SkipCertVerify:      skipCertVerify,
+			UAATokenURL:         uaaTokenURL,
+			UAAPassword:         uaaPassword,
+			UAAUsername:         uaaUsername,
+			ConsulCluster:       consulRunner.URL(),
+			AllowedCiphers:      allowedCiphers,
+			AllowedMACs:         allowedMACs,
+			AllowedKeyExchanges: allowedKeyExchanges,
 		}
 
 		runner = testrunner.New(sshProxyPath, args)
@@ -382,6 +392,90 @@ var _ = Describe("SSH proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(output)).To(Equal("hello"))
+		})
+
+		Context("when the proxy provides an unsupported cipher algorithm", func() {
+			BeforeEach(func() {
+				allowedCiphers = "unsupported"
+			})
+
+			It("rejects the cipher algorithm", func() {
+				_, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).To(MatchError(ContainSubstring("ssh: no common algorithm for client to server cipher")))
+				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the proxy provides a supported cipher algorithm", func() {
+			BeforeEach(func() {
+				allowedCiphers = "aes128-ctr,aes256-ctr"
+				clientConfig = &ssh.ClientConfig{
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				}
+			})
+
+			It("allows a client to complete a handshake", func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).NotTo(HaveOccurred())
+				client.Close()
+			})
+		})
+
+		Context("when the proxy provides an unsupported MAC algorithm", func() {
+			BeforeEach(func() {
+				allowedMACs = "unsupported"
+			})
+
+			It("rejects the MAC algorithm", func() {
+				_, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).To(MatchError(ContainSubstring("ssh: no common algorithm for client to server MAC")))
+				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the proxy provides a supported MAC algorithm", func() {
+			BeforeEach(func() {
+				allowedMACs = "hmac-sha2-256,hmac-sha1"
+				clientConfig = &ssh.ClientConfig{
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				}
+			})
+
+			It("allows a client to complete a handshake", func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).NotTo(HaveOccurred())
+				client.Close()
+			})
+		})
+
+		Context("when the proxy provides an unsupported key exchange algorithm", func() {
+			BeforeEach(func() {
+				allowedKeyExchanges = "unsupported"
+			})
+
+			It("rejects the key exchange algorithm", func() {
+				_, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).To(MatchError(ContainSubstring("ssh: no common algorithm for key exchange")))
+				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
+			})
+		})
+
+		Context("when the proxy provides a supported key exchange algorithm", func() {
+			BeforeEach(func() {
+				allowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
+				clientConfig = &ssh.ClientConfig{
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				}
+			})
+
+			It("allows a client to complete a handshake", func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).NotTo(HaveOccurred())
+				client.Close()
+			})
 		})
 
 		Context("when a non-existent process guid is used", func() {

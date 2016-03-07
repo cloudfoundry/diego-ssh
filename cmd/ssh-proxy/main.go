@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cloudfoundry-incubator/bbs"
@@ -142,6 +143,24 @@ var consulCluster = flag.String(
 	"consulCluster",
 	"",
 	"Consul Agent URL",
+)
+
+var allowedCiphers = flag.String(
+	"allowedCiphers",
+	"",
+	"Limit cipher algorithms to those provided (comma separated)",
+)
+
+var allowedMACs = flag.String(
+	"allowedMACs",
+	"",
+	"Limit MAC algorithms to those provided (comma separated)",
+)
+
+var allowedKeyExchanges = flag.String(
+	"allowedKeyExchanges",
+	"",
+	"Limit key exchanges algorithms to those provided (comma separated)",
 )
 
 const (
@@ -282,6 +301,16 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	sshConfig.AddHostKey(key)
+
+	if *allowedCiphers != "" {
+		sshConfig.Config.Ciphers = strings.Split(*allowedCiphers, ",")
+	}
+	if *allowedMACs != "" {
+		sshConfig.Config.MACs = strings.Split(*allowedMACs, ",")
+	}
+	if *allowedKeyExchanges != "" {
+		sshConfig.Config.KeyExchanges = strings.Split(*allowedKeyExchanges, ",")
+	}
 
 	return sshConfig, err
 }
