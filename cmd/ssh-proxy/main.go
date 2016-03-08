@@ -267,7 +267,11 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	sshConfig := &ssh.ServerConfig{
 		PasswordCallback: authenticator.Authenticate,
 		AuthLogCallback: func(cmd ssh.ConnMetadata, method string, err error) {
-			logger.Error("authentication-failed", err, lager.Data{"user": cmd.User()})
+			if err != nil {
+				logger.Error("authentication-failed", err, lager.Data{"user": cmd.User()})
+			} else {
+				logger.Info("authentication-successful", lager.Data{"user": cmd.User()})
+			}
 		},
 	}
 
