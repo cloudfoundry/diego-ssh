@@ -125,7 +125,7 @@ var _ = Describe("Proxy", func() {
 
 		JustBeforeEach(func() {
 			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig)
-			proxyServer = server.NewServer(logger, "127.0.0.1:0", sshProxy)
+			proxyServer = server.NewServer(logger.Session("proxy-server"), "", sshProxy)
 			proxyServer.SetListener(proxyListener)
 			go func() {
 				proxyServer.Serve()
@@ -133,7 +133,7 @@ var _ = Describe("Proxy", func() {
 			}()
 
 			sshDaemon = daemon.New(logger.Session("sshd"), daemonSSHConfig, daemonGlobalRequestHandlers, daemonNewChannelHandlers)
-			sshdServer = server.NewServer(logger, "127.0.0.1:0", sshDaemon)
+			sshdServer = server.NewServer(logger.Session("sshd-server"), "", sshDaemon)
 			sshdServer.SetListener(sshdListener)
 			go func() {
 				sshdServer.Serve()
@@ -432,6 +432,7 @@ var _ = Describe("Proxy", func() {
 					connectionHandler *server_fakes.FakeConnectionHandler
 
 					target        *server.Server
+					targetDone    chan struct{}
 					listener      net.Listener
 					targetAddress string
 
@@ -447,12 +448,16 @@ var _ = Describe("Proxy", func() {
 					targetAddress = listener.Addr().String()
 
 					connectionHandler = &server_fakes.FakeConnectionHandler{}
+					targetDone = make(chan struct{})
 				})
 
 				JustBeforeEach(func() {
-					target = server.NewServer(logger.Session("target"), "127.0.0.1", connectionHandler)
+					target = server.NewServer(logger.Session("target"), "", connectionHandler)
 					target.SetListener(listener)
-					go target.Serve()
+					go func() {
+						target.Serve()
+						close(targetDone)
+					}()
 
 					clientNetConn, err := net.Dial("tcp", targetAddress)
 					clientConn, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", &ssh.ClientConfig{})
@@ -461,12 +466,19 @@ var _ = Describe("Proxy", func() {
 
 				AfterEach(func() {
 					target.Shutdown()
+					Eventually(targetDone).Should(BeClosed())
 				})
 
 				Context("when the target sends a global request", func() {
+					var handleConnDone chan struct{}
+
 					BeforeEach(func() {
+						handleConnDone = make(chan struct{})
 						connectionHandler.HandleConnectionStub = func(conn net.Conn) {
 							defer GinkgoRecover()
+							defer func() {
+								handleConnDone <- struct{}{}
+							}()
 
 							serverConn, _, _, err := ssh.NewServerConn(conn, daemonSSHConfig)
 							Expect(err).NotTo(HaveOccurred())
@@ -480,11 +492,17 @@ var _ = Describe("Proxy", func() {
 						}
 					})
 
+					AfterEach(func() {
+						close(handleConnDone)
+					})
+
 					It("gets forwarded to the client", func() {
 						var req *ssh.Request
 						Eventually(clientRequests).Should(Receive(&req))
 
 						req.Reply(true, []byte("response-data"))
+
+						Eventually(handleConnDone).Should(Receive())
 					})
 				})
 
