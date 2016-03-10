@@ -394,7 +394,7 @@ var _ = Describe("SSH daemon", func() {
 					Expect(stdout.String()).To(ContainSubstring("env_var_value"))
 				})
 
-				It("inherits daemon's environment", func() {
+				It("inherits daemon's environment excluding PATH", func() {
 					session, err := client.NewSession()
 					Expect(err).NotTo(HaveOccurred())
 
@@ -412,7 +412,7 @@ var _ = Describe("SSH daemon", func() {
 					Expect(stdout.String()).To(ContainSubstring("FOO"))
 				})
 
-				It("inherits the daemon's PATH", func() {
+				It("does not inherit the daemon's PATH", func() {
 					session, err := client.NewSession()
 					Expect(err).NotTo(HaveOccurred())
 
@@ -426,7 +426,7 @@ var _ = Describe("SSH daemon", func() {
 
 					err = session.Wait()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(stdout.String()).To(ContainSubstring("$PATH:/tmp"))
+					Expect(stdout.String()).NotTo(ContainSubstring("/tmp"))
 				})
 			})
 
