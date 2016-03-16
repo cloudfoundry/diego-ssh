@@ -3,10 +3,13 @@ package handlers
 import (
 	"fmt"
 	"net"
-	"sync"
+	"os"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
 	"github.com/pivotal-golang/lager"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/sigmon"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -50,11 +53,23 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	channel, requests, err := newChannel.Accept()
 	go ssh.DiscardRequests(requests)
 
-	wg := &sync.WaitGroup{}
+	members := grouper.Members{
+		{"to-target", helpers.NewCopyRunner(logger.Session("to-target"), conn, channel)},
+		{"to-channel", helpers.NewCopyRunner(logger.Session("to-channel"), channel, conn)},
+	}
 
-	wg.Add(2)
-	go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel)
-	go helpers.CopyAndClose(logger.Session("to-channel"), wg, channel, conn)
+	defer func() {
+		conn.Close()
+		channel.Close()
+	}()
 
-	wg.Wait()
+	group := grouper.NewOrdered(os.Interrupt, members)
+	monitor := ifrit.Invoke(sigmon.New(group))
+
+	logger.Info("started")
+
+	err = <-monitor.Wait()
+	if err != nil {
+		logger.Error("exited-with-failure", err)
+	}
 }

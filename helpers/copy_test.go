@@ -1,7 +1,9 @@
 package helpers_test
 
 import (
+	"errors"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -9,6 +11,8 @@ import (
 	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -85,6 +89,74 @@ var _ = Describe("Copy", func() {
 
 			It("calls done before returning", func() {
 				wg.Wait()
+			})
+		})
+	})
+
+	Describe("CopyRunner", func() {
+		var (
+			reader     io.Reader
+			fakeWriter *fake_io.FakeWriteCloser
+			runner     *helpers.CopyRunner
+			process    ifrit.Process
+		)
+
+		BeforeEach(func() {
+			reader = strings.NewReader("message")
+			fakeWriter = &fake_io.FakeWriteCloser{}
+			fakeWriter.WriteReturns(7, nil)
+			runner = helpers.NewCopyRunner(logger, fakeWriter, reader)
+		})
+
+		JustBeforeEach(func() {
+			process = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Kill(process)
+		})
+
+		It("copies from source to target", func() {
+			Eventually(process.Wait()).Should(Receive())
+			Expect(fakeWriter.WriteCallCount()).To(Equal(1))
+			Expect(string(fakeWriter.WriteArgsForCall(0))).To(Equal("message"))
+		})
+
+		Context("when writing fails", func() {
+			BeforeEach(func() {
+				fakeWriter.WriteReturns(0, errors.New("writing failed yo"))
+			})
+
+			It("returns an error", func() {
+				var err error
+				Eventually(process.Wait()).Should(Receive(&err))
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when signalling the process", func() {
+			var closed chan struct{}
+
+			BeforeEach(func() {
+				closed = make(chan struct{})
+				fakeWriter.WriteStub = func(p []byte) (int, error) {
+					<-closed
+					return 0, nil
+				}
+
+				fakeWriter.CloseStub = func() error {
+					close(closed)
+					return nil
+				}
+			})
+
+			It("closes the writer/reader and returns immediately", func() {
+				var err error
+				Consistently(process.Wait()).ShouldNot(Receive())
+				process.Signal(os.Kill)
+				Eventually(process.Wait()).Should(Receive(&err))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(fakeWriter.CloseCallCount()).To(Equal(1))
 			})
 		})
 	})

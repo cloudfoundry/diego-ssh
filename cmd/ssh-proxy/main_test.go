@@ -318,6 +318,7 @@ var _ = Describe("SSH proxy", func() {
 				}))
 		})
 	})
+
 	It("presents the correct host key", func() {
 		var handshakeHostKey ssh.PublicKey
 		_, err := ssh.Dial("tcp", address, &ssh.ClientConfig{
