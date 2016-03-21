@@ -261,7 +261,7 @@ var _ = Describe("CFAuthenticator", func() {
 			})
 
 			It("fails to authenticate", func() {
-				Expect(authenErr).To(Equal(authenticators.InvalidRequestErr))
+				Expect(authenErr).To(HaveOccurred())
 				Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
 			})
 		})

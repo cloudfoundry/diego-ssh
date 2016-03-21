@@ -23,20 +23,22 @@ func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader
 	}
 }
 
-func CopyAndClose(logger lager.Logger, wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {
+func CopyAndClose(logger lager.Logger, wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader, closeFunc func()) {
 	logger = logger.Session("copy-and-close")
 	logger.Info("started")
+
+	defer func() {
+		closeFunc()
+
+		if wg != nil {
+			wg.Done()
+		}
+	}()
 
 	n, err := io.Copy(dest, src)
 	if err != nil {
 		logger.Error("copy-error", err)
 	}
 
-	dest.Close()
-
 	logger.Info("completed", lager.Data{"bytes-copied": n})
-
-	if wg != nil {
-		wg.Done()
-	}
 }

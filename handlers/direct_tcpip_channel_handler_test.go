@@ -141,18 +141,6 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 					Eventually(completed).Should(Receive())
 				})
 			})
-
-			Context("when the target connection closes", func() {
-				It("the handler returns", func() {
-					Consistently(completed).ShouldNot(Receive())
-
-					Expect(echoHandler.HandleConnectionCallCount()).To(Equal(1))
-					echoConn := echoHandler.HandleConnectionArgsForCall(0)
-					echoConn.Close()
-
-					Eventually(completed).Should(Receive())
-				})
-			})
 		})
 	})
 
@@ -163,7 +151,6 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 				Reason:  ssh.ConnectionFailed,
 				Message: "Failed to parse open channel message",
 			}))
-
 		})
 	})
 

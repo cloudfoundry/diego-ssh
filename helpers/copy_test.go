@@ -65,7 +65,10 @@ var _ = Describe("Copy", func() {
 		})
 
 		JustBeforeEach(func() {
-			helpers.CopyAndClose(logger, wg, fakeWriteCloser, reader)
+			closeFunc := func() {
+				fakeWriteCloser.Close()
+			}
+			helpers.CopyAndClose(logger, wg, fakeWriteCloser, reader, closeFunc)
 		})
 
 		It("copies from source to target", func() {
@@ -73,7 +76,7 @@ var _ = Describe("Copy", func() {
 			Expect(string(fakeWriteCloser.WriteArgsForCall(0))).To(Equal("message"))
 		})
 
-		It("closes the target when the copy is complete", func() {
+		It("it calls the close function when complete", func() {
 			Expect(fakeWriteCloser.CloseCallCount()).To(Equal(1))
 		})
 

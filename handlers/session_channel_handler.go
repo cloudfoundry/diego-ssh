@@ -537,7 +537,7 @@ func (sess *session) run(command *exec.Cmd) error {
 		return err
 	}
 
-	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel)
+	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel, func() { stdin.Close() })
 
 	return sess.runner.Start(command)
 }
