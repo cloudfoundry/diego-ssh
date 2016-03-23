@@ -507,8 +507,10 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("terminates the shell when the stdin closes", func() {
 				waitCh := make(chan error, 1)
+				waitStartedCh := make(chan struct{}, 1)
 				waitStub := runner.WaitStub
 				runner.WaitStub = func(command *exec.Cmd) error {
+					close(waitStartedCh)
 					err := waitStub(command)
 					waitCh <- err
 					return err
@@ -517,12 +519,12 @@ var _ = Describe("SessionChannelHandler", func() {
 				err := session.Shell()
 				Expect(err).NotTo(HaveOccurred())
 
+				Eventually(waitStartedCh).Should(BeClosed())
+
 				err = client.Conn.Close()
 				client = nil
 				Expect(err).NotTo(HaveOccurred())
-
 				session.Wait()
-
 				Eventually(waitCh, 3).Should(Receive(MatchError("signal: hangup")))
 			})
 
