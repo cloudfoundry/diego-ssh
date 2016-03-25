@@ -315,6 +315,8 @@ var _ = Describe("SessionChannelHandler", func() {
 
 					reader := bufio.NewReader(stdout)
 					Eventually(reader.ReadLine).Should(ContainSubstring("trapped"))
+
+					Eventually(runner.StartCallCount).Should(Equal(1))
 				})
 
 				It("delivers the signal to the process", func() {
