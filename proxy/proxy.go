@@ -158,53 +158,66 @@ func ProxyChannels(logger lager.Logger, conn ssh.Conn, channels <-chan ssh.NewCh
 	defer conn.Close()
 
 	for newChannel := range channels {
-		logger.Info("new-channel", lager.Data{
-			"channelType": newChannel.ChannelType(),
-			"extraData":   newChannel.ExtraData(),
-		})
-
-		targetChan, targetReqs, err := conn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
-		if err != nil {
-			logger.Error("failed-to-open-channel", err)
-			if openErr, ok := err.(*ssh.OpenChannelError); ok {
-				newChannel.Reject(openErr.Reason, openErr.Message)
-			} else {
-				newChannel.Reject(ssh.ConnectionFailed, err.Error())
-			}
-			continue
-		}
-
-		sourceChan, sourceReqs, err := newChannel.Accept()
-		if err != nil {
-			targetChan.Close()
-			continue
-		}
-
-		toTargetLogger := logger.Session("to-target")
-		toSourceLogger := logger.Session("to-source")
-
-		go func() {
-			helpers.Copy(toTargetLogger, nil, targetChan, sourceChan)
-			targetChan.CloseWrite()
-		}()
-		go func() {
-			helpers.Copy(toSourceLogger, nil, sourceChan, targetChan)
-			sourceChan.CloseWrite()
-		}()
-
-		go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan)
-		go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan)
+		handleNewChannel(logger, conn, newChannel)
 	}
 }
 
-func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Request, channel ssh.Channel) {
+func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChannel) {
+	logger.Info("new-channel", lager.Data{
+		"channelType": newChannel.ChannelType(),
+		"extraData":   newChannel.ExtraData(),
+	})
+
+	targetChan, targetReqs, err := conn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
+	if err != nil {
+		logger.Error("failed-to-open-channel", err)
+		if openErr, ok := err.(*ssh.OpenChannelError); ok {
+			newChannel.Reject(openErr.Reason, openErr.Message)
+		} else {
+			newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		}
+		return
+	}
+	defer targetChan.Close()
+
+	sourceChan, sourceReqs, err := newChannel.Accept()
+	if err != nil {
+		targetChan.Close()
+		return
+	}
+	defer sourceChan.Close()
+
+	toTargetLogger := logger.Session("to-target")
+	toSourceLogger := logger.Session("to-source")
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		helpers.Copy(toTargetLogger, wg, targetChan, sourceChan)
+		targetChan.CloseWrite()
+	}()
+	go func() {
+		helpers.Copy(toSourceLogger, wg, sourceChan, targetChan)
+		sourceChan.CloseWrite()
+	}()
+
+	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan, sourceChan)
+	go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan, targetChan)
+
+	wg.Wait()
+}
+
+func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Request, channel, channel2 ssh.Channel) {
 	logger = logger.Session("proxy-requests", lager.Data{
 		"channel-type": channelType,
 	})
 
 	logger.Info("started")
 	defer logger.Info("completed")
-	defer channel.Close()
+	defer func() {
+		channel2.CloseWrite()
+	}()
 
 	for req := range reqs {
 		logger.Info("request", lager.Data{
@@ -220,6 +233,11 @@ func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Req
 
 		if req.WantReply {
 			req.Reply(success, nil)
+		}
+
+		if req.Type == "exit-status" {
+			logger.Info("exiting-dawg")
+			return
 		}
 	}
 }
