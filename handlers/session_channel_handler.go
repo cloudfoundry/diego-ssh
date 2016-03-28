@@ -274,12 +274,12 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 		return
 	}
 
-	if scpRegex.MatchString(execMessage.Command) {
-		logger.Info("handling-scp-command", lager.Data{"Command": execMessage.Command})
-		sess.executeSCP(execMessage.Command, request)
-	} else {
-		sess.executeShell(request, "-c", execMessage.Command)
-	}
+	// if scpRegex.MatchString(execMessage.Command) {
+	// 	logger.Info("handling-scp-command", lager.Data{"Command": execMessage.Command})
+	// 	sess.executeSCP(execMessage.Command, request)
+	// } else {
+	sess.executeShell(request, "-c", execMessage.Command)
+	// }
 }
 
 func (sess *session) handleShellRequest(request *ssh.Request) {
