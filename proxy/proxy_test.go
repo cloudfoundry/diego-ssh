@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators/fake_authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
@@ -925,10 +926,12 @@ var _ = Describe("Proxy", func() {
 			channel *fake_ssh.FakeChannel
 			reqChan chan *ssh.Request
 
+			wg   *sync.WaitGroup
 			done chan struct{}
 		)
 
 		BeforeEach(func() {
+			wg = &sync.WaitGroup{}
 			channel = &fake_ssh.FakeChannel{}
 			reqChan = make(chan *ssh.Request, 2)
 			done = make(chan struct{}, 1)
@@ -936,7 +939,7 @@ var _ = Describe("Proxy", func() {
 
 		JustBeforeEach(func() {
 			go func(done chan<- struct{}) {
-				proxy.ProxyRequests(logger, "test", reqChan, channel)
+				proxy.ProxyRequests(logger, "test", reqChan, channel, wg)
 				done <- struct{}{}
 			}(done)
 		})
@@ -1004,6 +1007,49 @@ var _ = Describe("Proxy", func() {
 
 			It("returns gracefully", func() {
 				Eventually(done).Should(Receive())
+			})
+		})
+
+		Context("when an exit-status request is received", func() {
+			BeforeEach(func() {
+				request := &ssh.Request{Type: "exit-status", WantReply: false, Payload: []byte("test-data")}
+				reqChan <- request
+				reqChan <- request
+			})
+
+			AfterEach(func() {
+				close(reqChan)
+			})
+
+			It("does not handle extra requests", func() {
+				Eventually(channel.SendRequestCallCount).Should(Equal(1))
+				Consistently(channel.SendRequestCallCount).Should(Equal(1))
+
+				Eventually(channel.CloseCallCount).Should(Equal(1))
+				reqType, wantReply, payload := channel.SendRequestArgsForCall(0)
+				Expect(reqType).To(Equal("exit-status"))
+				Expect(wantReply).To(BeFalse())
+				Expect(payload).To(Equal([]byte("test-data")))
+			})
+
+			Context("when there is a wait group", func() {
+				BeforeEach(func() {
+					wg.Add(1)
+				})
+
+				It("exits when the waitgroup is done", func() {
+					Eventually(channel.SendRequestCallCount).Should(Equal(1))
+					Consistently(channel.SendRequestCallCount).Should(Equal(1))
+
+					Consistently(channel.CloseCallCount).Should(Equal(0))
+					wg.Done()
+					Eventually(channel.CloseCallCount).Should(Equal(1))
+
+					reqType, wantReply, payload := channel.SendRequestArgsForCall(0)
+					Expect(reqType).To(Equal("exit-status"))
+					Expect(wantReply).To(BeFalse())
+					Expect(payload).To(Equal([]byte("test-data")))
+				})
 			})
 		})
 	})

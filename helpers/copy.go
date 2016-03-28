@@ -10,6 +10,11 @@ import (
 func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader) {
 	logger = logger.Session("copy")
 	logger.Info("started")
+	defer func() {
+		if wg != nil {
+			wg.Done()
+		}
+	}()
 
 	n, err := io.Copy(dest, src)
 	if err != nil {
@@ -17,10 +22,6 @@ func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader
 	}
 
 	logger.Info("completed", lager.Data{"bytes-copied": n})
-
-	if wg != nil {
-		wg.Done()
-	}
 }
 
 func CopyAndClose(logger lager.Logger, wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader, closeFunc func()) {
