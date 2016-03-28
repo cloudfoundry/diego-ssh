@@ -178,14 +178,12 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 		}
 		return
 	}
-	defer targetChan.Close()
 
 	sourceChan, sourceReqs, err := newChannel.Accept()
 	if err != nil {
 		targetChan.Close()
 		return
 	}
-	defer sourceChan.Close()
 
 	toTargetLogger := logger.Session("to-target")
 	toSourceLogger := logger.Session("to-source")
@@ -202,13 +200,11 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 		sourceChan.CloseWrite()
 	}()
 
-	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan)
-	go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan)
-
-	wg.Wait()
+	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan, wg)
+	go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan, wg)
 }
 
-func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Request, channel ssh.Channel) {
+func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Request, channel ssh.Channel, wg *sync.WaitGroup) {
 	logger = logger.Session("proxy-requests", lager.Data{
 		"channel-type": channelType,
 	})
@@ -216,6 +212,7 @@ func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Req
 	logger.Info("started")
 	defer logger.Info("completed")
 	defer func() {
+		wg.Wait()
 		channel.Close()
 	}()
 
