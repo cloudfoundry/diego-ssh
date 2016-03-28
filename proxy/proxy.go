@@ -188,20 +188,24 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 	toTargetLogger := logger.Session("to-target")
 	toSourceLogger := logger.Session("to-source")
 
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	targetWg := &sync.WaitGroup{}
+	sourceWg := &sync.WaitGroup{}
+
+	targetWg.Add(1)
+	sourceWg.Add(1)
 
 	go func() {
-		helpers.Copy(toTargetLogger, wg, targetChan, sourceChan)
+		helpers.Copy(toTargetLogger, targetWg, targetChan, sourceChan)
 		targetChan.CloseWrite()
 	}()
+
 	go func() {
-		helpers.Copy(toSourceLogger, wg, sourceChan, targetChan)
+		helpers.Copy(toSourceLogger, sourceWg, sourceChan, targetChan)
 		sourceChan.CloseWrite()
 	}()
 
-	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan, wg)
-	go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan, wg)
+	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan, targetWg)
+	go ProxyRequests(toSourceLogger, newChannel.ChannelType(), targetReqs, sourceChan, sourceWg)
 }
 
 func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Request, channel ssh.Channel, wg *sync.WaitGroup) {
