@@ -239,7 +239,6 @@ func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Req
 		}
 
 		if req.Type == "exit-status" {
-			logger.Info("exiting-dawg")
 			return
 		}
 	}
