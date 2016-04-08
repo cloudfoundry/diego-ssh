@@ -713,9 +713,11 @@ var _ = Describe("Proxy", func() {
 			newChan       *fake_ssh.FakeNewChannel
 			sourceChannel *fake_ssh.FakeChannel
 			sourceReqChan chan *ssh.Request
+			sourceStderr  *fake_ssh.FakeChannel
 
 			targetChannel *fake_ssh.FakeChannel
 			targetReqChan chan *ssh.Request
+			targetStderr  *fake_ssh.FakeChannel
 
 			done chan struct{}
 		)
@@ -727,9 +729,15 @@ var _ = Describe("Proxy", func() {
 			newChan = &fake_ssh.FakeNewChannel{}
 			sourceChannel = &fake_ssh.FakeChannel{}
 			sourceReqChan = make(chan *ssh.Request, 2)
+			sourceStderr = &fake_ssh.FakeChannel{}
+			sourceStderr.ReadReturns(0, io.EOF)
+			sourceChannel.StderrReturns(sourceStderr)
 
 			targetChannel = &fake_ssh.FakeChannel{}
 			targetReqChan = make(chan *ssh.Request, 2)
+			targetStderr = &fake_ssh.FakeChannel{}
+			targetStderr.ReadReturns(0, io.EOF)
+			targetChannel.StderrReturns(targetStderr)
 
 			done = make(chan struct{}, 1)
 		})
@@ -782,6 +790,13 @@ var _ = Describe("Proxy", func() {
 							}
 							return 0, io.EOF
 						}
+						sourceStderr.ReadStub = func(dest []byte) (int, error) {
+							if cap(dest) >= 3 {
+								copy(dest, []byte("xyz"))
+								return 3, io.EOF
+							}
+							return 0, io.EOF
+						}
 					})
 
 					It("copies the source channel to the target channel", func() {
@@ -789,6 +804,14 @@ var _ = Describe("Proxy", func() {
 
 						data := targetChannel.WriteArgsForCall(0)
 						Expect(data).To(Equal([]byte("abc")))
+
+					})
+
+					It("copies the source stderr to the target stderr", func() {
+						Eventually(targetStderr.WriteCallCount).ShouldNot(Equal(0))
+
+						data := targetStderr.WriteArgsForCall(0)
+						Expect(data).To(Equal([]byte("xyz")))
 					})
 				})
 
@@ -801,6 +824,13 @@ var _ = Describe("Proxy", func() {
 							}
 							return 0, io.EOF
 						}
+						targetStderr.ReadStub = func(dest []byte) (int, error) {
+							if cap(dest) >= 3 {
+								copy(dest, []byte("abc"))
+								return 3, io.EOF
+							}
+							return 0, io.EOF
+						}
 					})
 
 					It("copies the target channel to the source channel", func() {
@@ -808,6 +838,14 @@ var _ = Describe("Proxy", func() {
 
 						data := sourceChannel.WriteArgsForCall(0)
 						Expect(data).To(Equal([]byte("xyz")))
+
+					})
+
+					It("copies the target stderr to the source stderr", func() {
+						Eventually(sourceStderr.WriteCallCount).ShouldNot(Equal(0))
+
+						data := sourceStderr.WriteArgsForCall(0)
+						Expect(data).To(Equal([]byte("abc")))
 					})
 				})
 
