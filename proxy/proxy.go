@@ -193,20 +193,19 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 	targetWg := &sync.WaitGroup{}
 	sourceWg := &sync.WaitGroup{}
 
-	targetWg.Add(1)
-	targetWg.Add(1)
-
+	targetWg.Add(2)
+	go helpers.Copy(toTargetLogger.Session("stdout"), targetWg, targetChan, sourceChan)
+	go helpers.Copy(toTargetLogger.Session("stderr"), targetWg, targetChan.Stderr(), sourceChan.Stderr())
 	go func() {
-		helpers.Copy(toTargetLogger.Session("stdout"), targetWg, targetChan, sourceChan)
-		helpers.Copy(toTargetLogger.Session("stderr"), targetWg, targetChan.Stderr(), sourceChan.Stderr())
+		targetWg.Wait()
 		targetChan.CloseWrite()
 	}()
 
-	sourceWg.Add(1)
-	sourceWg.Add(1)
+	sourceWg.Add(2)
+	go helpers.Copy(toSourceLogger.Session("stdout"), sourceWg, sourceChan, targetChan)
+	go helpers.Copy(toSourceLogger.Session("stderr"), sourceWg, sourceChan.Stderr(), targetChan.Stderr())
 	go func() {
-		helpers.Copy(toSourceLogger.Session("stdout"), sourceWg, sourceChan, targetChan)
-		helpers.Copy(toSourceLogger.Session("stderr"), sourceWg, sourceChan.Stderr(), targetChan.Stderr())
+		sourceWg.Wait()
 		sourceChan.CloseWrite()
 	}()
 
