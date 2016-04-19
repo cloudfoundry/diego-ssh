@@ -12,10 +12,10 @@ import (
 )
 
 type permissionsBuilder struct {
-	bbsClient bbs.Client
+	bbsClient bbs.InternalClient
 }
 
-func NewPermissionsBuiler(bbsClient bbs.Client) PermissionsBuilder {
+func NewPermissionsBuiler(bbsClient bbs.InternalClient) PermissionsBuilder {
 	return &permissionsBuilder{bbsClient}
 }
 
