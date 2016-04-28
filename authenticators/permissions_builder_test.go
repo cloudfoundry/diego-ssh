@@ -23,7 +23,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			expectedRoute  routes.SSHRoute
 			desiredLRP     *models.DesiredLRP
 			actualLRPGroup *models.ActualLRPGroup
-			bbsClient      *fake_bbs.FakeClient
+			bbsClient      *fake_bbs.FakeInternalClient
 			credentials    []byte
 			metadata       *fake_ssh.FakeConnMetadata
 
@@ -67,7 +67,7 @@ var _ = Describe("PermissionsBuilder", func() {
 				},
 			}
 
-			bbsClient = new(fake_bbs.FakeClient)
+			bbsClient = new(fake_bbs.FakeInternalClient)
 			bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
 			bbsClient.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
 
