@@ -8,6 +8,7 @@ import (
 	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/routes"
+	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -15,17 +16,17 @@ type permissionsBuilder struct {
 	bbsClient bbs.InternalClient
 }
 
-func NewPermissionsBuiler(bbsClient bbs.InternalClient) PermissionsBuilder {
+func NewPermissionsBuilder(bbsClient bbs.InternalClient) PermissionsBuilder {
 	return &permissionsBuilder{bbsClient}
 }
 
-func (pb *permissionsBuilder) Build(processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
-	actual, err := pb.bbsClient.ActualLRPGroupByProcessGuidAndIndex(processGuid, index)
+func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
+	actual, err := pb.bbsClient.ActualLRPGroupByProcessGuidAndIndex(logger, processGuid, index)
 	if err != nil {
 		return nil, err
 	}
 
-	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(processGuid)
+	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(logger, processGuid)
 	if err != nil {
 		return nil, err
 	}

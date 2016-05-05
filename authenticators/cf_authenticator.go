@@ -88,7 +88,7 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, err
 	}
 
-	permissions, err := cfa.permissionsBuilder.Build(processGuid, index, metadata)
+	permissions, err := cfa.permissionsBuilder.Build(logger, processGuid, index, metadata)
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}

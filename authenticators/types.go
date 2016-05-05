@@ -3,6 +3,8 @@ package authenticators
 import (
 	"regexp"
 
+	"github.com/pivotal-golang/lager"
+
 	"golang.org/x/crypto/ssh"
 )
 
@@ -20,5 +22,5 @@ type PasswordAuthenticator interface {
 
 //go:generate counterfeiter -o fake_authenticators/fake_permissions_builder.go . PermissionsBuilder
 type PermissionsBuilder interface {
-	Build(processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error)
+	Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error)
 }

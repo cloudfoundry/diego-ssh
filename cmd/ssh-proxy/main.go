@@ -232,7 +232,7 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 	}
 
 	bbsClient := initializeBBSClient(logger)
-	permissionsBuilder := authenticators.NewPermissionsBuiler(bbsClient)
+	permissionsBuilder := authenticators.NewPermissionsBuilder(bbsClient)
 
 	authens := []authenticators.PasswordAuthenticator{}
 

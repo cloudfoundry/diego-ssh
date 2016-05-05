@@ -150,7 +150,7 @@ var _ = Describe("CFAuthenticator", func() {
 		It("builds permissions from the process guid of the app", func() {
 			Expect(permissionsBuilder.BuildCallCount()).To(Equal(1))
 
-			guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
+			_, guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
 			Expect(guid).To(Equal("app-guid-app-version"))
 			Expect(index).To(Equal(1))
 			Expect(metadata).To(Equal(metadata))

@@ -53,11 +53,16 @@ func (fake *FakePasswordAuthenticator) UserRegexpReturns(result1 *regexp.Regexp)
 }
 
 func (fake *FakePasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+	var passwordCopy []byte
+	if password != nil {
+		passwordCopy = make([]byte, len(password))
+		copy(passwordCopy, password)
+	}
 	fake.authenticateMutex.Lock()
 	fake.authenticateArgsForCall = append(fake.authenticateArgsForCall, struct {
 		metadata ssh.ConnMetadata
 		password []byte
-	}{metadata, password})
+	}{metadata, passwordCopy})
 	fake.authenticateMutex.Unlock()
 	if fake.AuthenticateStub != nil {
 		return fake.AuthenticateStub(metadata, password)

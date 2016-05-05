@@ -60,7 +60,7 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 			It("builds permissions for the requested process", func() {
 				Expect(permissionsBuilder.BuildCallCount()).To(Equal(1))
-				guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
+				_, guid, index, metadata := permissionsBuilder.BuildArgsForCall(0)
 				Expect(guid).To(Equal("some-guid"))
 				Expect(index).To(Equal(0))
 				Expect(metadata).To(Equal(metadata))

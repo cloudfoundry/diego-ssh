@@ -57,7 +57,7 @@ func (dpa *DiegoProxyAuthenticator) Authenticate(metadata ssh.ConnMetadata, pass
 		return nil, err
 	}
 
-	permissions, err := dpa.permissionsBuilder.Build(processGuid, index, metadata)
+	permissions, err := dpa.permissionsBuilder.Build(logger, processGuid, index, metadata)
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}

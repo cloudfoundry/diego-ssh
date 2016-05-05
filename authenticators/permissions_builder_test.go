@@ -72,7 +72,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			bbsClient.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
 
 			credentials = []byte("some-user:some-password")
-			permissionsBuilder = authenticators.NewPermissionsBuiler(bbsClient)
+			permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient)
 
 			remoteAddr, err := net.ResolveIPAddr("ip", "1.1.1.1")
 			Expect(err).NotTo(HaveOccurred())
@@ -84,18 +84,19 @@ var _ = Describe("PermissionsBuilder", func() {
 		})
 
 		JustBeforeEach(func() {
-			permissions, buildErr = permissionsBuilder.Build(processGuid, index, metadata)
+			permissions, buildErr = permissionsBuilder.Build(logger, processGuid, index, metadata)
 		})
 
 		It("gets information about the desired lrp referenced in the username", func() {
 			Expect(bbsClient.DesiredLRPByProcessGuidCallCount()).To(Equal(1))
-			Expect(bbsClient.DesiredLRPByProcessGuidArgsForCall(0)).To(Equal("some-guid"))
+			_, guid := bbsClient.DesiredLRPByProcessGuidArgsForCall(0)
+			Expect(guid).To(Equal("some-guid"))
 		})
 
 		It("gets information about the the actual lrp from the username", func() {
 			Expect(bbsClient.ActualLRPGroupByProcessGuidAndIndexCallCount()).To(Equal(1))
 
-			guid, index := bbsClient.ActualLRPGroupByProcessGuidAndIndexArgsForCall(0)
+			_, guid, index := bbsClient.ActualLRPGroupByProcessGuidAndIndexArgsForCall(0)
 			Expect(guid).To(Equal("some-guid"))
 			Expect(index).To(Equal(1))
 		})
