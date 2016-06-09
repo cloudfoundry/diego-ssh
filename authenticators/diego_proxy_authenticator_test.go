@@ -34,18 +34,16 @@ var _ = Describe("DiegoProxyAuthenticator", func() {
 
 	Describe("Authenticate", func() {
 		var (
-			permissions *ssh.Permissions
-			password    []byte
-			authErr     error
+			password []byte
+			authErr  error
 		)
 
 		BeforeEach(func() {
-			permissions = nil
 			password = []byte{}
 		})
 
 		JustBeforeEach(func() {
-			permissions, authErr = authenticator.Authenticate(metadata, password)
+			_, authErr = authenticator.Authenticate(metadata, password)
 		})
 
 		Context("when the user name matches the user regex and valid credentials are provided", func() {

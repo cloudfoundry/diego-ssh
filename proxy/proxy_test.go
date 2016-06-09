@@ -437,7 +437,6 @@ var _ = Describe("Proxy", func() {
 					listener      net.Listener
 					targetAddress string
 
-					clientConn     ssh.Conn
 					clientChannels <-chan ssh.NewChannel
 					clientRequests <-chan *ssh.Request
 				)
@@ -461,7 +460,7 @@ var _ = Describe("Proxy", func() {
 					}()
 
 					clientNetConn, err := net.Dial("tcp", targetAddress)
-					clientConn, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", &ssh.ClientConfig{})
+					_, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", &ssh.ClientConfig{})
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1101,9 +1100,6 @@ var _ = Describe("Proxy", func() {
 			sshdListener    net.Listener
 			sshdServer      *server.Server
 
-			clientConn       ssh.Conn
-			newChannelChan   <-chan ssh.NewChannel
-			requestChannel   <-chan *ssh.Request
 			newClientConnErr error
 		)
 
@@ -1127,7 +1123,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 
-			clientConn, newChannelChan, requestChannel, newClientConnErr = proxy.NewClientConn(logger, permissions)
+			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions)
 		})
 
 		AfterEach(func() {

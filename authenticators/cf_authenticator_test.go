@@ -26,8 +26,7 @@ var _ = Describe("CFAuthenticator", func() {
 		httpClientTimeout  time.Duration
 		permissionsBuilder *fake_authenticators.FakePermissionsBuilder
 
-		permissions *ssh.Permissions
-		authenErr   error
+		authenErr error
 
 		metadata *fake_ssh.FakeConnMetadata
 		password []byte
@@ -66,7 +65,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 	JustBeforeEach(func() {
 		authenticator = authenticators.NewCFAuthenticator(logger, httpClient, ccURL, uaaTokenURL, uaaUsername, uaaPassword, permissionsBuilder)
-		permissions, authenErr = authenticator.Authenticate(metadata, password)
+		_, authenErr = authenticator.Authenticate(metadata, password)
 	})
 
 	Describe("UserRegexp", func() {

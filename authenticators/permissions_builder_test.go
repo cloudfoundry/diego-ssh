@@ -24,7 +24,6 @@ var _ = Describe("PermissionsBuilder", func() {
 			desiredLRP     *models.DesiredLRP
 			actualLRPGroup *models.ActualLRPGroup
 			bbsClient      *fake_bbs.FakeInternalClient
-			credentials    []byte
 			metadata       *fake_ssh.FakeConnMetadata
 
 			permissionsBuilder authenticators.PermissionsBuilder
@@ -71,7 +70,6 @@ var _ = Describe("PermissionsBuilder", func() {
 			bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
 			bbsClient.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
 
-			credentials = []byte("some-user:some-password")
 			permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient)
 
 			remoteAddr, err := net.ResolveIPAddr("ip", "1.1.1.1")

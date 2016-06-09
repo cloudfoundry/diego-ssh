@@ -12,8 +12,7 @@ import (
 
 var _ = Describe("PublicKeyAuthenticator", func() {
 	var (
-		privateKey ssh.Signer
-		publicKey  ssh.PublicKey
+		publicKey ssh.PublicKey
 
 		authenticator authenticators.PublicKeyAuthenticator
 
@@ -28,7 +27,6 @@ var _ = Describe("PublicKeyAuthenticator", func() {
 		keyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 		Expect(err).NotTo(HaveOccurred())
 
-		privateKey = keyPair.PrivateKey()
 		publicKey = keyPair.PublicKey()
 
 		authenticator = authenticators.NewPublicKeyAuthenticator(publicKey)
