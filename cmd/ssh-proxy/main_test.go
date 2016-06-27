@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/ssh-proxy/testrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
