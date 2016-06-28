@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/server"
+	"code.cloudfoundry.org/diego-ssh/server"
 )
 
 type FakeConnectionHandler struct {

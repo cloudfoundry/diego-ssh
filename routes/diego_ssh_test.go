@@ -3,7 +3,7 @@ package routes_test
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/routes"
+	"code.cloudfoundry.org/diego-ssh/routes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

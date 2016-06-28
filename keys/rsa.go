@@ -6,7 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"golang.org/x/crypto/ssh"
 )
 

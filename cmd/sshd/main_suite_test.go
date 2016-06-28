@@ -3,7 +3,7 @@ package main_test
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/keys"
+	"code.cloudfoundry.org/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -26,7 +26,7 @@ func TestSSHDaemon(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	sshd, err := gexec.Build("github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd", "-race")
+	sshd, err := gexec.Build("code.cloudfoundry.org/diego-ssh/cmd/sshd", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
 	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)

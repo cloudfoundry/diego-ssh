@@ -6,9 +6,9 @@ import (
 
 	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/routes"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/routes"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 

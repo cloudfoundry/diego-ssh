@@ -4,7 +4,7 @@ package fake_keys
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/keys"
+	"code.cloudfoundry.org/diego-ssh/keys"
 )
 
 type FakeSSHKeyFactory struct {

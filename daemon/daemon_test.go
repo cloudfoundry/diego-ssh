@@ -4,11 +4,11 @@ import (
 	"errors"
 	"net"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fake_handlers"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_net"
+	"code.cloudfoundry.org/diego-ssh/daemon"
+	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers/fake_handlers"
+	"code.cloudfoundry.org/diego-ssh/test_helpers"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
@@ -200,13 +200,11 @@ var _ = Describe("Daemon", func() {
 			var (
 				channelType string
 
-				sshChannel  ssh.Channel
-				requestChan <-chan *ssh.Request
-				openError   error
+				openError error
 			)
 
 			JustBeforeEach(func() {
-				sshChannel, requestChan, openError = client.OpenChannel(channelType, []byte("extra-data"))
+				_, _, openError = client.OpenChannel(channelType, []byte("extra-data"))
 			})
 
 			Context("and there is an associated handler", func() {

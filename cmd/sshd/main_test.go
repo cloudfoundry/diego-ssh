@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
+	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"golang.org/x/crypto/ssh"

@@ -4,7 +4,7 @@ package fake_authenticators
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )

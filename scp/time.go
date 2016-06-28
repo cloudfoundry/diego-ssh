@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/scp/atime"
+	"code.cloudfoundry.org/diego-ssh/scp/atime"
 )
 
 type TimeMessage struct {

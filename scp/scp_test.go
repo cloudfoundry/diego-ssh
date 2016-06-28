@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/scp"
-	"github.com/cloudfoundry-incubator/diego-ssh/scp/atime"
+	"code.cloudfoundry.org/diego-ssh/scp"
+	"code.cloudfoundry.org/diego-ssh/scp/atime"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -487,7 +487,6 @@ var _ = Describe("scp", func() {
 		Context("when a file is specified as the target", func() {
 			var (
 				targetFile         string
-				targetFileInfo     os.FileInfo
 				preserveTimestamps bool
 			)
 
@@ -532,7 +531,7 @@ var _ = Describe("scp", func() {
 				stdinSource.Close()
 				Eventually(done).Should(BeClosed())
 
-				targetFileInfo, err = os.Stat(targetFile)
+				_, err = os.Stat(targetFile)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -574,7 +573,6 @@ var _ = Describe("scp", func() {
 				dir                string
 				preserveTimestamps bool
 				targetIsDirectory  bool
-				session            *scp.Session
 				done               chan struct{}
 			)
 
@@ -611,7 +609,7 @@ var _ = Describe("scp", func() {
 				_, err = stdoutSource.Read(bytes)
 				Expect(err).NotTo(HaveOccurred())
 
-				session = scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
+				scp.NewSession(stdoutSource, stdinSource, nil, preserveTimestamps, logger)
 				testCopier = newTestCopier(stdoutSource, stdinSource, nil, preserveTimestamps)
 			})
 

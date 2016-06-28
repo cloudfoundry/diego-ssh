@@ -3,7 +3,7 @@ package helpers_test
 import (
 	"unicode/utf8"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators/fake_authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"

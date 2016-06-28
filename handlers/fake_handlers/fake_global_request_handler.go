@@ -4,7 +4,7 @@ package fake_handlers
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )

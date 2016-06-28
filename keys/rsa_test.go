@@ -4,8 +4,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
-	"github.com/cloudfoundry-incubator/diego-ssh/keys"
+	"code.cloudfoundry.org/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/keys"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"

@@ -8,9 +8,9 @@ import (
 
 	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/debugserver"
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
-	"github.com/cloudfoundry-incubator/diego-ssh/keys"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/daemon"
+	"code.cloudfoundry.org/diego-ssh/keys"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"

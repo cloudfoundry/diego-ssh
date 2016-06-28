@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
+	"code.cloudfoundry.org/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_io"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 

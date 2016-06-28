@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/cloudfoundry-incubator/diego-ssh/handlers"
+import "code.cloudfoundry.org/diego-ssh/handlers"
 
 func newChannelHandlers() map[string]handlers.NewChannelHandler {
 	return map[string]handlers.NewChannelHandler{

@@ -3,10 +3,10 @@
 package handlers_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers/fakes"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers"
+	"code.cloudfoundry.org/diego-ssh/daemon"
+	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers/fakes"
+	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"

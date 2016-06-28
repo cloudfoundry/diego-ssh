@@ -3,7 +3,7 @@ package helpers_test
 import (
 	"io"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 

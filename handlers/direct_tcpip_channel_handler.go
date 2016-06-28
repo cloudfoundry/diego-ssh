@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )

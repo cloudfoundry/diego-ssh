@@ -1,7 +1,7 @@
 package scp_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/scp"
+	"code.cloudfoundry.org/diego-ssh/scp"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

@@ -1,7 +1,7 @@
 package signals_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/signals"
+	"code.cloudfoundry.org/diego-ssh/signals"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

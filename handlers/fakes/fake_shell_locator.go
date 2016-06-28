@@ -4,7 +4,7 @@ package fakes
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 )
 
 type FakeShellLocator struct {

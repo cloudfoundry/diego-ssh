@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/server"
+	"code.cloudfoundry.org/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
 )
 

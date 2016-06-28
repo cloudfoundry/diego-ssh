@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/scp"
-	"github.com/cloudfoundry-incubator/diego-ssh/scp/atime"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_io"
+	"code.cloudfoundry.org/diego-ssh/scp"
+	"code.cloudfoundry.org/diego-ssh/scp/atime"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_io"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"

@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/server"
+	"code.cloudfoundry.org/diego-ssh/server"
 	"github.com/pivotal-golang/lager"
 )
 

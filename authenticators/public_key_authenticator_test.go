@@ -1,9 +1,9 @@
 package authenticators_test
 
 import (
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
-	"github.com/cloudfoundry-incubator/diego-ssh/keys"
-	"github.com/cloudfoundry-incubator/diego-ssh/test_helpers/fake_ssh"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/keys"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"

@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 )
 
 func newChannelHandlers() map[string]handlers.NewChannelHandler {

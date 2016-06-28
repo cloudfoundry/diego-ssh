@@ -6,7 +6,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 )
 
 type FakeRunner struct {

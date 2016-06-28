@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"golang.org/x/crypto/ssh"
 )
 
