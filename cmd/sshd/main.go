@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudfoundry-incubator/cf-debug-server"
+	"code.cloudfoundry.org/debugserver"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
@@ -67,7 +67,7 @@ var allowedKeyExchanges = flag.String(
 )
 
 func main() {
-	cf_debug_server.AddFlags(flag.CommandLine)
+	debugserver.AddFlags(flag.CommandLine)
 	cf_lager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
@@ -86,9 +86,9 @@ func main() {
 		{"sshd", server},
 	}
 
-	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
+	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
 		members = append(grouper.Members{
-			{"debug-server", cf_debug_server.Runner(dbgAddr, reconfigurableSink)},
+			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
 		}, members...)
 	}
 
