@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/debugserver"
-	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/daemon"
 	"github.com/cloudfoundry-incubator/diego-ssh/keys"
@@ -68,10 +68,10 @@ var allowedKeyExchanges = flag.String(
 
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
-	cf_lager.AddFlags(flag.CommandLine)
+	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	logger, reconfigurableSink := cf_lager.New("sshd")
+	logger, reconfigurableSink := cflager.New("sshd")
 
 	serverConfig, err := configure(logger)
 	if err != nil {
