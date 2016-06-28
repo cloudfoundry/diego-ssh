@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/consuladapter"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
-	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/diego-ssh/authenticators"
 	"github.com/cloudfoundry-incubator/diego-ssh/proxy"
 	"github.com/cloudfoundry-incubator/diego-ssh/server"

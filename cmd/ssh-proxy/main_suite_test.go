@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
+	"code.cloudfoundry.org/consuladapter/consulrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/cmd/sshd/testrunner"
 	"github.com/cloudfoundry-incubator/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
