@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/keys"
+	"github.com/ErikDubbelboer/gspt"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -71,6 +72,7 @@ func main() {
 	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
+	gspt.SetProcTitle("diego-sshd process")
 	logger, reconfigurableSink := cflager.New("sshd")
 
 	serverConfig, err := configure(logger)
