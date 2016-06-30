@@ -57,7 +57,7 @@ var _ = Describe("CFAuthenticator", func() {
 		u, err := url.Parse(fakeUAA.URL())
 		Expect(err).NotTo(HaveOccurred())
 		uaaUsername = "diego-ssh"
-		uaaPassword = "diego-ssh-secret-$\"^&'"
+		uaaPassword = "fake-diego-ssh-secret-$\"^&'"
 
 		u.Path = "/oauth/token"
 		uaaTokenURL = u.String()
@@ -116,7 +116,7 @@ var _ = Describe("CFAuthenticator", func() {
 			fakeUAA.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/oauth/token"),
-					ghttp.VerifyBasicAuth("diego-ssh", "diego-ssh-secret-$\"^&'"),
+					ghttp.VerifyBasicAuth("diego-ssh", "fake-diego-ssh-secret-$\"^&'"),
 					ghttp.VerifyFormKV("grant_type", "authorization_code"),
 					ghttp.VerifyFormKV("code", expectedOneTimeCode),
 					ghttp.RespondWithJSONEncodedPtr(&uaaTokenResponseCode, uaaTokenResponse),

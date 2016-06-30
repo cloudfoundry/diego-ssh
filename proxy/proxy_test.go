@@ -102,7 +102,7 @@ var _ = Describe("Proxy", func() {
 				Address:         daemonAddress,
 				HostFingerprint: helpers.MD5Fingerprint(TestHostKey.PublicKey()),
 				User:            "some-user",
-				Password:        "some-password",
+				Password:        "fake-some-password",
 			}
 
 			targetConfigJson, err := json.Marshal(daemonTargetConfig)
@@ -202,7 +202,7 @@ var _ = Describe("Proxy", func() {
 
 					metadata, password := daemonAuthenticator.AuthenticateArgsForCall(0)
 					Expect(metadata.User()).To(Equal("some-user"))
-					Expect(string(password)).To(Equal("some-password"))
+					Expect(string(password)).To(Equal("fake-some-password"))
 				})
 
 				It("emits a successful log message on behalf of the lrp", func() {
@@ -221,7 +221,7 @@ var _ = Describe("Proxy", func() {
 								Address:         sshdListener.Addr().String(),
 								HostFingerprint: helpers.MD5Fingerprint(TestHostKey.PublicKey()),
 								User:            "some-user",
-								Password:        "some-password",
+								Password:        "fake-some-password",
 							})
 							Expect(err).NotTo(HaveOccurred())
 
@@ -244,7 +244,7 @@ var _ = Describe("Proxy", func() {
 								Address:         sshdListener.Addr().String(),
 								HostFingerprint: helpers.SHA1Fingerprint(TestHostKey.PublicKey()),
 								User:            "some-user",
-								Password:        "some-password",
+								Password:        "fake-some-password",
 							})
 							Expect(err).NotTo(HaveOccurred())
 
@@ -267,7 +267,7 @@ var _ = Describe("Proxy", func() {
 								Address:         sshdListener.Addr().String(),
 								HostFingerprint: "bogus-fingerprint",
 								User:            "some-user",
-								Password:        "some-password",
+								Password:        "fake-some-password",
 							})
 							Expect(err).NotTo(HaveOccurred())
 

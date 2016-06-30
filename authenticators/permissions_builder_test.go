@@ -38,7 +38,7 @@ var _ = Describe("PermissionsBuilder", func() {
 
 			expectedRoute = routes.SSHRoute{
 				ContainerPort:   1111,
-				PrivateKey:      "pem-encoded-key",
+				PrivateKey:      "fake-pem-encoded-key",
 				HostFingerprint: "host-fingerprint",
 				User:            "user",
 				Password:        "password",
@@ -103,7 +103,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			expectedConfig := `{
 				"address": "1.2.3.4:3333",
 				"host_fingerprint": "host-fingerprint",
-				"private_key": "pem-encoded-key",
+				"private_key": "fake-pem-encoded-key",
 				"user": "user",
 				"password": "password"
 			}`

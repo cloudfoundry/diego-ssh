@@ -18,7 +18,7 @@ var _ = Describe("Diego SSH Route", func() {
 			HostFingerprint: "my-key-fingerprint",
 			User:            "user",
 			Password:        "password",
-			PrivateKey:      "PEM_ENCODED_KEY",
+			PrivateKey:      "FAKE_PEM_ENCODED_KEY",
 		}
 	})
 
@@ -33,7 +33,7 @@ var _ = Describe("Diego SSH Route", func() {
 				expectedJson = `{
 					"container_port": 2222,
 					"host_fingerprint": "my-key-fingerprint",
-					"private_key": "PEM_ENCODED_KEY"
+					"private_key": "FAKE_PEM_ENCODED_KEY"
 				}`
 			})
 
