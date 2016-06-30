@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"code.cloudfoundry.org/diego-ssh/server"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type PortMapping struct {

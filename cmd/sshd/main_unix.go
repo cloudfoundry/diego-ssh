@@ -4,7 +4,7 @@ package main
 
 import (
 	"code.cloudfoundry.org/diego-ssh/server"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 func createServer(

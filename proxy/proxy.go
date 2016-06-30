@@ -9,9 +9,9 @@ import (
 	"unicode/utf8"
 
 	"code.cloudfoundry.org/diego-ssh/helpers"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"github.com/cloudfoundry/dropsonde/logs"
-	"github.com/pivotal-golang/lager"
 	"golang.org/x/crypto/ssh"
 )
 

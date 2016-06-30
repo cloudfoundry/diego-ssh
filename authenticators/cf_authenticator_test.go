@@ -11,10 +11,10 @@ import (
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
+	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
-	"github.com/pivotal-golang/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 )
 

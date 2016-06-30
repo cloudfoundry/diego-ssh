@@ -3,7 +3,7 @@ package helpers
 import (
 	"io"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 type lagerWriter struct {

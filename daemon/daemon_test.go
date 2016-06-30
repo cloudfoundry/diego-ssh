@@ -9,8 +9,8 @@ import (
 	"code.cloudfoundry.org/diego-ssh/handlers/fake_handlers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
-	"github.com/pivotal-golang/lager"
-	"github.com/pivotal-golang/lager/lagertest"
+	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"

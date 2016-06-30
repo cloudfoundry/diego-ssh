@@ -12,9 +12,9 @@ import (
 
 	"code.cloudfoundry.org/diego-ssh/scp"
 	"code.cloudfoundry.org/diego-ssh/scp/atime"
+	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pivotal-golang/lager/lagertest"
 )
 
 type TestCopier interface {

@@ -8,7 +8,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/routes"
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
 

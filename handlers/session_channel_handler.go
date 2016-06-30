@@ -18,9 +18,9 @@ import (
 	"code.cloudfoundry.org/diego-ssh/scp"
 	"code.cloudfoundry.org/diego-ssh/signals"
 	"code.cloudfoundry.org/diego-ssh/termcodes"
+	"code.cloudfoundry.org/lager"
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
-	"github.com/pivotal-golang/lager"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )

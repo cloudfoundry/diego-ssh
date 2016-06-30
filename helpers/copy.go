@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/pivotal-golang/lager"
+	"code.cloudfoundry.org/lager"
 )
 
 func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader) {
