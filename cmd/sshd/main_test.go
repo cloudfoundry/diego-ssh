@@ -135,6 +135,10 @@ var _ = Describe("SSH daemon", func() {
 				os.Setenv("SSHD_HOSTKEY", "invalid-host-key")
 			})
 
+			AfterEach(func() {
+				os.Unsetenv("SSHD_HOSTKEY")
+			})
+
 			It("reports and dies", func() {
 				Expect(runner).To(gbytes.Say("failed-to-parse-host-key"))
 				Expect(runner).NotTo(gexec.Exit(0))
@@ -145,6 +149,10 @@ var _ = Describe("SSH daemon", func() {
 			BeforeEach(func() {
 				authorizedKey = ""
 				os.Setenv("SSHD_AUTHKEY", "authorized-key")
+			})
+
+			AfterEach(func() {
+				os.Unsetenv("SSHD_AUTHKEY")
 			})
 
 			It("reports and dies", func() {
@@ -198,6 +206,7 @@ var _ = Describe("SSH daemon", func() {
 				if client != nil {
 					client.Close()
 				}
+				os.Unsetenv("SSHD_HOSTKEY")
 			})
 
 			BeforeEach(func() {
