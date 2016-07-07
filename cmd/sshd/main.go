@@ -66,10 +66,27 @@ var allowedKeyExchanges = flag.String(
 	"Limit key exchanges algorithms to those provided (comma separated)",
 )
 
+var hostKeyPEM string
+var authorizedKeyValue string
+
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
 	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
+	envHostKey := os.Getenv("SSHD_HOSTKEY")
+	if envHostKey != "" {
+		hostKeyPEM = envHostKey
+		os.Unsetenv("SSHD_HOSTKEY")
+	} else {
+		hostKeyPEM = *hostKey
+	}
+	envAuthKey := os.Getenv("SSHD_AUTHKEY")
+	if envAuthKey != "" {
+		authorizedKeyValue = envAuthKey
+		os.Unsetenv("SSHD_AUTHKEY")
+	} else {
+		authorizedKeyValue = *authorizedKey
+	}
 
 	logger, reconfigurableSink := cflager.New("sshd")
 
@@ -135,12 +152,12 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	sshConfig.AddHostKey(key)
 	sshConfig.NoClientAuth = *allowUnauthenticatedClients
 
-	if *authorizedKey == "" && !*allowUnauthenticatedClients {
+	if authorizedKeyValue == "" && !*allowUnauthenticatedClients {
 		logger.Error("authorized-key-required", nil)
 		errorStrings = append(errorStrings, "Public user key is required")
 	}
 
-	if *authorizedKey != "" {
+	if authorizedKeyValue != "" {
 		decodedPublicKey, err := decodeAuthorizedKey(logger)
 		if err == nil {
 			authenticator := authenticators.NewPublicKeyAuthenticator(decodedPublicKey)
@@ -169,13 +186,13 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 }
 
 func decodeAuthorizedKey(logger lager.Logger) (ssh.PublicKey, error) {
-	publicKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(*authorizedKey))
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorizedKeyValue))
 	return publicKey, err
 }
 
 func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 	var encoded []byte
-	if *hostKey == "" {
+	if hostKeyPEM == "" {
 		hostKeyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 
 		if err != nil {
@@ -184,7 +201,7 @@ func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 		}
 		encoded = []byte(hostKeyPair.PEMEncodedPrivateKey())
 	} else {
-		encoded = []byte(*hostKey)
+		encoded = []byte(hostKeyPEM)
 	}
 
 	key, err := ssh.ParsePrivateKey(encoded)

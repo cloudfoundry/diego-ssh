@@ -129,6 +129,99 @@ var _ = Describe("SSH daemon", func() {
 		})
 	})
 
+	Describe("env variable validation", func() {
+		Context("when an ill-formed host key is provided", func() {
+			BeforeEach(func() {
+				os.Setenv("SSHD_HOSTKEY", "invalid-host-key")
+			})
+
+			It("reports and dies", func() {
+				Expect(runner).To(gbytes.Say("failed-to-parse-host-key"))
+				Expect(runner).NotTo(gexec.Exit(0))
+			})
+		})
+
+		Context("when an ill-formed authorized key is provided", func() {
+			BeforeEach(func() {
+				authorizedKey = ""
+				os.Setenv("SSHD_AUTHKEY", "authorized-key")
+			})
+
+			It("reports and dies", func() {
+				Expect(runner).To(gbytes.Say(`configure-failed.*ssh: no key found`))
+				Expect(runner).NotTo(gexec.Exit(0))
+			})
+		})
+
+		Context("the authorized key is not provided", func() {
+			BeforeEach(func() {
+				authorizedKey = ""
+				os.Unsetenv("SSHD_AUTHKEY")
+			})
+
+			Context("and allowUnauthenticatedClients is not true", func() {
+				BeforeEach(func() {
+					allowUnauthenticatedClients = false
+				})
+
+				It("reports and dies", func() {
+					Expect(runner).To(gbytes.Say("authorized-key-required"))
+					Expect(runner).NotTo(gexec.Exit(0))
+				})
+			})
+
+			Context("and allowUnauthenticatedClients is true", func() {
+				BeforeEach(func() {
+					allowUnauthenticatedClients = true
+				})
+
+				It("starts normally", func() {
+					Expect(process).NotTo(BeNil())
+				})
+			})
+		})
+
+		Context("when the hostKey is provided as an env variable", func() {
+			var (
+				client           *ssh.Client
+				dialErr          error
+				clientConfig     *ssh.ClientConfig
+				handshakeHostKey ssh.PublicKey
+			)
+
+			JustBeforeEach(func() {
+				Expect(process).NotTo(BeNil())
+				client, dialErr = ssh.Dial("tcp", address, clientConfig)
+			})
+
+			AfterEach(func() {
+				if client != nil {
+					client.Close()
+				}
+			})
+
+			BeforeEach(func() {
+				hostKey = "host-key"
+				os.Setenv("SSHD_HOSTKEY", hostKeyPem)
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+						handshakeHostKey = key
+						return nil
+					},
+				}
+			})
+
+			It("uses the hostKey from the environment", func() {
+				sshHostKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
+				Expect(err).NotTo(HaveOccurred())
+
+				sshPublicHostKey := sshHostKey.PublicKey()
+				Expect(sshPublicHostKey.Marshal()).To(Equal(handshakeHostKey.Marshal()))
+			})
+		})
+	})
+
 	Describe("daemon execution", func() {
 		var (
 			client       *ssh.Client
