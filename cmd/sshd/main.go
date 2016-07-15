@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
+	"syscall"
 
 	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/debugserver"
@@ -73,12 +75,15 @@ func main() {
 	debugserver.AddFlags(flag.CommandLine)
 	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
+	exec := false
+
 	envHostKey := os.Getenv("SSHD_HOSTKEY")
 	if envHostKey != "" {
 		hostKeyPEM = envHostKey
 		os.Unsetenv("SSHD_HOSTKEY")
 	} else {
 		hostKeyPEM = *hostKey
+		exec = true
 	}
 	envAuthKey := os.Getenv("SSHD_AUTHKEY")
 	if envAuthKey != "" {
@@ -86,9 +91,28 @@ func main() {
 		os.Unsetenv("SSHD_AUTHKEY")
 	} else {
 		authorizedKeyValue = *authorizedKey
+		exec = true
 	}
 
 	logger, reconfigurableSink := cflager.New("sshd")
+
+	if exec {
+		os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
+		os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
+
+		err := syscall.Exec(os.Args[0], []string{
+			fmt.Sprintf("--allowedKeyExchanges=%s", *allowedKeyExchanges),
+			fmt.Sprintf("--address=%s", *address),
+			fmt.Sprintf("--allowUnauthenticatedClients=%t", *allowUnauthenticatedClients),
+			fmt.Sprintf("--inheritDaemonEnv=%t", *inheritDaemonEnv),
+			fmt.Sprintf("--allowedCiphers=%s", *allowedCiphers),
+			fmt.Sprintf("--allowedMACs=%s", *allowedMACs),
+		}, os.Environ())
+		if err != nil {
+			logger.Error("failed-exec", err)
+			os.Exit(1)
+		}
+	}
 
 	serverConfig, err := configure(logger)
 	if err != nil {
