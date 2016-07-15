@@ -132,11 +132,7 @@ var _ = Describe("SSH daemon", func() {
 	Describe("env variable validation", func() {
 		Context("when an ill-formed host key is provided", func() {
 			BeforeEach(func() {
-				os.Setenv("SSHD_HOSTKEY", "invalid-host-key")
-			})
-
-			AfterEach(func() {
-				os.Unsetenv("SSHD_HOSTKEY")
+				hostKey = "invalid-host-key"
 			})
 
 			It("reports and dies", func() {
@@ -147,12 +143,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when an ill-formed authorized key is provided", func() {
 			BeforeEach(func() {
-				authorizedKey = ""
-				os.Setenv("SSHD_AUTHKEY", "authorized-key")
-			})
-
-			AfterEach(func() {
-				os.Unsetenv("SSHD_AUTHKEY")
+				authorizedKey = "invalid-authorized-key"
 			})
 
 			It("reports and dies", func() {
@@ -164,7 +155,6 @@ var _ = Describe("SSH daemon", func() {
 		Context("the authorized key is not provided", func() {
 			BeforeEach(func() {
 				authorizedKey = ""
-				os.Unsetenv("SSHD_AUTHKEY")
 			})
 
 			Context("and allowUnauthenticatedClients is not true", func() {
