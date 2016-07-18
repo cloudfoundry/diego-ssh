@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -252,6 +254,15 @@ var _ = Describe("SSH daemon", func() {
 				Expect(client).NotTo(BeNil())
 				Expect(dialErr).NotTo(HaveOccurred())
 			})
+
+			It("does not expose the key on the command line", func() {
+				command := exec.Command("ps", "-ef")
+				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+				<-session.Exited
+				keyRegex := regexp.QuoteMeta(authorizedKey[:len(authorizedKey)-1])
+				Expect(session.Out).ToNot(gbytes.Say(keyRegex))
+			})
 		})
 
 		Context("when a host key is specified", func() {
@@ -273,6 +284,15 @@ var _ = Describe("SSH daemon", func() {
 
 				sshPublicHostKey := sshHostKey.PublicKey()
 				Expect(sshPublicHostKey.Marshal()).To(Equal(handshakeHostKey.Marshal()))
+			})
+
+			It("does not expose the key on the command line", func() {
+				command := exec.Command("ps", "-ef")
+				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+				<-session.Exited
+				keyRegex := regexp.QuoteMeta(authorizedKey[:len(authorizedKey)-1])
+				Expect(session.Out).ToNot(gbytes.Say(keyRegex))
 			})
 		})
 
