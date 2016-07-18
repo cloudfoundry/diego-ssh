@@ -9,6 +9,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -132,11 +135,7 @@ var _ = Describe("SSH daemon", func() {
 	Describe("env variable validation", func() {
 		Context("when an ill-formed host key is provided", func() {
 			BeforeEach(func() {
-				os.Setenv("SSHD_HOSTKEY", "invalid-host-key")
-			})
-
-			AfterEach(func() {
-				os.Unsetenv("SSHD_HOSTKEY")
+				hostKey = "invalid-host-key"
 			})
 
 			It("reports and dies", func() {
@@ -147,12 +146,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when an ill-formed authorized key is provided", func() {
 			BeforeEach(func() {
-				authorizedKey = ""
-				os.Setenv("SSHD_AUTHKEY", "authorized-key")
-			})
-
-			AfterEach(func() {
-				os.Unsetenv("SSHD_AUTHKEY")
+				authorizedKey = "invalid-authorized-key"
 			})
 
 			It("reports and dies", func() {
@@ -164,7 +158,6 @@ var _ = Describe("SSH daemon", func() {
 		Context("the authorized key is not provided", func() {
 			BeforeEach(func() {
 				authorizedKey = ""
-				os.Unsetenv("SSHD_AUTHKEY")
 			})
 
 			Context("and allowUnauthenticatedClients is not true", func() {
@@ -249,6 +242,18 @@ var _ = Describe("SSH daemon", func() {
 			}
 		})
 
+		var ItDoesNotExposeSensitiveInformation = func() {
+			It("does not expose the key on the command line", func() {
+				pid := runner.(*ginkgomon.Runner).Command.Process.Pid
+				command := exec.Command("ps", "-fp", strconv.Itoa(pid))
+				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(session).Should(gexec.Exit(0))
+				keyRegex := regexp.QuoteMeta(authorizedKey[:len(authorizedKey)-1])
+				Expect(session.Out).NotTo(gbytes.Say(keyRegex))
+			})
+		}
+
 		Context("when a host key is not specified", func() {
 			BeforeEach(func() {
 				hostKey = ""
@@ -262,6 +267,8 @@ var _ = Describe("SSH daemon", func() {
 				Expect(client).NotTo(BeNil())
 				Expect(dialErr).NotTo(HaveOccurred())
 			})
+
+			ItDoesNotExposeSensitiveInformation()
 		})
 
 		Context("when a host key is specified", func() {
@@ -284,6 +291,8 @@ var _ = Describe("SSH daemon", func() {
 				sshPublicHostKey := sshHostKey.PublicKey()
 				Expect(sshPublicHostKey.Marshal()).To(Equal(handshakeHostKey.Marshal()))
 			})
+
+			ItDoesNotExposeSensitiveInformation()
 		})
 
 		Context("when unauthenticated clients are not allowed", func() {
