@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
+	"syscall"
 
 	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/debugserver"
@@ -73,22 +75,49 @@ func main() {
 	debugserver.AddFlags(flag.CommandLine)
 	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
-	envHostKey := os.Getenv("SSHD_HOSTKEY")
-	if envHostKey != "" {
-		hostKeyPEM = envHostKey
-		os.Unsetenv("SSHD_HOSTKEY")
-	} else {
-		hostKeyPEM = *hostKey
-	}
-	envAuthKey := os.Getenv("SSHD_AUTHKEY")
-	if envAuthKey != "" {
-		authorizedKeyValue = envAuthKey
-		os.Unsetenv("SSHD_AUTHKEY")
-	} else {
-		authorizedKeyValue = *authorizedKey
-	}
+	exec := false
 
 	logger, reconfigurableSink := cflager.New("sshd")
+
+	hostKeyPEM = os.Getenv("SSHD_HOSTKEY")
+	if hostKeyPEM != "" {
+		authorizedKeyValue = os.Getenv("SSHD_AUTHKEY")
+
+		// unset the variables so child processes don't inherit them
+		os.Unsetenv("SSHD_HOSTKEY")
+		os.Unsetenv("SSHD_AUTHKEY")
+	} else {
+		hostKeyPEM = *hostKey
+		if hostKeyPEM == "" {
+			var err error
+			hostKeyPEM, err = generateNewHostKey()
+			if err != nil {
+				logger.Error("failed-to-generate-host-key", err)
+				os.Exit(1)
+			}
+		}
+		authorizedKeyValue = *authorizedKey
+		exec = true
+	}
+
+	if exec {
+		os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
+		os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
+
+		err := syscall.Exec(os.Args[0], []string{
+			os.Args[0],
+			fmt.Sprintf("--allowedKeyExchanges=%s", *allowedKeyExchanges),
+			fmt.Sprintf("--address=%s", *address),
+			fmt.Sprintf("--allowUnauthenticatedClients=%t", *allowUnauthenticatedClients),
+			fmt.Sprintf("--inheritDaemonEnv=%t", *inheritDaemonEnv),
+			fmt.Sprintf("--allowedCiphers=%s", *allowedCiphers),
+			fmt.Sprintf("--allowedMACs=%s", *allowedMACs),
+		}, os.Environ())
+		if err != nil {
+			logger.Error("failed-exec", err)
+			os.Exit(1)
+		}
+	}
 
 	serverConfig, err := configure(logger)
 	if err != nil {
@@ -193,13 +222,7 @@ func decodeAuthorizedKey(logger lager.Logger) (ssh.PublicKey, error) {
 func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 	var encoded []byte
 	if hostKeyPEM == "" {
-		hostKeyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
-
-		if err != nil {
-			logger.Error("failed-to-generate-host-key", err)
-			return nil, err
-		}
-		encoded = []byte(hostKeyPair.PEMEncodedPrivateKey())
+		return nil, errors.New("empty-host-key")
 	} else {
 		encoded = []byte(hostKeyPEM)
 	}
@@ -210,4 +233,13 @@ func acquireHostKey(logger lager.Logger) (ssh.Signer, error) {
 		return nil, err
 	}
 	return key, nil
+}
+
+func generateNewHostKey() (string, error) {
+	hostKeyPair, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
+
+	if err != nil {
+		return "", err
+	}
+	return hostKeyPair.PEMEncodedPrivateKey(), nil
 }
