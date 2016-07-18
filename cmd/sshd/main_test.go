@@ -483,7 +483,7 @@ var _ = Describe("SSH daemon", func() {
 				BeforeEach(func() {
 					inheritDaemonEnv = true
 					os.Setenv("TEST", "FOO")
-					os.Setenv("PATH", "$PATH:/tmp")
+					os.Setenv("PATH", os.Getenv("PATH")+":/tmp")
 				})
 
 				It("creates a shell environment", func() {
