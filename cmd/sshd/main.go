@@ -104,6 +104,13 @@ func main() {
 		os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
 		os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
 
+		logLevel := "info"
+		flag.CommandLine.Lookup("logLevel")
+		logLevelFlag := flag.CommandLine.Lookup("logLevel")
+		if logLevelFlag != nil {
+			logLevel = logLevelFlag.Value.String()
+		}
+
 		err := syscall.Exec(os.Args[0], []string{
 			os.Args[0],
 			fmt.Sprintf("--allowedKeyExchanges=%s", *allowedKeyExchanges),
@@ -112,6 +119,8 @@ func main() {
 			fmt.Sprintf("--inheritDaemonEnv=%t", *inheritDaemonEnv),
 			fmt.Sprintf("--allowedCiphers=%s", *allowedCiphers),
 			fmt.Sprintf("--allowedMACs=%s", *allowedMACs),
+			fmt.Sprintf("--logLevel=%s", logLevel),
+			fmt.Sprintf("--debugAddr=%s", debugserver.DebugAddress(flag.CommandLine)),
 		}, os.Environ())
 		if err != nil {
 			logger.Error("failed-exec", err)
