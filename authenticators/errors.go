@@ -3,7 +3,7 @@ package authenticators
 import "errors"
 
 var AuthenticationFailedErr = errors.New("Authentication failed")
-var FetchAppFailedErr = errors.New("Fetching appplication data failed")
+var FetchAppFailedErr = errors.New("Fetching application data failed")
 var InvalidCCResponse = errors.New("Invalid response from Cloud Controller")
 var InvalidCredentialsErr error = errors.New("Invalid credentials")
 var InvalidDomainErr error = errors.New("Invalid authentication domain")
