@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 	"sync"
@@ -70,9 +71,20 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	if err != nil {
 		return
 	}
-	defer clientConn.Close()
 
-	emitLogMessage(logger, serverConn.Permissions)
+	logMessage := extractLogMessage(logger, serverConn.Permissions)
+
+	defer func() {
+		if logMessage != nil {
+			endMessage := fmt.Sprintf("Remote access ended for %s", serverConn.RemoteAddr().String())
+			logs.SendAppLog(logMessage.Guid, endMessage, "SSH", strconv.Itoa(logMessage.Index))
+		}
+		clientConn.Close()
+	}()
+
+	if logMessage != nil {
+		logs.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
+	}
 
 	fromClientLogger := logger.Session("from-client")
 	fromDaemonLogger := logger.Session("from-daemon")
@@ -109,20 +121,20 @@ func (p *Proxy) emitConnectionClosing(logger lager.Logger) {
 	}
 }
 
-func emitLogMessage(logger lager.Logger, perms *ssh.Permissions) {
+func extractLogMessage(logger lager.Logger, perms *ssh.Permissions) *LogMessage {
 	logMessageJson := perms.CriticalOptions["log-message"]
 	if logMessageJson == "" {
-		return
+		return nil
 	}
 
 	logMessage := &LogMessage{}
 	err := json.Unmarshal([]byte(logMessageJson), logMessage)
 	if err != nil {
 		logger.Error("json-unmarshal-failed", err)
-		return
+		return nil
 	}
 
-	logs.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
+	return logMessage
 }
 
 func ProxyGlobalRequests(logger lager.Logger, conn ssh.Conn, reqs <-chan *ssh.Request) {

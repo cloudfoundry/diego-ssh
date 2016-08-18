@@ -613,6 +613,27 @@ var _ = Describe("Proxy", func() {
 					})
 				})
 			})
+
+			Describe("app logs", func() {
+				Context("when a connection is closed", func() {
+					It("logs that the connection has been closed", func() {
+						conn, err := ssh.Dial("tcp", proxyAddress, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						conn.Close()
+
+						Eventually(
+							func() string {
+								lastIdx := len(fakeLogSender.GetLogs()) - 1
+								if lastIdx == -1 {
+									return ""
+								}
+								return fakeLogSender.GetLogs()[lastIdx].Message
+							},
+						).Should(ContainSubstring("Remote access ended for"))
+					})
+				})
+			})
 		})
 	})
 

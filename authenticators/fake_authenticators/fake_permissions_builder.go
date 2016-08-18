@@ -22,6 +22,8 @@ type FakePermissionsBuilder struct {
 		result1 *ssh.Permissions
 		result2 error
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakePermissionsBuilder) Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
@@ -32,6 +34,7 @@ func (fake *FakePermissionsBuilder) Build(logger lager.Logger, processGuid strin
 		index       int
 		metadata    ssh.ConnMetadata
 	}{logger, processGuid, index, metadata})
+	fake.recordInvocation("Build", []interface{}{logger, processGuid, index, metadata})
 	fake.buildMutex.Unlock()
 	if fake.BuildStub != nil {
 		return fake.BuildStub(logger, processGuid, index, metadata)
@@ -58,6 +61,26 @@ func (fake *FakePermissionsBuilder) BuildReturns(result1 *ssh.Permissions, resul
 		result1 *ssh.Permissions
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakePermissionsBuilder) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.buildMutex.RLock()
+	defer fake.buildMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakePermissionsBuilder) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ authenticators.PermissionsBuilder = new(FakePermissionsBuilder)

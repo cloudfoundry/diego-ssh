@@ -35,6 +35,8 @@ type FakeRunner struct {
 	signalReturns struct {
 		result1 error
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeRunner) Start(cmd *exec.Cmd) error {
@@ -42,6 +44,7 @@ func (fake *FakeRunner) Start(cmd *exec.Cmd) error {
 	fake.startArgsForCall = append(fake.startArgsForCall, struct {
 		cmd *exec.Cmd
 	}{cmd})
+	fake.recordInvocation("Start", []interface{}{cmd})
 	fake.startMutex.Unlock()
 	if fake.StartStub != nil {
 		return fake.StartStub(cmd)
@@ -74,6 +77,7 @@ func (fake *FakeRunner) Wait(cmd *exec.Cmd) error {
 	fake.waitArgsForCall = append(fake.waitArgsForCall, struct {
 		cmd *exec.Cmd
 	}{cmd})
+	fake.recordInvocation("Wait", []interface{}{cmd})
 	fake.waitMutex.Unlock()
 	if fake.WaitStub != nil {
 		return fake.WaitStub(cmd)
@@ -107,6 +111,7 @@ func (fake *FakeRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
 		cmd    *exec.Cmd
 		signal syscall.Signal
 	}{cmd, signal})
+	fake.recordInvocation("Signal", []interface{}{cmd, signal})
 	fake.signalMutex.Unlock()
 	if fake.SignalStub != nil {
 		return fake.SignalStub(cmd, signal)
@@ -132,6 +137,30 @@ func (fake *FakeRunner) SignalReturns(result1 error) {
 	fake.signalReturns = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeRunner) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.startMutex.RLock()
+	defer fake.startMutex.RUnlock()
+	fake.waitMutex.RLock()
+	defer fake.waitMutex.RUnlock()
+	fake.signalMutex.RLock()
+	defer fake.signalMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeRunner) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ handlers.Runner = new(FakeRunner)

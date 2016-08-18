@@ -17,6 +17,8 @@ type FakeSSHKeyFactory struct {
 		result1 keys.KeyPair
 		result2 error
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeSSHKeyFactory) NewKeyPair(bits int) (keys.KeyPair, error) {
@@ -24,6 +26,7 @@ func (fake *FakeSSHKeyFactory) NewKeyPair(bits int) (keys.KeyPair, error) {
 	fake.newKeyPairArgsForCall = append(fake.newKeyPairArgsForCall, struct {
 		bits int
 	}{bits})
+	fake.recordInvocation("NewKeyPair", []interface{}{bits})
 	fake.newKeyPairMutex.Unlock()
 	if fake.NewKeyPairStub != nil {
 		return fake.NewKeyPairStub(bits)
@@ -50,6 +53,26 @@ func (fake *FakeSSHKeyFactory) NewKeyPairReturns(result1 keys.KeyPair, result2 e
 		result1 keys.KeyPair
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeSSHKeyFactory) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.newKeyPairMutex.RLock()
+	defer fake.newKeyPairMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeSSHKeyFactory) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ keys.SSHKeyFactory = new(FakeSSHKeyFactory)
