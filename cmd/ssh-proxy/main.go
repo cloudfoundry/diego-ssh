@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
 	"code.cloudfoundry.org/lager"
@@ -27,6 +28,7 @@ import (
 	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/ifrit/sigmon"
 	"golang.org/x/crypto/ssh"
 )
@@ -35,6 +37,12 @@ var address = flag.String(
 	"address",
 	":2222",
 	"listen address for ssh proxy",
+)
+
+var healthCheckAddress = flag.String(
+	"healthCheckAddress",
+	":2223",
+	"listen address for ssh proxy health check server",
 )
 
 var hostKey = flag.String(
@@ -187,6 +195,10 @@ func main() {
 	sshProxy := proxy.New(logger, proxyConfig)
 	server := server.NewServer(logger, *address, sshProxy)
 
+	healthCheckHandler := handlers.NewHealthCheckHandler(logger)
+	httpServer := http_server.New(*healthCheckAddress, http.DefaultServeMux)
+	http.HandleFunc("/", healthCheckHandler.HealthCheck)
+
 	consulClient, err := consuladapter.NewClientFromUrl(*consulCluster)
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
@@ -197,6 +209,7 @@ func main() {
 	members := grouper.Members{
 		{"ssh-proxy", server},
 		{"registration-runner", registrationRunner},
+		{"healthcheck", httpServer},
 	}
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
