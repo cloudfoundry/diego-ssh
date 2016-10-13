@@ -23,8 +23,9 @@ var (
 	sshdPath     string
 	sshdProcess  ifrit.Process
 
-	sshdPort     int
-	sshProxyPort int
+	sshdPort             int
+	sshProxyPort         int
+	healthCheckProxyPort int
 
 	hostKeyPem          string
 	privateKeyPem       string
@@ -76,6 +77,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	sshProxyPort = 7100 + GinkgoParallelNode()
 	sshProxyPath = context["ssh-proxy"]
+
+	healthCheckProxyPort = 7200 + GinkgoParallelNode()
 
 	consulRunner = consulrunner.NewClusterRunner(
 		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,

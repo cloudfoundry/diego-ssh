@@ -38,6 +38,7 @@ var _ = Describe("SSH proxy", func() {
 		process ifrit.Process
 
 		address                     string
+		healthCheckAddress          string
 		bbsAddress                  string
 		ccAPIURL                    string
 		diegoCredentials            string
@@ -71,6 +72,7 @@ var _ = Describe("SSH proxy", func() {
 		hostKeyFingerprint = helpers.MD5Fingerprint(privateKey.PublicKey())
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
+		healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckProxyPort)
 		bbsAddress = fakeBBS.URL()
 		ccAPIURL = fakeCC.URL()
 		diegoCredentials = "some-creds"
@@ -146,6 +148,7 @@ var _ = Describe("SSH proxy", func() {
 
 		args := testrunner.Args{
 			Address:             address,
+			HealthCheckAddress:  healthCheckAddress,
 			BBSAddress:          bbsAddress,
 			CCAPIURL:            ccAPIURL,
 			DiegoCredentials:    diegoCredentials,

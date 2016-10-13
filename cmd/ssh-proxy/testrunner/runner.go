@@ -9,17 +9,18 @@ import (
 )
 
 type Args struct {
-	Address         string
-	HostKey         string
-	BBSAddress      string
-	CCAPIURL        string
-	UAATokenURL     string
-	UAAPassword     string
-	UAAUsername     string
-	ConsulCluster   string
-	SkipCertVerify  bool
-	EnableCFAuth    bool
-	EnableDiegoAuth bool
+	Address            string
+	HealthCheckAddress string
+	HostKey            string
+	BBSAddress         string
+	CCAPIURL           string
+	UAATokenURL        string
+	UAAPassword        string
+	UAAUsername        string
+	ConsulCluster      string
+	SkipCertVerify     bool
+	EnableCFAuth       bool
+	EnableDiegoAuth    bool
 
 	AllowedCiphers      string
 	AllowedMACs         string
@@ -31,6 +32,7 @@ type Args struct {
 func (args Args) ArgSlice() []string {
 	return []string{
 		"-address=" + args.Address,
+		"-healthCheckAddress=" + args.HealthCheckAddress,
 		"-hostKey=" + args.HostKey,
 		"-bbsAddress=" + args.BBSAddress,
 		"-ccAPIURL=" + args.CCAPIURL,
