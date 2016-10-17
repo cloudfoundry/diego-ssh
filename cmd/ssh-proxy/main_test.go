@@ -338,6 +338,55 @@ var _ = Describe("SSH proxy", func() {
 		Expect(proxyHostKey.PublicKey().Marshal()).To(Equal(handshakeHostKey.Marshal()))
 	})
 
+	Describe("http healthcheck server", func() {
+		var (
+			method, path string
+			resp         *http.Response
+		)
+
+		JustBeforeEach(func() {
+			req, err := http.NewRequest(method, "http://"+healthCheckAddress+path, nil)
+			Expect(err).NotTo(HaveOccurred())
+			resp, err = http.DefaultClient.Do(req)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("valid requests", func() {
+			BeforeEach(func() {
+				method = "GET"
+				path = "/"
+			})
+
+			It("returns 200", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+		})
+
+		Context("invalid requests", func() {
+			Context("invalid method", func() {
+				BeforeEach(func() {
+					method = "POST"
+					path = "/"
+				})
+
+				It("returns 405", func() {
+					Expect(resp.StatusCode).To(Equal(http.StatusMethodNotAllowed))
+				})
+			})
+
+			Context("invalid path", func() {
+				BeforeEach(func() {
+					method = "GET"
+					path = "/foo/bar"
+				})
+
+				It("returns 404", func() {
+					Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
+				})
+			})
+		})
+	})
+
 	Describe("attempting authentication without a realm", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{

@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
-	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/healthcheck"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
 	"code.cloudfoundry.org/lager"
@@ -195,9 +195,8 @@ func main() {
 	sshProxy := proxy.New(logger, proxyConfig)
 	server := server.NewServer(logger, *address, sshProxy)
 
-	healthCheckHandler := handlers.NewHealthCheckHandler(logger)
-	httpServer := http_server.New(*healthCheckAddress, http.DefaultServeMux)
-	http.HandleFunc("/", healthCheckHandler.HealthCheck)
+	healthCheckHandler := healthcheck.NewHandler(logger)
+	httpServer := http_server.New(*healthCheckAddress, healthCheckHandler)
 
 	consulClient, err := consuladapter.NewClientFromUrl(*consulCluster)
 	if err != nil {
