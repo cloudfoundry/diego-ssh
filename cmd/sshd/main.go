@@ -8,12 +8,12 @@ import (
 	"strings"
 	"syscall"
 
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
@@ -73,11 +73,11 @@ var authorizedKeyValue string
 
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
-	cflager.AddFlags(flag.CommandLine)
+	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 	exec := false
 
-	logger, reconfigurableSink := cflager.New("sshd")
+	logger, reconfigurableSink := lagerflags.New("sshd")
 
 	hostKeyPEM = os.Getenv("SSHD_HOSTKEY")
 	if hostKeyPEM != "" {

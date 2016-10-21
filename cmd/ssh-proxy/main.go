@@ -14,7 +14,6 @@ import (
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/cfhttp"
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
@@ -23,6 +22,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/hashicorp/consul/api"
@@ -177,12 +177,12 @@ const (
 
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
-	cflager.AddFlags(flag.CommandLine)
+	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	cfhttp.Initialize(*communicationTimeout)
 
-	logger, reconfigurableSink := cflager.New("ssh-proxy")
+	logger, reconfigurableSink := lagerflags.New("ssh-proxy")
 
 	initializeDropsonde(logger)
 
