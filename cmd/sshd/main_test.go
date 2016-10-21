@@ -185,14 +185,13 @@ var _ = Describe("SSH daemon", func() {
 		Context("when the hostKey is provided as an env variable", func() {
 			var (
 				client           *ssh.Client
-				dialErr          error
 				clientConfig     *ssh.ClientConfig
 				handshakeHostKey ssh.PublicKey
 			)
 
 			JustBeforeEach(func() {
 				Expect(process).NotTo(BeNil())
-				client, dialErr = ssh.Dial("tcp", address, clientConfig)
+				client, _ = ssh.Dial("tcp", address, clientConfig)
 			})
 
 			AfterEach(func() {
