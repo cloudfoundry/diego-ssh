@@ -349,7 +349,11 @@ func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error)
 }
 
 func NewHttpClient() *http.Client {
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	dialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
 	tlsConfig := &tls.Config{InsecureSkipVerify: *skipCertVerify}
 	return &http.Client{
 		Transport: &http.Transport{
