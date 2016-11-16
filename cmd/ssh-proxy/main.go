@@ -153,6 +153,12 @@ var consulCluster = flag.String(
 	"Consul Agent URL",
 )
 
+var consulTTL = flag.String(
+	"consulTTL",
+	"3",
+	"TTL value for consul registration in seconds",
+)
+
 var allowedCiphers = flag.String(
 	"allowedCiphers",
 	"",
@@ -395,7 +401,7 @@ func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapte
 		Name: "ssh-proxy",
 		Port: portNum,
 		Check: &api.AgentServiceCheck{
-			TTL: "3s",
+			TTL: *consulTTL + "s",
 		},
 	}
 
