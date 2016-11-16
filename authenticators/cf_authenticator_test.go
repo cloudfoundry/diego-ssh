@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/ghttp"
 	"golang.org/x/crypto/ssh"
 )
@@ -92,6 +93,41 @@ var _ = Describe("CFAuthenticator", func() {
 		})
 	})
 
+	Describe("Authenticate invalid token returned", func() {
+		const expectedOneTimeCode = "abc123"
+
+		var (
+			uaaTokenResponse     *authenticators.UAAAuthTokenResponse
+			uaaTokenResponseCode int
+		)
+
+		BeforeEach(func() {
+			metadata.UserReturns("cf:1e051b88-a210-40b7-bcca-df645b24b634/1")
+			password = []byte(expectedOneTimeCode)
+
+			uaaTokenResponseCode = http.StatusOK
+			uaaTokenResponse = &authenticators.UAAAuthTokenResponse{
+				AccessToken: "is not right",
+				TokenType:   "bearer",
+			}
+
+			fakeUAA.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("POST", "/oauth/token"),
+					ghttp.VerifyBasicAuth("diego-ssh", "fake-diego-ssh-secret-$\"^&'"),
+					ghttp.VerifyFormKV("grant_type", "authorization_code"),
+					ghttp.VerifyFormKV("code", expectedOneTimeCode),
+					ghttp.RespondWithJSONEncodedPtr(&uaaTokenResponseCode, uaaTokenResponse),
+				),
+			)
+		})
+
+		It("logs the access to the container by the user", func() {
+			Expect(authenErr).To(Equal(authenticators.AuthenticationFailedErr))
+			Expect(fakeCC.ReceivedRequests()).To(HaveLen(0))
+		})
+	})
+
 	Describe("Authenticate", func() {
 		const expectedOneTimeCode = "abc123"
 
@@ -109,7 +145,7 @@ var _ = Describe("CFAuthenticator", func() {
 
 			uaaTokenResponseCode = http.StatusOK
 			uaaTokenResponse = &authenticators.UAAAuthTokenResponse{
-				AccessToken: "exchanged-token",
+				AccessToken: "eyJhbGciOiJSUzI1NiIsImtpZCI6ImxlZ2FjeS10b2tlbi1rZXkiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiJmMGMyYWRkN2E5MDI0NTQyOWExZTdiMjNjZGVlZjkyZiIsInN1YiI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsInNjb3BlIjpbInJvdXRpbmcucm91dGVyX2dyb3Vwcy5yZWFkIiwiY2xvdWRfY29udHJvbGxlci5yZWFkIiwicGFzc3dvcmQud3JpdGUiLCJjbG91ZF9jb250cm9sbGVyLndyaXRlIiwib3BlbmlkIiwicm91dGluZy5yb3V0ZXJfZ3JvdXBzLndyaXRlIiwiZG9wcGxlci5maXJlaG9zZSIsInNjaW0ud3JpdGUiLCJzY2ltLnJlYWQiLCJjbG91ZF9jb250cm9sbGVyLmFkbWluIiwidWFhLnVzZXIiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbiIsInJldl9zaWciOiJiMzUyMDU5ZiIsImlhdCI6MTQ3ODUxMzI3NywiZXhwIjoxNDc4NTEzODc3LCJpc3MiOiJodHRwczovL3VhYS5ib3NoLWxpdGUuY29tL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbInNjaW0iLCJjbG91ZF9jb250cm9sbGVyIiwicGFzc3dvcmQiLCJjZiIsInVhYSIsIm9wZW5pZCIsImRvcHBsZXIiLCJyb3V0aW5nLnJvdXRlcl9ncm91cHMiXX0.d8YS9HYM2QJ7f3xXjwHjZsGHCD2a4hM3tNQdGUQCJzT45YQkFZAJJDFIn4rai0YXJyswHmNT3K9pwKBzzcVzbe2HoMyI2HhCn3vW45OA7r55ATYmA88F1KkOtGitO_qi5NPhqDlQwg55kr6PzWAE84BXgWwivMXDDcwkyQosVYA",
 				TokenType:   "bearer",
 			}
 
@@ -131,7 +167,7 @@ var _ = Describe("CFAuthenticator", func() {
 			fakeCC.AppendHandlers(
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1"),
-					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
+					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImxlZ2FjeS10b2tlbi1rZXkiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiJmMGMyYWRkN2E5MDI0NTQyOWExZTdiMjNjZGVlZjkyZiIsInN1YiI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsInNjb3BlIjpbInJvdXRpbmcucm91dGVyX2dyb3Vwcy5yZWFkIiwiY2xvdWRfY29udHJvbGxlci5yZWFkIiwicGFzc3dvcmQud3JpdGUiLCJjbG91ZF9jb250cm9sbGVyLndyaXRlIiwib3BlbmlkIiwicm91dGluZy5yb3V0ZXJfZ3JvdXBzLndyaXRlIiwiZG9wcGxlci5maXJlaG9zZSIsInNjaW0ud3JpdGUiLCJzY2ltLnJlYWQiLCJjbG91ZF9jb250cm9sbGVyLmFkbWluIiwidWFhLnVzZXIiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbiIsInJldl9zaWciOiJiMzUyMDU5ZiIsImlhdCI6MTQ3ODUxMzI3NywiZXhwIjoxNDc4NTEzODc3LCJpc3MiOiJodHRwczovL3VhYS5ib3NoLWxpdGUuY29tL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbInNjaW0iLCJjbG91ZF9jb250cm9sbGVyIiwicGFzc3dvcmQiLCJjZiIsInVhYSIsIm9wZW5pZCIsImRvcHBsZXIiLCJyb3V0aW5nLnJvdXRlcl9ncm91cHMiXX0.d8YS9HYM2QJ7f3xXjwHjZsGHCD2a4hM3tNQdGUQCJzT45YQkFZAJJDFIn4rai0YXJyswHmNT3K9pwKBzzcVzbe2HoMyI2HhCn3vW45OA7r55ATYmA88F1KkOtGitO_qi5NPhqDlQwg55kr6PzWAE84BXgWwivMXDDcwkyQosVYA"}}),
 					ghttp.RespondWithJSONEncodedPtr(&sshAccessResponseCode, sshAccessResponse),
 				),
 			)
@@ -153,6 +189,10 @@ var _ = Describe("CFAuthenticator", func() {
 			Expect(guid).To(Equal("app-guid-app-version"))
 			Expect(index).To(Equal(1))
 			Expect(metadata).To(Equal(metadata))
+		})
+
+		It("logs the access to the container by the user", func() {
+			Eventually(logger).Should(gbytes.Say("test.cf-authenticate.app-access-success.*\"app\":\"1e051b88-a210-40b7-bcca-df645b24b634/1\".*\"principal\":\"36ba11ff-0f6a-4c50-ab34-6fbd286a643e\".*\"username\":\"admin\""))
 		})
 
 		Context("when the token exchange fails", func() {
@@ -219,6 +259,7 @@ var _ = Describe("CFAuthenticator", func() {
 			It("fails to authenticate", func() {
 				Expect(authenErr).To(Equal(authenticators.FetchAppFailedErr))
 				Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
+				Eventually(logger).Should(gbytes.Say("test.cf-authenticate.fetching-app-failed.*\"app\":\"1e051b88-a210-40b7-bcca-df645b24b634/1\".*\"principal\":\"36ba11ff-0f6a-4c50-ab34-6fbd286a643e\".*\"username\":\"admin\""))
 			})
 		})
 
@@ -226,7 +267,7 @@ var _ = Describe("CFAuthenticator", func() {
 			BeforeEach(func() {
 				fakeCC.RouteToHandler("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1", ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/internal/apps/1e051b88-a210-40b7-bcca-df645b24b634/ssh_access/1"),
-					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer exchanged-token"}}),
+					ghttp.VerifyHeader(http.Header{"Authorization": []string{"bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImxlZ2FjeS10b2tlbi1rZXkiLCJ0eXAiOiJKV1QifQ.eyJqdGkiOiJmMGMyYWRkN2E5MDI0NTQyOWExZTdiMjNjZGVlZjkyZiIsInN1YiI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsInNjb3BlIjpbInJvdXRpbmcucm91dGVyX2dyb3Vwcy5yZWFkIiwiY2xvdWRfY29udHJvbGxlci5yZWFkIiwicGFzc3dvcmQud3JpdGUiLCJjbG91ZF9jb250cm9sbGVyLndyaXRlIiwib3BlbmlkIiwicm91dGluZy5yb3V0ZXJfZ3JvdXBzLndyaXRlIiwiZG9wcGxlci5maXJlaG9zZSIsInNjaW0ud3JpdGUiLCJzY2ltLnJlYWQiLCJjbG91ZF9jb250cm9sbGVyLmFkbWluIiwidWFhLnVzZXIiXSwiY2xpZW50X2lkIjoiY2YiLCJjaWQiOiJjZiIsImF6cCI6ImNmIiwiZ3JhbnRfdHlwZSI6InBhc3N3b3JkIiwidXNlcl9pZCI6IjM2YmExMWZmLTBmNmEtNGM1MC1hYjM0LTZmYmQyODZhNjQzZSIsIm9yaWdpbiI6InVhYSIsInVzZXJfbmFtZSI6ImFkbWluIiwiZW1haWwiOiJhZG1pbiIsInJldl9zaWciOiJiMzUyMDU5ZiIsImlhdCI6MTQ3ODUxMzI3NywiZXhwIjoxNDc4NTEzODc3LCJpc3MiOiJodHRwczovL3VhYS5ib3NoLWxpdGUuY29tL29hdXRoL3Rva2VuIiwiemlkIjoidWFhIiwiYXVkIjpbInNjaW0iLCJjbG91ZF9jb250cm9sbGVyIiwicGFzc3dvcmQiLCJjZiIsInVhYSIsIm9wZW5pZCIsImRvcHBsZXIiLCJyb3V0aW5nLnJvdXRlcl9ncm91cHMiXX0.d8YS9HYM2QJ7f3xXjwHjZsGHCD2a4hM3tNQdGUQCJzT45YQkFZAJJDFIn4rai0YXJyswHmNT3K9pwKBzzcVzbe2HoMyI2HhCn3vW45OA7r55ATYmA88F1KkOtGitO_qi5NPhqDlQwg55kr6PzWAE84BXgWwivMXDDcwkyQosVYA"}}),
 					ghttp.RespondWith(http.StatusOK, "{{"),
 				))
 			})

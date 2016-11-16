@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"code.cloudfoundry.org/lager"
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -83,6 +84,32 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return nil, err
 	}
 
+	parts := strings.Split(cred, " ")
+	if len(parts) != 2 {
+		return nil, AuthenticationFailedErr
+	}
+	tokenString := parts[1]
+	// When parsing the certificate validating the signature is not required and we don't readily have the
+	// certificate to validate the signature.  This is just to parse the second information part of the token anyway.
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte("Doesntmatter"), nil
+	})
+
+	username, ok := token.Claims["user_name"].(string)
+	if !ok {
+		username = "unknown"
+	}
+	principal, ok := token.Claims["user_id"].(string)
+	if !ok {
+		principal = "unknown"
+	}
+
+	logger = logger.WithData(lager.Data{
+		"app":       fmt.Sprintf("%s/%d", appGuid, index),
+		"principal": principal,
+		"username":  username,
+	})
+
 	processGuid, err := cfa.checkAccess(logger, appGuid, index, string(cred))
 	if err != nil {
 		return nil, err
@@ -92,6 +119,8 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	if err != nil {
 		logger.Error("building-ssh-permissions-failed", err)
 	}
+
+	logger.Info("app-access-success")
 
 	return permissions, err
 }
