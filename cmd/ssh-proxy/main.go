@@ -18,6 +18,7 @@ import (
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/diego-ssh/healthcheck"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
@@ -33,146 +34,14 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var address = flag.String(
-	"address",
-	":2222",
-	"listen address for ssh proxy",
-)
-
-var healthCheckAddress = flag.String(
-	"healthCheckAddress",
-	":2223",
-	"listen address for ssh proxy health check server",
-)
-
-var hostKey = flag.String(
-	"hostKey",
-	"",
-	"PEM encoded RSA host key",
-)
-
-var bbsAddress = flag.String(
-	"bbsAddress",
-	"",
-	"Address of the BBS API Server",
-)
-
-var ccAPIURL = flag.String(
-	"ccAPIURL",
-	"",
-	"URL of Cloud Controller API",
-)
-
-var uaaTokenURL = flag.String(
-	"uaaTokenURL",
-	"",
-	"URL of the UAA OAuth2 token endpoint that includes the oauth client ID and password",
-)
-
-var uaaPassword = flag.String(
-	"uaaPassword",
-	"",
-	"Basic auth password for UAA.",
-)
-
-var uaaUsername = flag.String(
-	"uaaUsername",
-	"",
-	"Username for UAA",
-)
-
-var skipCertVerify = flag.Bool(
-	"skipCertVerify",
-	false,
-	"skip SSL certificate verification",
-)
-
-var communicationTimeout = flag.Duration(
-	"communicationTimeout",
-	10*time.Second,
-	"Timeout applied to all HTTP requests.",
-)
-
-var dropsondePort = flag.Int(
-	"dropsondePort",
-	3457,
-	"port the local metron agent is listening on",
-)
-
-var enableCFAuth = flag.Bool(
-	"enableCFAuth",
-	false,
-	"Allow authentication with cf",
-)
-
-var enableDiegoAuth = flag.Bool(
-	"enableDiegoAuth",
-	false,
-	"Allow authentication with diego",
-)
-
-var diegoCredentials = flag.String(
-	"diegoCredentials",
-	"",
-	"Diego Credentials to be used with the Diego authentication method",
-)
-
-var bbsCACert = flag.String(
-	"bbsCACert",
-	"",
-	"path to certificate authority cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientCert = flag.String(
-	"bbsClientCert",
-	"",
-	"path to client cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientKey = flag.String(
-	"bbsClientKey",
-	"",
-	"path to client key used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientSessionCacheSize = flag.Int(
-	"bbsClientSessionCacheSize",
-	0,
-	"Capacity of the ClientSessionCache option on the TLS configuration. If zero, golang's default will be used",
-)
-
-var bbsMaxIdleConnsPerHost = flag.Int(
-	"bbsMaxIdleConnsPerHost",
-	0,
-	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
-)
-
-var consulCluster = flag.String(
-	"consulCluster",
-	"",
-	"Consul Agent URL",
-)
-
-var allowedCiphers = flag.String(
-	"allowedCiphers",
-	"",
-	"Limit cipher algorithms to those provided (comma separated)",
-)
-
-var allowedMACs = flag.String(
-	"allowedMACs",
-	"",
-	"Limit MAC algorithms to those provided (comma separated)",
-)
-
-var allowedKeyExchanges = flag.String(
-	"allowedKeyExchanges",
-	"",
-	"Limit key exchanges algorithms to those provided (comma separated)",
-)
-
 const (
 	dropsondeOrigin = "ssh-proxy"
+)
+
+var configPath = flag.String(
+	"config",
+	"",
+	"Path to SSH Proxy config.",
 )
 
 func main() {
@@ -180,30 +49,35 @@ func main() {
 	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	cfhttp.Initialize(*communicationTimeout)
-
 	logger, reconfigurableSink := lagerflags.New("ssh-proxy")
+	sshProxyConfig, err := config.NewSSHProxyConfig(logger, *configPath)
+	if err != nil {
+		logger.Error("failed-to-load-config", err)
+		os.Exit(1)
+	}
 
-	initializeDropsonde(logger)
+	cfhttp.Initialize(time.Duration(sshProxyConfig.CommunicationTimeout))
 
-	proxyConfig, err := configureProxy(logger)
+	initializeDropsonde(logger, sshProxyConfig.DropsondePort)
+
+	proxySSHServerConfig, err := configureProxy(logger, sshProxyConfig)
 	if err != nil {
 		logger.Error("configure-failed", err)
 		os.Exit(1)
 	}
 
-	sshProxy := proxy.New(logger, proxyConfig)
-	server := server.NewServer(logger, *address, sshProxy)
+	sshProxy := proxy.New(logger, proxySSHServerConfig)
+	server := server.NewServer(logger, sshProxyConfig.Address, sshProxy)
 
 	healthCheckHandler := healthcheck.NewHandler(logger)
-	httpServer := http_server.New(*healthCheckAddress, healthCheckHandler)
+	httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
 
-	consulClient, err := consuladapter.NewClientFromUrl(*consulCluster)
+	consulClient, err := consuladapter.NewClientFromUrl(sshProxyConfig.ConsulCluster)
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
 	}
 
-	registrationRunner := initializeRegistrationRunner(logger, consulClient, *address, clock.NewClock())
+	registrationRunner := initializeRegistrationRunner(logger, consulClient, sshProxyConfig.Address, clock.NewClock())
 
 	members := grouper.Members{
 		{"ssh-proxy", server},
@@ -232,62 +106,70 @@ func main() {
 	os.Exit(0)
 }
 
-func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
-	if *bbsAddress == "" {
+func configureProxy(logger lager.Logger, sshProxyConfig *config.SSHProxyConfig) (*ssh.ServerConfig, error) {
+	if sshProxyConfig.BBSAddress == "" {
 		err := errors.New("bbsAddress is required")
 		logger.Fatal("bbs-address-required", err)
 	}
 
-	url, err := url.Parse(*bbsAddress)
+	url, err := url.Parse(sshProxyConfig.BBSAddress)
 	if err != nil {
 		logger.Fatal("failed-to-parse-bbs-address", err)
 	}
 
-	bbsClient := initializeBBSClient(logger)
+	bbsClient := initializeBBSClient(
+		logger,
+		sshProxyConfig.BBSAddress,
+		sshProxyConfig.BBSCACert,
+		sshProxyConfig.BBSClientCert,
+		sshProxyConfig.BBSClientKey,
+		sshProxyConfig.BBSClientSessionCacheSize,
+		sshProxyConfig.BBSMaxIdleConnsPerHost,
+	)
 	permissionsBuilder := authenticators.NewPermissionsBuilder(bbsClient)
 
 	authens := []authenticators.PasswordAuthenticator{}
 
-	if *enableDiegoAuth {
-		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, []byte(*diegoCredentials), permissionsBuilder)
+	if sshProxyConfig.EnableDiegoAuth {
+		diegoAuthenticator := authenticators.NewDiegoProxyAuthenticator(logger, []byte(sshProxyConfig.DiegoCredentials), permissionsBuilder)
 		authens = append(authens, diegoAuthenticator)
 	}
 
-	if *enableCFAuth {
-		if *ccAPIURL == "" {
+	if sshProxyConfig.EnableCFAuth {
+		if sshProxyConfig.CCAPIURL == "" {
 			return nil, errors.New("ccAPIURL is required for Cloud Foundry authentication")
 		}
 
-		_, err = url.Parse(*ccAPIURL)
-		if *ccAPIURL != "" && err != nil {
+		_, err = url.Parse(sshProxyConfig.CCAPIURL)
+		if err != nil {
 			return nil, err
 		}
 
-		if *uaaPassword == "" {
+		if sshProxyConfig.UAAPassword == "" {
 			return nil, errors.New("UAA password is required for Cloud Foundry authentication")
 		}
 
-		if *uaaUsername == "" {
+		if sshProxyConfig.UAAUsername == "" {
 			return nil, errors.New("UAA username is required for Cloud Foundry authentication")
 		}
 
-		if *uaaTokenURL == "" {
+		if sshProxyConfig.UAATokenURL == "" {
 			return nil, errors.New("uaaTokenURL is required for Cloud Foundry authentication")
 		}
 
-		_, err = url.Parse(*uaaTokenURL)
-		if *uaaTokenURL != "" && err != nil {
+		_, err = url.Parse(sshProxyConfig.UAATokenURL)
+		if err != nil {
 			return nil, err
 		}
 
-		client := NewHttpClient()
+		client := newHttpClient(sshProxyConfig.SkipCertVerify, time.Duration(sshProxyConfig.CommunicationTimeout))
 		cfAuthenticator := authenticators.NewCFAuthenticator(
 			logger,
 			client,
-			*ccAPIURL,
-			*uaaTokenURL,
-			*uaaUsername,
-			*uaaPassword,
+			sshProxyConfig.CCAPIURL,
+			sshProxyConfig.UAATokenURL,
+			sshProxyConfig.UAAUsername,
+			sshProxyConfig.UAAPassword,
 			permissionsBuilder,
 		)
 		authens = append(authens, cfAuthenticator)
@@ -306,33 +188,33 @@ func configureProxy(logger lager.Logger) (*ssh.ServerConfig, error) {
 		},
 	}
 
-	if *hostKey == "" {
+	if sshProxyConfig.HostKey == "" {
 		err := errors.New("hostKey is required")
 		logger.Fatal("host-key-required", err)
 	}
 
-	key, err := parsePrivateKey(logger, *hostKey)
+	key, err := parsePrivateKey(logger, sshProxyConfig.HostKey)
 	if err != nil {
 		logger.Fatal("failed-to-parse-host-key", err)
 	}
 
 	sshConfig.AddHostKey(key)
 
-	if *allowedCiphers != "" {
-		sshConfig.Config.Ciphers = strings.Split(*allowedCiphers, ",")
+	if sshProxyConfig.AllowedCiphers != "" {
+		sshConfig.Config.Ciphers = strings.Split(sshProxyConfig.AllowedCiphers, ",")
 	}
-	if *allowedMACs != "" {
-		sshConfig.Config.MACs = strings.Split(*allowedMACs, ",")
+	if sshProxyConfig.AllowedMACs != "" {
+		sshConfig.Config.MACs = strings.Split(sshProxyConfig.AllowedMACs, ",")
 	}
-	if *allowedKeyExchanges != "" {
-		sshConfig.Config.KeyExchanges = strings.Split(*allowedKeyExchanges, ",")
+	if sshProxyConfig.AllowedKeyExchanges != "" {
+		sshConfig.Config.KeyExchanges = strings.Split(sshProxyConfig.AllowedKeyExchanges, ",")
 	}
 
 	return sshConfig, err
 }
 
-func initializeDropsonde(logger lager.Logger) {
-	dropsondeDestination := fmt.Sprint("localhost:", *dropsondePort)
+func initializeDropsonde(logger lager.Logger, dropsondePort int) {
+	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
 	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
@@ -348,33 +230,41 @@ func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error)
 	return key, nil
 }
 
-func NewHttpClient() *http.Client {
+func newHttpClient(insecureSkipVerify bool, communicationTimeout time.Duration) *http.Client {
 	dialer := &net.Dialer{
 		Timeout:   5 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
-	tlsConfig := &tls.Config{InsecureSkipVerify: *skipCertVerify}
+	tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
 	return &http.Client{
 		Transport: &http.Transport{
 			Dial:            dialer.Dial,
 			TLSClientConfig: tlsConfig,
 		},
-		Timeout: *communicationTimeout,
+		Timeout: communicationTimeout,
 	}
 }
 
-func initializeBBSClient(logger lager.Logger) bbs.InternalClient {
-	bbsURL, err := url.Parse(*bbsAddress)
+func initializeBBSClient(
+	logger lager.Logger,
+	bbsAddress,
+	bbsCACert,
+	bbsClientCert,
+	bbsClientKey string,
+	bbsClientSessionCacheSize,
+	bbsMaxIdleConnsPerHost int,
+) bbs.InternalClient {
+	bbsURL, err := url.Parse(bbsAddress)
 	if err != nil {
 		logger.Fatal("Invalid BBS URL", err)
 	}
 
 	if bbsURL.Scheme != "https" {
-		return bbs.NewClient(*bbsAddress)
+		return bbs.NewClient(bbsAddress)
 	}
 
-	bbsClient, err := bbs.NewSecureClient(*bbsAddress, *bbsCACert, *bbsClientCert, *bbsClientKey, *bbsClientSessionCacheSize, *bbsMaxIdleConnsPerHost)
+	bbsClient, err := bbs.NewSecureClient(bbsAddress, bbsCACert, bbsClientCert, bbsClientKey, bbsClientSessionCacheSize, bbsMaxIdleConnsPerHost)
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}

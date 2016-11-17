@@ -8,11 +8,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
+	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/testrunner"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/routes"
@@ -31,11 +33,12 @@ import (
 
 var _ = Describe("SSH proxy", func() {
 	var (
-		fakeBBS *ghttp.Server
-		fakeUAA *ghttp.Server
-		fakeCC  *ghttp.Server
-		runner  ifrit.Runner
-		process ifrit.Process
+		fakeBBS            *ghttp.Server
+		fakeUAA            *ghttp.Server
+		fakeCC             *ghttp.Server
+		runner             ifrit.Runner
+		process            ifrit.Process
+		sshProxyConfigPath string
 
 		address                     string
 		healthCheckAddress          string
@@ -146,7 +149,7 @@ var _ = Describe("SSH proxy", func() {
 			RespondWithProto(desiredLRPResponse),
 		))
 
-		args := testrunner.Args{
+		sshProxyConfig := config.SSHProxyConfig{
 			Address:             address,
 			HealthCheckAddress:  healthCheckAddress,
 			BBSAddress:          bbsAddress,
@@ -165,12 +168,27 @@ var _ = Describe("SSH proxy", func() {
 			AllowedKeyExchanges: allowedKeyExchanges,
 		}
 
-		runner = testrunner.New(sshProxyPath, args)
+		configData, err := json.Marshal(&sshProxyConfig)
+		Expect(err).NotTo(HaveOccurred())
+
+		configFile, err := ioutil.TempFile("", "ssh-proxy-config")
+		Expect(err).NotTo(HaveOccurred())
+
+		n, err := configFile.Write(configData)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(n).To(Equal(len(configData)))
+
+		sshProxyConfigPath = configFile.Name()
+
+		runner = testrunner.New(sshProxyPath, sshProxyConfigPath)
 		process = ifrit.Invoke(runner)
 	})
 
 	AfterEach(func() {
 		ginkgomon.Kill(process, 3*time.Second)
+
+		err := os.RemoveAll(sshProxyConfigPath)
+		Expect(err).NotTo(HaveOccurred())
 
 		fakeBBS.Close()
 		fakeUAA.Close()
@@ -321,6 +339,7 @@ var _ = Describe("SSH proxy", func() {
 				}))
 		})
 	})
+
 	It("presents the correct host key", func() {
 		var handshakeHostKey ssh.PublicKey
 		_, err := ssh.Dial("tcp", address, &ssh.ClientConfig{
