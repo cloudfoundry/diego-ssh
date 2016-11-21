@@ -5,22 +5,18 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/lagerflags"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("SSHProxyConfig", func() {
-	var (
-		logger                     *lagertest.TestLogger
-		configFilePath, configData string
-	)
+	var configFilePath, configData string
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("ssh-proxy")
-
 		configData = `{
 			"address": "1.1.1.1",
 			"health_check_address": "2.2.2.2",
@@ -44,7 +40,9 @@ var _ = Describe("SSHProxyConfig", func() {
 			"consul_cluster": "I am a consul cluster.",
 			"allowed_ciphers": "cipher1,cipher2,cipher3",
 			"allowed_macs": "mac1,mac2,mac3",
-			"allowed_key_exchanges": "exchange1,exchange2,exchange3"
+			"allowed_key_exchanges": "exchange1,exchange2,exchange3",
+			"log_level": "debug",
+			"debug_address": "5.5.5.5:9090"
 		}`
 	})
 
@@ -65,10 +63,10 @@ var _ = Describe("SSHProxyConfig", func() {
 	})
 
 	It("correctly parses the config file", func() {
-		proxyConfig, err := config.NewSSHProxyConfig(logger, configFilePath)
+		proxyConfig, err := config.NewSSHProxyConfig(configFilePath)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(proxyConfig).To(Equal(&config.SSHProxyConfig{
+		Expect(proxyConfig).To(Equal(config.SSHProxyConfig{
 			Address:                   "1.1.1.1",
 			HealthCheckAddress:        "2.2.2.2",
 			HostKey:                   "I am a host key.",
@@ -92,12 +90,18 @@ var _ = Describe("SSHProxyConfig", func() {
 			AllowedCiphers:            "cipher1,cipher2,cipher3",
 			AllowedMACs:               "mac1,mac2,mac3",
 			AllowedKeyExchanges:       "exchange1,exchange2,exchange3",
+			LagerConfig: lagerflags.LagerConfig{
+				LogLevel: lagerflags.DEBUG,
+			},
+			DebugServerConfig: debugserver.DebugServerConfig{
+				DebugAddress: "5.5.5.5:9090",
+			},
 		}))
 	})
 
 	Context("when the file does not exist", func() {
 		It("returns an error", func() {
-			_, err := config.NewSSHProxyConfig(logger, "foobar")
+			_, err := config.NewSSHProxyConfig("foobar")
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -108,7 +112,7 @@ var _ = Describe("SSHProxyConfig", func() {
 		})
 
 		It("returns an error", func() {
-			_, err := config.NewSSHProxyConfig(logger, configFilePath)
+			_, err := config.NewSSHProxyConfig(configFilePath)
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -118,7 +122,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := config.NewSSHProxyConfig(logger, configFilePath)
+				_, err := config.NewSSHProxyConfig(configFilePath)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -145,15 +149,16 @@ var _ = Describe("SSHProxyConfig", func() {
 				"consul_cluster": "I am a consul cluster.",
 				"allowed_ciphers": "cipher1,cipher2,cipher3",
 				"allowed_macs": "mac1,mac2,mac3",
-				"allowed_key_exchanges": "exchange1,exchange2,exchange3"
+				"allowed_key_exchanges": "exchange1,exchange2,exchange3",
+				"debug_address": "5.5.5.5:9090"
 			}`
 		})
 
 		It("uses default values when they are not specified", func() {
-			proxyConfig, err := config.NewSSHProxyConfig(logger, configFilePath)
+			proxyConfig, err := config.NewSSHProxyConfig(configFilePath)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(proxyConfig).To(Equal(&config.SSHProxyConfig{
+			Expect(proxyConfig).To(Equal(config.SSHProxyConfig{
 				Address:                   ":2222",
 				HealthCheckAddress:        ":2223",
 				HostKey:                   "I am a host key.",
@@ -177,6 +182,10 @@ var _ = Describe("SSHProxyConfig", func() {
 				AllowedCiphers:            "cipher1,cipher2,cipher3",
 				AllowedMACs:               "mac1,mac2,mac3",
 				AllowedKeyExchanges:       "exchange1,exchange2,exchange3",
+				LagerConfig:               lagerflags.DefaultLagerConfig(),
+				DebugServerConfig: debugserver.DebugServerConfig{
+					DebugAddress: "5.5.5.5:9090",
+				},
 			}))
 		})
 	})

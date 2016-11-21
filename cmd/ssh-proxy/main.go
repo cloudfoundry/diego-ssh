@@ -46,15 +46,15 @@ var configPath = flag.String(
 
 func main() {
 	debugserver.AddFlags(flag.CommandLine)
-	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	logger, reconfigurableSink := lagerflags.New("ssh-proxy")
-	sshProxyConfig, err := config.NewSSHProxyConfig(logger, *configPath)
+	sshProxyConfig, err := config.NewSSHProxyConfig(*configPath)
 	if err != nil {
-		logger.Error("failed-to-load-config", err)
-		os.Exit(1)
+		logger, _ := lagerflags.New("ssh-proxy")
+		logger.Fatal("failed-to-parse-config", err)
 	}
+
+	logger, reconfigurableSink := lagerflags.NewFromConfig("ssh-proxy", sshProxyConfig.LagerConfig)
 
 	cfhttp.Initialize(time.Duration(sshProxyConfig.CommunicationTimeout))
 
@@ -85,9 +85,9 @@ func main() {
 		{"healthcheck", httpServer},
 	}
 
-	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
+	if sshProxyConfig.DebugAddress != "" {
 		members = append(grouper.Members{{
-			"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink),
+			"debug-server", debugserver.Runner(sshProxyConfig.DebugAddress, reconfigurableSink),
 		}}, members...)
 	}
 
@@ -106,7 +106,7 @@ func main() {
 	os.Exit(0)
 }
 
-func configureProxy(logger lager.Logger, sshProxyConfig *config.SSHProxyConfig) (*ssh.ServerConfig, error) {
+func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (*ssh.ServerConfig, error) {
 	if sshProxyConfig.BBSAddress == "" {
 		err := errors.New("bbsAddress is required")
 		logger.Fatal("bbs-address-required", err)

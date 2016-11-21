@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/debugserver"
+	"code.cloudfoundry.org/lager/lagerflags"
 )
 
 type Duration time.Duration
@@ -33,8 +34,10 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 }
 
 type SSHProxyConfig struct {
-	Address                   string   `json:"address"`
-	HealthCheckAddress        string   `json:"health_check_address"`
+	lagerflags.LagerConfig
+	debugserver.DebugServerConfig
+	Address                   string   `json:"address,omitempty"`
+	HealthCheckAddress        string   `json:"health_check_address,omitempty"`
 	HostKey                   string   `json:"host_key"`
 	BBSAddress                string   `json:"bbs_address"`
 	CCAPIURL                  string   `json:"cc_api_url"`
@@ -42,7 +45,7 @@ type SSHProxyConfig struct {
 	UAAPassword               string   `json:"uaa_password"`
 	UAAUsername               string   `json:"uaa_username"`
 	SkipCertVerify            bool     `json:"skip_cert_verify"`
-	DropsondePort             int      `json:"dropsonde_port"`
+	DropsondePort             int      `json:"dropsonde_port,omitempty"`
 	EnableCFAuth              bool     `json:"enable_cf_auth"`
 	EnableDiegoAuth           bool     `json:"enable_diego_auth"`
 	DiegoCredentials          string   `json:"diego_credentials"`
@@ -55,44 +58,32 @@ type SSHProxyConfig struct {
 	AllowedCiphers            string   `json:"allowed_ciphers"`
 	AllowedMACs               string   `json:"allowed_macs"`
 	AllowedKeyExchanges       string   `json:"allowed_key_exchanges"`
-	CommunicationTimeout      Duration `json:"communication_timeout"`
+	CommunicationTimeout      Duration `json:"communication_timeout,omitempty"`
 }
 
-var DefaultSSHProxyConfig = SSHProxyConfig{
-	Address:              ":2222",
-	HealthCheckAddress:   ":2223",
-	CommunicationTimeout: Duration(10 * time.Second),
-	DropsondePort:        3457,
+func defaultConfig() SSHProxyConfig {
+	return SSHProxyConfig{
+		Address:              ":2222",
+		HealthCheckAddress:   ":2223",
+		CommunicationTimeout: Duration(10 * time.Second),
+		DropsondePort:        3457,
+		LagerConfig:          lagerflags.DefaultLagerConfig(),
+	}
 }
 
-func NewSSHProxyConfig(logger lager.Logger, configPath string) (*SSHProxyConfig, error) {
+func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
+	proxyConfig := defaultConfig()
+
 	configFile, err := os.Open(configPath)
 	if err != nil {
-		return nil, err
+		return SSHProxyConfig{}, err
 	}
 	decoder := json.NewDecoder(configFile)
 
-	proxyConfig := SSHProxyConfig{}
 	err = decoder.Decode(&proxyConfig)
 	if err != nil {
-		return nil, err
+		return SSHProxyConfig{}, err
 	}
 
-	if proxyConfig.Address == "" {
-		proxyConfig.Address = DefaultSSHProxyConfig.Address
-	}
-
-	if proxyConfig.HealthCheckAddress == "" {
-		proxyConfig.HealthCheckAddress = DefaultSSHProxyConfig.HealthCheckAddress
-	}
-
-	if proxyConfig.CommunicationTimeout == 0 {
-		proxyConfig.CommunicationTimeout = DefaultSSHProxyConfig.CommunicationTimeout
-	}
-
-	if proxyConfig.DropsondePort == 0 {
-		proxyConfig.DropsondePort = DefaultSSHProxyConfig.DropsondePort
-	}
-
-	return &proxyConfig, nil
+	return proxyConfig, nil
 }
