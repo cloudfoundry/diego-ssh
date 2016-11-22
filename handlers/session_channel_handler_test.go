@@ -157,6 +157,11 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			AfterEach(func() {
+				Expect(os.RemoveAll(sourceDir)).To(Succeed())
+				Expect(os.RemoveAll(targetDir)).To(Succeed())
+			})
+
 			It("properly copies using the secure copier", func() {
 				done := make(chan struct{})
 				go func() {
