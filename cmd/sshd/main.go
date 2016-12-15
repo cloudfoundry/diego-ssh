@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -100,7 +101,7 @@ func main() {
 		exec = true
 	}
 
-	if exec {
+	if exec && runtime.GOOS != "windows" {
 		os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
 		os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
 
