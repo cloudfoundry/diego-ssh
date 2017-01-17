@@ -7,6 +7,7 @@ import (
 
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
 
 	. "github.com/onsi/ginkgo"
@@ -76,7 +77,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			UAAPassword:               "uaa-password",
 			UAAUsername:               "uaa-username",
 			SkipCertVerify:            true,
-			CommunicationTimeout:      config.Duration(5 * time.Second),
+			CommunicationTimeout:      durationjson.Duration(5 * time.Second),
 			DropsondePort:             1234,
 			EnableCFAuth:              true,
 			EnableDiegoAuth:           true,
@@ -168,7 +169,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				UAAPassword:               "uaa-password",
 				UAAUsername:               "uaa-username",
 				SkipCertVerify:            true,
-				CommunicationTimeout:      config.Duration(10 * time.Second),
+				CommunicationTimeout:      durationjson.Duration(10 * time.Second),
 				DropsondePort:             3457,
 				EnableCFAuth:              true,
 				EnableDiegoAuth:           true,
