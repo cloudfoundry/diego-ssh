@@ -53,6 +53,7 @@ var _ = Describe("SSH proxy", func() {
 		uaaTokenURL                 string
 		uaaPassword                 string
 		uaaUsername                 string
+		uaaCACert                   string
 		allowedCiphers              string
 		allowedMACs                 string
 		allowedKeyExchanges         string
@@ -92,6 +93,7 @@ var _ = Describe("SSH proxy", func() {
 		uaaTokenURL = u.String()
 		uaaPassword = "password1"
 		uaaUsername = "amandaplease"
+		uaaCACert = ""
 
 		allowedCiphers = ""
 		allowedMACs = ""
@@ -162,6 +164,7 @@ var _ = Describe("SSH proxy", func() {
 			UAATokenURL:         uaaTokenURL,
 			UAAPassword:         uaaPassword,
 			UAAUsername:         uaaUsername,
+			UAACACert:           uaaCACert,
 			ConsulCluster:       consulRunner.URL(),
 			AllowedCiphers:      allowedCiphers,
 			AllowedMACs:         allowedMACs,
@@ -307,6 +310,17 @@ var _ = Describe("SSH proxy", func() {
 
 				It("reports the problem and terminates", func() {
 					Expect(runner).To(gbytes.Say("configure-failed"))
+					Expect(runner).To(gexec.Exit(1))
+				})
+			})
+
+			Context("when UAA ca cert does not exist", func() {
+				BeforeEach(func() {
+					uaaCACert = "doesnotexist"
+				})
+
+				It("exits with an error", func() {
+					Expect(runner).To(gbytes.Say("failed to read ca cert"))
 					Expect(runner).To(gexec.Exit(1))
 				})
 			})

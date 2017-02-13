@@ -21,6 +21,7 @@ type SSHProxyConfig struct {
 	UAATokenURL               string                `json:"uaa_token_url"`
 	UAAPassword               string                `json:"uaa_password"`
 	UAAUsername               string                `json:"uaa_username"`
+	UAACACert                 string                `json:"uaa_ca_cert"`
 	SkipCertVerify            bool                  `json:"skip_cert_verify"`
 	DropsondePort             int                   `json:"dropsonde_port,omitempty"`
 	EnableCFAuth              bool                  `json:"enable_cf_auth"`
