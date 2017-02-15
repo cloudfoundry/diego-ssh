@@ -18,6 +18,10 @@ var _ = Describe("NewHTTPSClient", func() {
 		timeout            time.Duration
 	)
 
+	BeforeEach(func() {
+		uaaCACert = ""
+	})
+
 	It("sets InsecureSkipVerify on the TLS config", func() {
 		client, err := helpers.NewHTTPSClient(true, uaaCACert, timeout)
 		Expect(err).NotTo(HaveOccurred())
