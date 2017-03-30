@@ -565,6 +565,26 @@ var _ = Describe("SessionChannelHandler", func() {
 				})
 			})
 
+			Context("when an unrecognized terminal mode is specified", func() {
+				BeforeEach(func() {
+					terminalModes[42] = 1
+				})
+
+				It("ignores it", func() {
+					errCh := make(chan error)
+					go func() {
+						defer GinkgoRecover()
+
+						result, err := session.Output("echo -n hi")
+						Expect(string(result)).To(Equal("hi"))
+						errCh <- err
+					}()
+					var err error
+					Eventually(errCh).Should(Receive(&err))
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			Context("when input modes are specified in TerminalModes", func() {
 				BeforeEach(func() {
 					terminalModes[ssh.IGNPAR] = 1

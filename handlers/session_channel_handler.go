@@ -515,7 +515,15 @@ func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist str
 			continue
 		}
 
-		err = termcodes.TermAttrSetters[opcode].Set(pseudoTty, termios, value)
+		setter, ok := termcodes.TermAttrSetters[opcode]
+		if !ok {
+			logger.Error("failed-to-find-setter-for-opcode", errors.New("opcode-not-found"), lager.Data{
+				"opcode": opcode,
+			})
+			continue
+		}
+
+		err = setter.Set(pseudoTty, termios, value)
 		if err != nil {
 			logger.Error("failed-to-set-terminal-attrs", err, lager.Data{
 				"opcode": opcode,
