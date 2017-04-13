@@ -257,7 +257,9 @@ var _ = Describe("SSH daemon", func() {
 			BeforeEach(func() {
 				hostKey = ""
 				allowUnauthenticatedClients = true
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("generates one internally", func() {
@@ -296,7 +298,9 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when unauthenticated clients are not allowed", func() {
 			BeforeEach(func() {
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -313,7 +317,8 @@ var _ = Describe("SSH daemon", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					clientConfig = &ssh.ClientConfig{
-						User: os.Getenv("USER"),
+						HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+						User:            os.Getenv("USER"),
 						Auth: []ssh.AuthMethod{
 							ssh.PublicKeys(key),
 						},
@@ -330,7 +335,9 @@ var _ = Describe("SSH daemon", func() {
 		Context("when the daemon allows unauthenticated clients", func() {
 			BeforeEach(func() {
 				allowUnauthenticatedClients = true
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -347,7 +354,9 @@ var _ = Describe("SSH daemon", func() {
 		Context("when the daemon provides an unsupported cipher algorithm", func() {
 			BeforeEach(func() {
 				allowedCiphers = "unsupported"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -364,7 +373,9 @@ var _ = Describe("SSH daemon", func() {
 			BeforeEach(func() {
 				allowUnauthenticatedClients = true
 				allowedCiphers = "aes128-ctr,aes256-ctr"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -380,7 +391,9 @@ var _ = Describe("SSH daemon", func() {
 		Context("when the daemon provides an unsupported MAC algorithm", func() {
 			BeforeEach(func() {
 				allowedMACs = "unsupported"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -397,7 +410,9 @@ var _ = Describe("SSH daemon", func() {
 			BeforeEach(func() {
 				allowUnauthenticatedClients = true
 				allowedMACs = "hmac-sha2-256,hmac-sha1"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -413,7 +428,9 @@ var _ = Describe("SSH daemon", func() {
 		Context("when the daemon provides an unsupported key exchange algorithm", func() {
 			BeforeEach(func() {
 				allowedKeyExchanges = "unsupported"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -430,7 +447,9 @@ var _ = Describe("SSH daemon", func() {
 			BeforeEach(func() {
 				allowUnauthenticatedClients = true
 				allowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
-				clientConfig = &ssh.ClientConfig{}
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
 			})
 
 			It("starts the daemon", func() {
@@ -450,7 +469,9 @@ var _ = Describe("SSH daemon", func() {
 
 		BeforeEach(func() {
 			allowUnauthenticatedClients = true
-			clientConfig = &ssh.ClientConfig{}
+			clientConfig = &ssh.ClientConfig{
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			}
 		})
 
 		JustBeforeEach(func() {

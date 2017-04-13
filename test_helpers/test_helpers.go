@@ -44,7 +44,8 @@ func Pipe() (net.Conn, net.Conn) {
 func NewClient(clientNetConn net.Conn, clientConfig *ssh.ClientConfig) *ssh.Client {
 	if clientConfig == nil {
 		clientConfig = &ssh.ClientConfig{
-			User: "username",
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			User:            "username",
 			Auth: []ssh.AuthMethod{
 				ssh.Password("secret"),
 			},

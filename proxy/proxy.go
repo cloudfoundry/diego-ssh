@@ -335,6 +335,8 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn,
 
 			return nil
 		}
+	} else {
+		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
 	conn, ch, req, err := ssh.NewClientConn(nConn, targetConfig.Address, clientConfig)
