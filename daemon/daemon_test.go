@@ -71,8 +71,7 @@ var _ = Describe("Daemon", func() {
 				serverNetConn, clientNetConn = test_helpers.Pipe()
 
 				clientConfig := &ssh.ClientConfig{
-					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-					User:            "username",
+					User: "username",
 					Auth: []ssh.AuthMethod{
 						ssh.Password("secret"),
 					},

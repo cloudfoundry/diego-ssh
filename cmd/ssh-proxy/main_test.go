@@ -423,9 +423,8 @@ var _ = Describe("SSH proxy", func() {
 	Describe("attempting authentication without a realm", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-				User:            processGuid + "/99",
-				Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				User: processGuid + "/99",
+				Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 			}
 		})
 
@@ -439,9 +438,8 @@ var _ = Describe("SSH proxy", func() {
 	Describe("attempting authentication with an unknown realm", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-				User:            "goo:" + processGuid + "/99",
-				Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				User: "goo:" + processGuid + "/99",
+				Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 			}
 		})
 
@@ -455,9 +453,8 @@ var _ = Describe("SSH proxy", func() {
 	Describe("authenticating with the diego realm", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-				User:            "diego:" + processGuid + "/99",
-				Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
+				User: "diego:" + processGuid + "/99",
+				Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 			}
 		})
 
@@ -498,9 +495,8 @@ var _ = Describe("SSH proxy", func() {
 			BeforeEach(func() {
 				allowedCiphers = "aes128-ctr,aes256-ctr"
 				clientConfig = &ssh.ClientConfig{
-					User:            "diego:" + processGuid + "/99",
-					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
-					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 				}
 			})
 
@@ -527,9 +523,8 @@ var _ = Describe("SSH proxy", func() {
 			BeforeEach(func() {
 				allowedMACs = "hmac-sha2-256,hmac-sha1"
 				clientConfig = &ssh.ClientConfig{
-					User:            "diego:" + processGuid + "/99",
-					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
-					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 				}
 			})
 
@@ -556,9 +551,8 @@ var _ = Describe("SSH proxy", func() {
 			BeforeEach(func() {
 				allowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
 				clientConfig = &ssh.ClientConfig{
-					User:            "diego:" + processGuid + "/99",
-					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
-					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+					User: "diego:" + processGuid + "/99",
+					Auth: []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 				}
 			})
 
@@ -621,9 +615,8 @@ var _ = Describe("SSH proxy", func() {
 	Describe("authenticating with the cf realm with a one time code", func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
-				User:            "cf:60f0f26e-86b3-4487-8f19-9e94f848f3d2/99",
-				Auth:            []ssh.AuthMethod{ssh.Password("abc123")},
-				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				User: "cf:60f0f26e-86b3-4487-8f19-9e94f848f3d2/99",
+				Auth: []ssh.AuthMethod{ssh.Password("abc123")},
 			}
 
 			fakeUAA.RouteToHandler("POST", "/oauth/token", ghttp.CombineHandlers(
