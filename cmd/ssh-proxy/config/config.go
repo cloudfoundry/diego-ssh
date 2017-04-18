@@ -56,6 +56,9 @@ func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
 	if err != nil {
 		return SSHProxyConfig{}, err
 	}
+
+	defer configFile.Close()
+
 	decoder := json.NewDecoder(configFile)
 
 	err = decoder.Decode(&proxyConfig)
