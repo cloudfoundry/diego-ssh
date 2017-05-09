@@ -62,7 +62,7 @@ var _ = Describe("PermissionsBuilder", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", models.NewPortMapping(3333, 1111)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(3333, 1111)),
 				},
 			}
 
