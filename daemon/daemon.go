@@ -87,6 +87,7 @@ func (d *Daemon) handleNewChannels(logger lager.Logger, newChannelRequests <-cha
 			continue
 		}
 
+		logger.Info("rejecting-channel", lager.Data{"reason": "unkonwn-channel-type"})
 		newChannel.Reject(ssh.UnknownChannelType, newChannel.ChannelType())
 	}
 }

@@ -47,6 +47,7 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	}
 
 	destination := fmt.Sprintf("%s:%d", directTcpipMessage.TargetAddr, directTcpipMessage.TargetPort)
+	logger.Debug("dialing-connection", lager.Data{"destination": destination})
 	conn, err := handler.dialer.Dial("tcp", destination)
 	if err != nil {
 		logger.Error("failed-connecting-to-target", err)
@@ -54,6 +55,7 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 		return
 	}
 
+	logger.Debug("dialed-connection", lager.Data{"destintation": destination})
 	channel, requests, err := newChannel.Accept()
 	go ssh.DiscardRequests(requests)
 
@@ -66,6 +68,7 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 		channel.Close()
 	}()
 
+	logger.Debug("copying-channel-data")
 	go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel,
 		func() {
 			conn.(*net.TCPConn).CloseWrite()

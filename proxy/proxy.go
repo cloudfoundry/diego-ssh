@@ -182,6 +182,8 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 		"extraData":   newChannel.ExtraData(),
 	})
 
+	logger.Debug("openning-channel-to-daemon")
+
 	targetChan, targetReqs, err := conn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
 	if err != nil {
 		logger.Error("failed-to-open-channel", err)
@@ -192,12 +194,14 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 		}
 		return
 	}
+	logger.Debug("opened-channel-to-daemon")
 
 	sourceChan, sourceReqs, err := newChannel.Accept()
 	if err != nil {
 		targetChan.Close()
 		return
 	}
+	logger.Debug("accepted-channel-from-client")
 
 	toTargetLogger := logger.Session("to-target")
 	toSourceLogger := logger.Session("to-source")
@@ -282,6 +286,8 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn,
 	logger = logger.Session("new-client-conn", lager.Data{
 		"proxy-target-config": targetConfigJson,
 	})
+
+	logger.Debug("creating-client-connection")
 
 	var targetConfig TargetConfig
 	err := json.Unmarshal([]byte(permissions.CriticalOptions["proxy-target-config"]), &targetConfig)
