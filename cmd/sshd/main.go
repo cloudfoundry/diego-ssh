@@ -112,6 +112,7 @@ func main() {
 			logLevel = logLevelFlag.Value.String()
 		}
 
+		runtime.GOMAXPROCS(1)
 		err := syscall.Exec(os.Args[0], []string{
 			os.Args[0],
 			fmt.Sprintf("--allowedKeyExchanges=%s", *allowedKeyExchanges),
