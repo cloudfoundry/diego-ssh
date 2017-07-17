@@ -348,7 +348,9 @@ var _ = Describe("SessionChannelHandler", func() {
 					Eventually(runner.SignalCallCount).Should(Equal(1))
 
 					err = stdin.Close()
-					Expect(err).NotTo(HaveOccurred())
+					if err != nil {
+						Expect(err).To(Equal(io.EOF), "expected no error or ignorable EOF error")
+					}
 
 					err = session.Wait()
 					Expect(err).To(HaveOccurred())
@@ -779,7 +781,9 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				err = stdin.Close()
-				Expect(err).NotTo(HaveOccurred())
+				if err != nil {
+					Expect(err).To(Equal(io.EOF), "expected no error or ignorable EOF error")
+				}
 
 				err = session.Wait()
 				Expect(err).NotTo(HaveOccurred())
