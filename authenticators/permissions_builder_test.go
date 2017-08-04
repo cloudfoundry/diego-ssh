@@ -70,7 +70,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
 			bbsClient.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
 
-			permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient)
+			permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, false)
 
 			remoteAddr, err := net.ResolveIPAddr("ip", "1.1.1.1")
 			Expect(err).NotTo(HaveOccurred())
@@ -97,6 +97,26 @@ var _ = Describe("PermissionsBuilder", func() {
 			_, guid, index := bbsClient.ActualLRPGroupByProcessGuidAndIndexArgsForCall(0)
 			Expect(guid).To(Equal("some-guid"))
 			Expect(index).To(Equal(1))
+		})
+
+		Context("when configured to use instance adress", func() {
+			BeforeEach(func() {
+				permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, true)
+			})
+
+			It("saves container information in the critical options of the permissions", func() {
+				expectedConfig := `{
+				"address": "2.2.2.2:1111",
+				"host_fingerprint": "host-fingerprint",
+				"private_key": "fake-pem-encoded-key",
+				"user": "user",
+				"password": "password"
+			}`
+
+				Expect(permissions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
+			})
 		})
 
 		It("saves container information in the critical options of the permissions", func() {

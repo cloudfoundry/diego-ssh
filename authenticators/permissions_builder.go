@@ -13,11 +13,15 @@ import (
 )
 
 type permissionsBuilder struct {
-	bbsClient bbs.InternalClient
+	bbsClient             bbs.InternalClient
+	useDirectInstanceAddr bool
 }
 
-func NewPermissionsBuilder(bbsClient bbs.InternalClient) PermissionsBuilder {
-	return &permissionsBuilder{bbsClient}
+func NewPermissionsBuilder(bbsClient bbs.InternalClient, useDirectInstanceAddr bool) PermissionsBuilder {
+	return &permissionsBuilder{
+		bbsClient:             bbsClient,
+		useDirectInstanceAddr: useDirectInstanceAddr,
+	}
 }
 
 func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
@@ -39,10 +43,10 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 	logMessage := fmt.Sprintf("Successful remote access by %s", metadata.RemoteAddr().String())
 
 	actualLRP, _ := actual.Resolve()
-	return createPermissions(sshRoute, actualLRP, desired.LogGuid, logMessage, index)
+	return pb.createPermissions(sshRoute, actualLRP, desired.LogGuid, logMessage, index)
 }
 
-func createPermissions(
+func (pb *permissionsBuilder) createPermissions(
 	sshRoute *routes.SSHRoute,
 	actual *models.ActualLRP,
 	logGuid string,
@@ -53,8 +57,14 @@ func createPermissions(
 
 	for _, mapping := range actual.Ports {
 		if mapping.ContainerPort == sshRoute.ContainerPort {
+			address := actual.Address
+			port := mapping.HostPort
+			if pb.useDirectInstanceAddr {
+				address = actual.InstanceAddress
+				port = mapping.ContainerPort
+			}
 			targetConfig = &proxy.TargetConfig{
-				Address:         fmt.Sprintf("%s:%d", actual.Address, mapping.HostPort),
+				Address:         fmt.Sprintf("%s:%d", address, port),
 				HostFingerprint: sshRoute.HostFingerprint,
 				User:            sshRoute.User,
 				Password:        sshRoute.Password,

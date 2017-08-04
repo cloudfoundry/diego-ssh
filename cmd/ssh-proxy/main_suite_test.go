@@ -24,6 +24,7 @@ var (
 	sshdProcess  ifrit.Process
 
 	sshdPort             int
+	sshdContainerPort    uint32
 	sshProxyPort         int
 	healthCheckProxyPort int
 
@@ -73,6 +74,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	publicAuthorizedKey = context["authorized-key"]
 
 	sshdPort = 7000 + GinkgoParallelNode()
+	sshdContainerPort = 8000 + uint32(GinkgoParallelNode())
 	sshdPath = context["sshd"]
 
 	sshProxyPort = 7100 + GinkgoParallelNode()

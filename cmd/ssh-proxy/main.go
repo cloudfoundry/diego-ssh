@@ -129,7 +129,7 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 		sshProxyConfig.BBSClientSessionCacheSize,
 		sshProxyConfig.BBSMaxIdleConnsPerHost,
 	)
-	permissionsBuilder := authenticators.NewPermissionsBuilder(bbsClient)
+	permissionsBuilder := authenticators.NewPermissionsBuilder(bbsClient, sshProxyConfig.ConnectToInstanceAddress)
 
 	authens := []authenticators.PasswordAuthenticator{}
 

@@ -16,6 +16,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/testrunner"
+	sshdtestrunner "code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/routes"
 	"github.com/gogo/protobuf/proto"
@@ -62,8 +63,9 @@ var _ = Describe("SSH proxy", func() {
 		getDesiredLRPRequest        *models.DesiredLRPByProcessGuidRequest
 		desiredLRPResponse          *models.DesiredLRPResponse
 
-		processGuid  string
-		clientConfig *ssh.ClientConfig
+		processGuid              string
+		clientConfig             *ssh.ClientConfig
+		connectToInstanceAddress bool
 	)
 
 	BeforeEach(func() {
@@ -99,6 +101,8 @@ var _ = Describe("SSH proxy", func() {
 		allowedMACs = ""
 		allowedKeyExchanges = ""
 
+		connectToInstanceAddress = false
+
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
 			Index:       99,
@@ -110,7 +114,7 @@ var _ = Describe("SSH proxy", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "2.2.2.2", models.NewPortMapping(uint32(sshdPort), 9999)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMapping(uint32(sshdPort), sshdContainerPort)),
 				},
 			},
 		}
@@ -120,7 +124,7 @@ var _ = Describe("SSH proxy", func() {
 		}
 
 		sshRoute, err := json.Marshal(routes.SSHRoute{
-			ContainerPort:   9999,
+			ContainerPort:   sshdContainerPort,
 			PrivateKey:      privateKeyPem,
 			HostFingerprint: hostKeyFingerprint,
 		})
@@ -140,6 +144,27 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	JustBeforeEach(func() {
+		sshProxyConfig := config.SSHProxyConfig{
+			Address:                  address,
+			HealthCheckAddress:       healthCheckAddress,
+			BBSAddress:               bbsAddress,
+			CCAPIURL:                 ccAPIURL,
+			DiegoCredentials:         diegoCredentials,
+			EnableCFAuth:             enableCFAuth,
+			EnableDiegoAuth:          enableDiegoAuth,
+			HostKey:                  hostKey,
+			SkipCertVerify:           skipCertVerify,
+			UAATokenURL:              uaaTokenURL,
+			UAAPassword:              uaaPassword,
+			UAAUsername:              uaaUsername,
+			UAACACert:                uaaCACert,
+			ConsulCluster:            consulRunner.URL(),
+			AllowedCiphers:           allowedCiphers,
+			AllowedMACs:              allowedMACs,
+			AllowedKeyExchanges:      allowedKeyExchanges,
+			ConnectToInstanceAddress: connectToInstanceAddress,
+		}
+
 		fakeBBS.RouteToHandler("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index", ghttp.CombineHandlers(
 			ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
 			VerifyProto(expectedGetActualLRPRequest),
@@ -150,26 +175,6 @@ var _ = Describe("SSH proxy", func() {
 			VerifyProto(getDesiredLRPRequest),
 			RespondWithProto(desiredLRPResponse),
 		))
-
-		sshProxyConfig := config.SSHProxyConfig{
-			Address:             address,
-			HealthCheckAddress:  healthCheckAddress,
-			BBSAddress:          bbsAddress,
-			CCAPIURL:            ccAPIURL,
-			DiegoCredentials:    diegoCredentials,
-			EnableCFAuth:        enableCFAuth,
-			EnableDiegoAuth:     enableDiegoAuth,
-			HostKey:             hostKey,
-			SkipCertVerify:      skipCertVerify,
-			UAATokenURL:         uaaTokenURL,
-			UAAPassword:         uaaPassword,
-			UAAUsername:         uaaUsername,
-			UAACACert:           uaaCACert,
-			ConsulCluster:       consulRunner.URL(),
-			AllowedCiphers:      allowedCiphers,
-			AllowedMACs:         allowedMACs,
-			AllowedKeyExchanges: allowedKeyExchanges,
-		}
 
 		configData, err := json.Marshal(&sshProxyConfig)
 		Expect(err).NotTo(HaveOccurred())
@@ -678,6 +683,35 @@ var _ = Describe("SSH proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(output)).To(Equal("hello"))
+		})
+
+		Context("when the proxy is configured to use direct instance address", func() {
+			BeforeEach(func() {
+				connectToInstanceAddress = true
+
+				ginkgomon.Kill(sshdProcess)
+				sshdArgs := sshdtestrunner.Args{
+					Address:       fmt.Sprintf("127.0.0.1:%d", sshdContainerPort),
+					HostKey:       hostKeyPem,
+					AuthorizedKey: publicAuthorizedKey,
+				}
+
+				runner := sshdtestrunner.New(sshdPath, sshdArgs)
+				sshdProcess = ifrit.Invoke(runner)
+			})
+
+			It("connects to the target daemon", func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).NotTo(HaveOccurred())
+
+				session, err := client.NewSession()
+				Expect(err).NotTo(HaveOccurred())
+
+				output, err := session.Output("echo -n hello")
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(string(output)).To(Equal("hello"))
+			})
 		})
 	})
 })

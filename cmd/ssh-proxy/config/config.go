@@ -37,15 +37,17 @@ type SSHProxyConfig struct {
 	AllowedMACs               string                `json:"allowed_macs"`
 	AllowedKeyExchanges       string                `json:"allowed_key_exchanges"`
 	CommunicationTimeout      durationjson.Duration `json:"communication_timeout,omitempty"`
+	ConnectToInstanceAddress  bool                  `json:"connect_to_instance_address"`
 }
 
 func defaultConfig() SSHProxyConfig {
 	return SSHProxyConfig{
-		Address:              ":2222",
-		HealthCheckAddress:   ":2223",
-		CommunicationTimeout: durationjson.Duration(10 * time.Second),
-		DropsondePort:        3457,
-		LagerConfig:          lagerflags.DefaultLagerConfig(),
+		Address:                  ":2222",
+		HealthCheckAddress:       ":2223",
+		CommunicationTimeout:     durationjson.Duration(10 * time.Second),
+		DropsondePort:            3457,
+		LagerConfig:              lagerflags.DefaultLagerConfig(),
+		ConnectToInstanceAddress: false,
 	}
 }
 

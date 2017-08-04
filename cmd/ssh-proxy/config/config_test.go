@@ -43,7 +43,8 @@ var _ = Describe("SSHProxyConfig", func() {
 			"allowed_macs": "mac1,mac2,mac3",
 			"allowed_key_exchanges": "exchange1,exchange2,exchange3",
 			"log_level": "debug",
-			"debug_address": "5.5.5.5:9090"
+			"debug_address": "5.5.5.5:9090",
+			"connect_to_instance_address": true
 		}`
 	})
 
@@ -91,6 +92,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			AllowedCiphers:            "cipher1,cipher2,cipher3",
 			AllowedMACs:               "mac1,mac2,mac3",
 			AllowedKeyExchanges:       "exchange1,exchange2,exchange3",
+			ConnectToInstanceAddress:  true,
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -184,6 +186,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				AllowedMACs:               "mac1,mac2,mac3",
 				AllowedKeyExchanges:       "exchange1,exchange2,exchange3",
 				LagerConfig:               lagerflags.DefaultLagerConfig(),
+				ConnectToInstanceAddress:  false,
 				DebugServerConfig: debugserver.DebugServerConfig{
 					DebugAddress: "5.5.5.5:9090",
 				},
