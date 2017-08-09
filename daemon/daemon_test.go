@@ -75,6 +75,7 @@ var _ = Describe("Daemon", func() {
 					Auth: []ssh.AuthMethod{
 						ssh.Password("secret"),
 					},
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 				}
 
 				sshd = daemon.New(logger, serverSSHConfig, nil, nil)

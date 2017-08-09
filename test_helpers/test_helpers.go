@@ -48,6 +48,7 @@ func NewClient(clientNetConn net.Conn, clientConfig *ssh.ClientConfig) *ssh.Clie
 			Auth: []ssh.AuthMethod{
 				ssh.Password("secret"),
 			},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		}
 	}
 
