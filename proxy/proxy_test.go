@@ -159,6 +159,7 @@ var _ = Describe("Proxy", func() {
 					Auth: []ssh.AuthMethod{
 						ssh.Password("diego-user:diego-password"),
 					},
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 				}
 			})
 
@@ -367,6 +368,7 @@ var _ = Describe("Proxy", func() {
 					Auth: []ssh.AuthMethod{
 						ssh.Password("diego-user:diego-password"),
 					},
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 				}
 				daemonSSHConfig.NoClientAuth = true
 			})
@@ -459,8 +461,9 @@ var _ = Describe("Proxy", func() {
 						close(targetDone)
 					}()
 
+					clientConfig := &ssh.ClientConfig{HostKeyCallback: ssh.InsecureIgnoreHostKey()}
 					clientNetConn, err := net.Dial("tcp", targetAddress)
-					_, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", &ssh.ClientConfig{})
+					_, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", clientConfig)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
