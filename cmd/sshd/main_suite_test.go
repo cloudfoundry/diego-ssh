@@ -26,8 +26,7 @@ func TestSSHDaemon(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	sshd, err := gexec.Build("code.cloudfoundry.org/diego-ssh/cmd/sshd", "-race")
-	Expect(err).NotTo(HaveOccurred())
+	sshd := buildSshd()
 
 	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)
 	Expect(err).NotTo(HaveOccurred())

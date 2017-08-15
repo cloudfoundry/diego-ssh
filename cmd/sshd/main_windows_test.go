@@ -4,10 +4,10 @@ package main_test
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
+
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"golang.org/x/crypto/ssh"
@@ -17,38 +17,7 @@ import (
 	"github.com/onsi/gomega/ghttp"
 )
 
-func startSshd(address string) ifrit.Process {
-	args := testrunner.Args{
-		Address:       address,
-		HostKey:       string(privateKeyPem),
-		AuthorizedKey: string(publicAuthorizedKey),
-
-		AllowUnauthenticatedClients: true,
-		InheritDaemonEnv:            false,
-	}
-
-	runner := testrunner.New(sshdPath, args)
-	runner.Command.Env = append(
-		os.Environ(),
-		fmt.Sprintf(`CF_INSTANCE_PORTS=[{"external":%d,"internal":%d}]`, sshdPort, 2222),
-	)
-	process := ifrit.Invoke(runner)
-	return process
-}
-
 var _ = Describe("SSH daemon", func() {
-	It("maps the internal port to the external port", func() {
-		process := startSshd("127.0.0.1:2222")
-		defer ginkgomon.Kill(process, 3*time.Second)
-
-		clientConfig := &ssh.ClientConfig{}
-		Expect(process).NotTo(BeNil())
-
-		client, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", sshdPort), clientConfig)
-		Expect(err).NotTo(HaveOccurred())
-		client.Close()
-	})
-
 	Describe("SSH features", func() {
 		var (
 			process      ifrit.Process
@@ -58,9 +27,18 @@ var _ = Describe("SSH daemon", func() {
 		)
 
 		BeforeEach(func() {
+			args := testrunner.Args{
+				HostKey:       string(privateKeyPem),
+				AuthorizedKey: string(publicAuthorizedKey),
+
+				AllowUnauthenticatedClients: true,
+				InheritDaemonEnv:            false,
+			}
 			address = fmt.Sprintf("127.0.0.1:%d", sshdPort)
-			process = startSshd(address)
-			clientConfig = &ssh.ClientConfig{}
+			_, process = startSshd(sshdPath, args, "127.0.0.1", sshdPort)
+			clientConfig = &ssh.ClientConfig{
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			}
 			Expect(process).NotTo(BeNil())
 
 			var dialErr error

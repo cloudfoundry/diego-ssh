@@ -61,7 +61,6 @@ var _ = Describe("SSH daemon", func() {
 
 	JustBeforeEach(func() {
 		args := testrunner.Args{
-			Address:       address,
 			HostKey:       string(hostKey),
 			AuthorizedKey: string(authorizedKey),
 
@@ -73,8 +72,7 @@ var _ = Describe("SSH daemon", func() {
 			InheritDaemonEnv:            inheritDaemonEnv,
 		}
 
-		runner = testrunner.New(sshdPath, args)
-		process = ifrit.Invoke(runner)
+		runner, process = startSshd(sshdPath, args, "127.0.0.1", sshdPort)
 	})
 
 	AfterEach(func() {
