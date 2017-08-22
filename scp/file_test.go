@@ -545,8 +545,7 @@ var _ = Describe("File Message", func() {
 
 		Context("when opening the target file fails", func() {
 			BeforeEach(func() {
-				err := os.Chmod(tempFile, 0400)
-				Expect(err).NotTo(HaveOccurred())
+				tempFile = filepath.Join(tempDir, "some-dir", "does-not-exists.txt")
 			})
 
 			It("fails with an error", func() {
@@ -559,7 +558,7 @@ var _ = Describe("File Message", func() {
 
 				testCopier = newTestCopier(stdin, stdout, stderr, false)
 				err := testCopier.ReceiveFile(tempFile, false, nil)
-				Expect(err).To(MatchError(MatchRegexp("permission denied")))
+				Expect(err).To(MatchError(MatchRegexp("no such file or directory")))
 			})
 		})
 

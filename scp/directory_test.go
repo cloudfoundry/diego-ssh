@@ -134,8 +134,7 @@ var _ = Describe("Directory Message", func() {
 
 		Context("when the directory cannot be opened", func() {
 			BeforeEach(func() {
-				err := os.Chmod(emptySubdir, 0222)
-				Expect(err).NotTo(HaveOccurred())
+				emptySubdir = filepath.Join(emptySubdir, "non-existent-dir")
 			})
 
 			It("returns an error", func() {
@@ -146,7 +145,7 @@ var _ = Describe("Directory Message", func() {
 				copier = newTestCopier(stdin, stdout, stderr, false)
 
 				err := copier.SendDirectory(emptySubdir, emptyDirInfo)
-				Expect(err).To(MatchError(MatchRegexp("permission denied")))
+				Expect(err).To(MatchError(MatchRegexp("no such file or directory")))
 			})
 		})
 
@@ -244,14 +243,9 @@ var _ = Describe("Directory Message", func() {
 		})
 
 		Context("when sending a file fails", func() {
-			var subdirFile2 string
-
 			BeforeEach(func() {
-				subdirFile2 = filepath.Join(subdir, "tempfile.txt")
-				err := ioutil.WriteFile(subdirFile2, []byte("temporary-file-contents\n"), os.FileMode(0200))
-				Expect(err).NotTo(HaveOccurred())
-
-				err = os.Chmod(subdirFile, 0200)
+				subdirFile2 := filepath.Join(subdir, "does-not-exist.link")
+				os.Symlink(filepath.Join(subdir, "does-not-exist"), subdirFile2)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -260,20 +254,23 @@ var _ = Describe("Directory Message", func() {
 				stdout := &bytes.Buffer{}
 				stderr := &bytes.Buffer{}
 
-				subdirInfo, err := os.Stat(subdir)
-				Expect(err).NotTo(HaveOccurred())
-
 				copier = newTestCopier(stdin, stdout, stderr, false)
-				err = copier.SendDirectory(subdir, subdirInfo)
+				err = copier.SendDirectory(tempDir, dirInfo)
 				Expect(err).NotTo(HaveOccurred())
 
+				Expect(stdout.ReadString('\n')).To(Equal("D0700 0 " + filepath.Base(tempDir) + "\n"))
+				Expect(stdout.ReadString('\n')).To(Equal("D0775 0 empty-dir\n"))
+				Expect(stdout.ReadString('\n')).To(Equal("E\n"))
 				Expect(stdout.ReadString('\n')).To(Equal("D0700 0 subdir\n"))
-
 				Expect(stdout.ReadByte()).To(BeEquivalentTo(1))
-				Expect(stdout.ReadString('\n')).To(ContainSubstring("permission denied"))
-				Expect(stdout.ReadByte()).To(BeEquivalentTo(1))
-				Expect(stdout.ReadString('\n')).To(ContainSubstring("permission denied"))
-
+				Expect(stdout.ReadString('\n')).To(ContainSubstring("no such file or directory"))
+				Expect(stdout.ReadString('\n')).To(Equal("C0644 21 subdir-file.txt\n"))
+				Expect(stdout.ReadString('\n')).To(Equal("subdir-file-contents\n"))
+				Expect(stdout.ReadByte()).To(BeEquivalentTo(0))
+				Expect(stdout.ReadString('\n')).To(Equal("E\n"))
+				Expect(stdout.ReadString('\n')).To(Equal("C0644 24 tempfile.txt\n"))
+				Expect(stdout.ReadString('\n')).To(Equal("temporary-file-contents\n"))
+				Expect(stdout.ReadByte()).To(BeEquivalentTo(0))
 				Expect(stdout.ReadString('\n')).To(Equal("E\n"))
 			})
 		})
@@ -434,12 +431,7 @@ var _ = Describe("Directory Message", func() {
 			var targetDir string
 
 			BeforeEach(func() {
-				targetDir = filepath.Join(tempDir, "target")
-				err := os.Mkdir(targetDir, os.FileMode(0555))
-				Expect(err).NotTo(HaveOccurred())
-
-				err = os.Chmod(targetDir, 0555)
-				Expect(err).NotTo(HaveOccurred())
+				targetDir = filepath.Join(tempDir, "non-existent-dir", "target")
 			})
 
 			It("raises an error", func() {
@@ -452,7 +444,7 @@ var _ = Describe("Directory Message", func() {
 
 				copier = newTestCopier(stdin, stdout, stderr, false)
 				err := copier.ReceiveDirectory(targetDir, nil)
-				Expect(err).To(MatchError(MatchRegexp("permission denied")))
+				Expect(err).To(MatchError(MatchRegexp("no such file or directory")))
 			})
 		})
 
