@@ -3,6 +3,7 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 
 	"testing"
 	"time"
@@ -95,7 +96,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 })
 
 var _ = BeforeEach(func() {
-	consulRunner.Reset()
+
+	if runtime.GOOS == "windows" {
+		Skip("SSH not supported on Windows, and SSH proxy never runs on Windows anyway")
+	}
+
+	err := consulRunner.Reset()
+	Expect(err).NotTo(HaveOccurred())
 
 	sshdArgs := testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", sshdPort),

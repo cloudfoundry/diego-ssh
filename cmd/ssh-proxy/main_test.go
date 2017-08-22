@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -188,6 +189,9 @@ var _ = Describe("SSH proxy", func() {
 
 		sshProxyConfigPath = configFile.Name()
 
+		err = configFile.Close()
+		Expect(err).NotTo(HaveOccurred())
+
 		runner = testrunner.New(sshProxyPath, sshProxyConfigPath)
 		process = ifrit.Invoke(runner)
 	})
@@ -334,14 +338,20 @@ var _ = Describe("SSH proxy", func() {
 
 	Describe("Initialization", func() {
 		It("registers itself with consul", func() {
+
+			service := &api.AgentService{
+				Service: "ssh-proxy",
+				ID:      "ssh-proxy",
+				Port:    sshProxyPort,
+			}
+
+			if runtime.GOOS == "windows" {
+				service.Tags = []string{}
+			}
+
 			services, err := consulRunner.NewClient().Agent().Services()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(services).Should(HaveKeyWithValue("ssh-proxy",
-				&api.AgentService{
-					Service: "ssh-proxy",
-					ID:      "ssh-proxy",
-					Port:    sshProxyPort,
-				}))
+			Expect(services).Should(HaveKeyWithValue("ssh-proxy", service))
 		})
 
 		It("registers a TTL healthcheck", func() {
@@ -469,7 +479,9 @@ var _ = Describe("SSH proxy", func() {
 		It("acquires the desired and actual LRP info from the BBS", func() {
 			client, err := ssh.Dial("tcp", address, clientConfig)
 			Expect(err).NotTo(HaveOccurred())
-			client.Close()
+
+			err = client.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
 		})
@@ -512,7 +524,9 @@ var _ = Describe("SSH proxy", func() {
 			It("allows a client to complete a handshake", func() {
 				client, err := ssh.Dial("tcp", address, clientConfig)
 				Expect(err).NotTo(HaveOccurred())
-				client.Close()
+
+				err = client.Close()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -541,7 +555,9 @@ var _ = Describe("SSH proxy", func() {
 			It("allows a client to complete a handshake", func() {
 				client, err := ssh.Dial("tcp", address, clientConfig)
 				Expect(err).NotTo(HaveOccurred())
-				client.Close()
+
+				err = client.Close()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -570,7 +586,9 @@ var _ = Describe("SSH proxy", func() {
 			It("allows a client to complete a handshake", func() {
 				client, err := ssh.Dial("tcp", address, clientConfig)
 				Expect(err).NotTo(HaveOccurred())
-				client.Close()
+
+				err = client.Close()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
@@ -587,7 +605,7 @@ var _ = Describe("SSH proxy", func() {
 			})
 
 			It("attempts to acquire the lrp info from the BBS", func() {
-				ssh.Dial("tcp", address, clientConfig)
+				_, _ = ssh.Dial("tcp", address, clientConfig)
 				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(1))
 			})
 
@@ -656,7 +674,8 @@ var _ = Describe("SSH proxy", func() {
 			client, err := ssh.Dial("tcp", address, clientConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			client.Close()
+			err = client.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeUAA.ReceivedRequests()).To(HaveLen(1))
 		})
@@ -665,7 +684,8 @@ var _ = Describe("SSH proxy", func() {
 			client, err := ssh.Dial("tcp", address, clientConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			client.Close()
+			err = client.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeCC.ReceivedRequests()).To(HaveLen(1))
 		})
@@ -674,7 +694,8 @@ var _ = Describe("SSH proxy", func() {
 			client, err := ssh.Dial("tcp", address, clientConfig)
 			Expect(err).NotTo(HaveOccurred())
 
-			client.Close()
+			err = client.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeBBS.ReceivedRequests()).To(HaveLen(2))
 		})
@@ -731,7 +752,9 @@ func VerifyProto(expected proto.Message) http.HandlerFunc {
 			defer GinkgoRecover()
 			body, err := ioutil.ReadAll(req.Body)
 			Expect(err).ToNot(HaveOccurred())
-			req.Body.Close()
+
+			err = req.Body.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			expectedType := reflect.TypeOf(expected)
 			actualValuePtr := reflect.New(expectedType.Elem())

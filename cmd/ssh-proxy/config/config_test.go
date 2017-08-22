@@ -56,6 +56,9 @@ var _ = Describe("SSHProxyConfig", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n).To(Equal(len(configData)))
 
+		err = configFile.Close()
+		Expect(err).NotTo(HaveOccurred())
+
 		configFilePath = configFile.Name()
 	})
 
