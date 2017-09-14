@@ -40,33 +40,20 @@ var _ = Describe("SSH proxy", func() {
 		fakeCC             *ghttp.Server
 		runner             ifrit.Runner
 		process            ifrit.Process
+		sshProxyConfig     *config.SSHProxyConfig
 		sshProxyConfigPath string
 
 		address                     string
 		healthCheckAddress          string
-		bbsAddress                  string
-		ccAPIURL                    string
 		diegoCredentials            string
-		enableCFAuth                bool
-		enableDiegoAuth             bool
-		hostKey                     string
 		hostKeyFingerprint          string
-		skipCertVerify              bool
-		uaaTokenURL                 string
-		uaaPassword                 string
-		uaaUsername                 string
-		uaaCACert                   string
-		allowedCiphers              string
-		allowedMACs                 string
-		allowedKeyExchanges         string
 		expectedGetActualLRPRequest *models.ActualLRPGroupByProcessGuidAndIndexRequest
 		actualLRPGroupResponse      *models.ActualLRPGroupResponse
 		getDesiredLRPRequest        *models.DesiredLRPByProcessGuidRequest
 		desiredLRPResponse          *models.DesiredLRPResponse
 
-		processGuid              string
-		clientConfig             *ssh.ClientConfig
-		connectToInstanceAddress bool
+		processGuid  string
+		clientConfig *ssh.ClientConfig
 	)
 
 	BeforeEach(func() {
@@ -80,29 +67,31 @@ var _ = Describe("SSH proxy", func() {
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
 		healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckProxyPort)
-		bbsAddress = fakeBBS.URL()
-		ccAPIURL = fakeCC.URL()
 		diegoCredentials = "some-creds"
-		enableCFAuth = true
-		enableDiegoAuth = true
-		hostKey = hostKeyPem
-		skipCertVerify = true
 		processGuid = "app-guid-app-version"
 
 		u, err := url.Parse(fakeUAA.URL())
 		Expect(err).NotTo(HaveOccurred())
 
 		u.Path = "/oauth/token"
-		uaaTokenURL = u.String()
-		uaaPassword = "password1"
-		uaaUsername = "amandaplease"
-		uaaCACert = ""
 
-		allowedCiphers = ""
-		allowedMACs = ""
-		allowedKeyExchanges = ""
-
-		connectToInstanceAddress = false
+		sshProxyConfig = &config.SSHProxyConfig{
+			Address:                         address,
+			HealthCheckAddress:              healthCheckAddress,
+			BBSAddress:                      fakeBBS.URL(),
+			CCAPIURL:                        fakeCC.URL(),
+			DiegoCredentials:                diegoCredentials,
+			EnableCFAuth:                    true,
+			EnableConsulServiceRegistration: false,
+			EnableDiegoAuth:                 true,
+			HostKey:                         hostKeyPem,
+			SkipCertVerify:                  true,
+			UAATokenURL:                     u.String(),
+			UAAPassword:                     "password1",
+			UAAUsername:                     "amandaplease",
+			UAACACert:                       "",
+			ConsulCluster:                   consulRunner.URL(),
+		}
 
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
@@ -145,27 +134,6 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	JustBeforeEach(func() {
-		sshProxyConfig := config.SSHProxyConfig{
-			Address:                  address,
-			HealthCheckAddress:       healthCheckAddress,
-			BBSAddress:               bbsAddress,
-			CCAPIURL:                 ccAPIURL,
-			DiegoCredentials:         diegoCredentials,
-			EnableCFAuth:             enableCFAuth,
-			EnableDiegoAuth:          enableDiegoAuth,
-			HostKey:                  hostKey,
-			SkipCertVerify:           skipCertVerify,
-			UAATokenURL:              uaaTokenURL,
-			UAAPassword:              uaaPassword,
-			UAAUsername:              uaaUsername,
-			UAACACert:                uaaCACert,
-			ConsulCluster:            consulRunner.URL(),
-			AllowedCiphers:           allowedCiphers,
-			AllowedMACs:              allowedMACs,
-			AllowedKeyExchanges:      allowedKeyExchanges,
-			ConnectToInstanceAddress: connectToInstanceAddress,
-		}
-
 		fakeBBS.RouteToHandler("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index", ghttp.CombineHandlers(
 			ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
 			VerifyProto(expectedGetActualLRPRequest),
@@ -210,7 +178,7 @@ var _ = Describe("SSH proxy", func() {
 	Describe("argument validation", func() {
 		Context("when the host key is not provided", func() {
 			BeforeEach(func() {
-				hostKey = ""
+				sshProxyConfig.HostKey = ""
 			})
 
 			It("reports the problem and terminates", func() {
@@ -221,7 +189,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when an ill-formed host key is provided", func() {
 			BeforeEach(func() {
-				hostKey = "host-key"
+				sshProxyConfig.HostKey = "host-key"
 			})
 
 			It("reports the problem and terminates", func() {
@@ -232,7 +200,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the BBS address is missing", func() {
 			BeforeEach(func() {
-				bbsAddress = ""
+				sshProxyConfig.BBSAddress = ""
 			})
 
 			It("reports the problem and terminates", func() {
@@ -243,7 +211,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the BBS address cannot be parsed", func() {
 			BeforeEach(func() {
-				bbsAddress = ":://goober-swallow#yuck"
+				sshProxyConfig.BBSAddress = ":://goober-swallow#yuck"
 			})
 
 			It("reports the problem and terminates", func() {
@@ -254,12 +222,12 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when CF authentication is enabled", func() {
 			BeforeEach(func() {
-				enableCFAuth = true
+				sshProxyConfig.EnableCFAuth = true
 			})
 
 			Context("when the cc URL is missing", func() {
 				BeforeEach(func() {
-					ccAPIURL = ""
+					sshProxyConfig.CCAPIURL = ""
 				})
 
 				It("reports the problem and terminates", func() {
@@ -270,7 +238,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when the cc URL cannot be parsed", func() {
 				BeforeEach(func() {
-					ccAPIURL = ":://goober-swallow#yuck"
+					sshProxyConfig.CCAPIURL = ":://goober-swallow#yuck"
 				})
 
 				It("reports the problem and terminates", func() {
@@ -281,7 +249,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when the uaa URL is missing", func() {
 				BeforeEach(func() {
-					uaaTokenURL = ""
+					sshProxyConfig.UAATokenURL = ""
 				})
 
 				It("reports the problem and terminates", func() {
@@ -292,7 +260,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when the UAA password is missing", func() {
 				BeforeEach(func() {
-					uaaPassword = ""
+					sshProxyConfig.UAAPassword = ""
 				})
 
 				It("exits with an error", func() {
@@ -303,7 +271,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when the UAA username is missing", func() {
 				BeforeEach(func() {
-					uaaUsername = ""
+					sshProxyConfig.UAAUsername = ""
 				})
 
 				It("exits with an error", func() {
@@ -314,7 +282,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when the UAA URL cannot be parsed", func() {
 				BeforeEach(func() {
-					uaaTokenURL = ":://spitting#nickles"
+					sshProxyConfig.UAATokenURL = ":://spitting#nickles"
 				})
 
 				It("reports the problem and terminates", func() {
@@ -325,7 +293,7 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when UAA ca cert does not exist", func() {
 				BeforeEach(func() {
-					uaaCACert = "doesnotexist"
+					sshProxyConfig.UAACACert = "doesnotexist"
 				})
 
 				It("exits with an error", func() {
@@ -337,35 +305,52 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	Describe("Initialization", func() {
-		It("registers itself with consul", func() {
+		Context("when consul registration is enabled", func() {
+			BeforeEach(func() {
+				sshProxyConfig.EnableConsulServiceRegistration = true
+			})
 
-			service := &api.AgentService{
-				Service: "ssh-proxy",
-				ID:      "ssh-proxy",
-				Port:    sshProxyPort,
-			}
+			It("registers itself with consul", func() {
+				service := &api.AgentService{
+					Service: "ssh-proxy",
+					ID:      "ssh-proxy",
+					Port:    sshProxyPort,
+				}
 
-			if runtime.GOOS == "windows" {
-				service.Tags = []string{}
-			}
+				if runtime.GOOS == "windows" {
+					service.Tags = []string{}
+				}
 
-			services, err := consulRunner.NewClient().Agent().Services()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(services).Should(HaveKeyWithValue("ssh-proxy", service))
+				services, err := consulRunner.NewClient().Agent().Services()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(services).To(HaveKeyWithValue("ssh-proxy", service))
+			})
+
+			It("registers a TTL healthcheck", func() {
+				checks, err := consulRunner.NewClient().Agent().Checks()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(checks).To(HaveKeyWithValue("service:ssh-proxy",
+					&api.AgentCheck{
+						Node:        "0",
+						CheckID:     "service:ssh-proxy",
+						Name:        "Service 'ssh-proxy' check",
+						Status:      "passing",
+						ServiceID:   "ssh-proxy",
+						ServiceName: "ssh-proxy",
+					}))
+			})
 		})
 
-		It("registers a TTL healthcheck", func() {
+		It("does not registers itself with consul", func() {
+			services, err := consulRunner.NewClient().Agent().Services()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(services).NotTo(HaveKey("ssh-proxy"))
+		})
+
+		It("does not register a TTL healthcheck", func() {
 			checks, err := consulRunner.NewClient().Agent().Checks()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(checks).Should(HaveKeyWithValue("service:ssh-proxy",
-				&api.AgentCheck{
-					Node:        "0",
-					CheckID:     "service:ssh-proxy",
-					Name:        "Service 'ssh-proxy' check",
-					Status:      "passing",
-					ServiceID:   "ssh-proxy",
-					ServiceName: "ssh-proxy",
-				}))
+			Expect(checks).NotTo(HaveKey("service:ssh-proxy"))
 		})
 	})
 
@@ -501,7 +486,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides an unsupported cipher algorithm", func() {
 			BeforeEach(func() {
-				allowedCiphers = "unsupported"
+				sshProxyConfig.AllowedCiphers = "unsupported"
 			})
 
 			It("rejects the cipher algorithm", func() {
@@ -513,7 +498,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides a supported cipher algorithm", func() {
 			BeforeEach(func() {
-				allowedCiphers = "aes128-ctr,aes256-ctr"
+				sshProxyConfig.AllowedCiphers = "aes128-ctr,aes256-ctr"
 				clientConfig = &ssh.ClientConfig{
 					User:            "diego:" + processGuid + "/99",
 					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
@@ -532,7 +517,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides an unsupported MAC algorithm", func() {
 			BeforeEach(func() {
-				allowedMACs = "unsupported"
+				sshProxyConfig.AllowedMACs = "unsupported"
 			})
 
 			It("rejects the MAC algorithm", func() {
@@ -544,7 +529,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides a supported MAC algorithm", func() {
 			BeforeEach(func() {
-				allowedMACs = "hmac-sha2-256,hmac-sha1"
+				sshProxyConfig.AllowedMACs = "hmac-sha2-256,hmac-sha1"
 				clientConfig = &ssh.ClientConfig{
 					User:            "diego:" + processGuid + "/99",
 					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
@@ -563,7 +548,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides an unsupported key exchange algorithm", func() {
 			BeforeEach(func() {
-				allowedKeyExchanges = "unsupported"
+				sshProxyConfig.AllowedKeyExchanges = "unsupported"
 			})
 
 			It("rejects the key exchange algorithm", func() {
@@ -575,7 +560,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides a supported key exchange algorithm", func() {
 			BeforeEach(func() {
-				allowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
+				sshProxyConfig.AllowedKeyExchanges = "curve25519-sha256@libssh.org,ecdh-sha2-nistp384,diffie-hellman-group14-sha1"
 				clientConfig = &ssh.ClientConfig{
 					User:            "diego:" + processGuid + "/99",
 					Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
@@ -630,7 +615,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("and the enableDiegoAuth flag is set to false", func() {
 			BeforeEach(func() {
-				enableDiegoAuth = false
+				sshProxyConfig.EnableDiegoAuth = false
 			})
 
 			It("fails the authentication", func() {
@@ -715,7 +700,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy is configured to use direct instance address", func() {
 			BeforeEach(func() {
-				connectToInstanceAddress = true
+				sshProxyConfig.ConnectToInstanceAddress = true
 
 				ginkgomon.Kill(sshdProcess)
 				sshdArgs := sshdtestrunner.Args{

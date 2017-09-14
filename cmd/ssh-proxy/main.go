@@ -75,17 +75,19 @@ func main() {
 	healthCheckHandler := healthcheck.NewHandler(logger)
 	httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
 
-	consulClient, err := consuladapter.NewClientFromUrl(sshProxyConfig.ConsulCluster)
-	if err != nil {
-		logger.Fatal("new-client-failed", err)
-	}
-
-	registrationRunner := initializeRegistrationRunner(logger, consulClient, sshProxyConfig.Address, clock.NewClock())
-
 	members := grouper.Members{
 		{"ssh-proxy", server},
-		{"registration-runner", registrationRunner},
 		{"healthcheck", httpServer},
+	}
+
+	if sshProxyConfig.EnableConsulServiceRegistration {
+		consulClient, err := consuladapter.NewClientFromUrl(sshProxyConfig.ConsulCluster)
+		if err != nil {
+			logger.Fatal("new-client-failed", err)
+		}
+
+		registrationRunner := initializeRegistrationRunner(logger, consulClient, sshProxyConfig.Address, clock.NewClock())
+		members = append(members, grouper.Member{"registration-runner", registrationRunner})
 	}
 
 	if sshProxyConfig.DebugAddress != "" {
