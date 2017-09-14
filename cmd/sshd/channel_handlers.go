@@ -1,4 +1,4 @@
-// +build !windows
+// +build !windows2012R2
 
 package main
 

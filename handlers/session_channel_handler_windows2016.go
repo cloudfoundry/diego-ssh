@@ -1,10 +1,8 @@
-// +build !windows,!windows2012R2
+// +build windows,!windows2012R2
 
 package handlers
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -17,10 +15,8 @@ import (
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/scp"
 	"code.cloudfoundry.org/diego-ssh/signals"
-	"code.cloudfoundry.org/diego-ssh/termcodes"
+	"code.cloudfoundry.org/diego-ssh/winpty"
 	"code.cloudfoundry.org/lager"
-	"github.com/docker/docker/pkg/term"
-	"github.com/kr/pty"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -28,10 +24,11 @@ import (
 var scpRegex = regexp.MustCompile(`^\s*scp($|\s+)`)
 
 type SessionChannelHandler struct {
-	runner       Runner
-	shellLocator ShellLocator
-	defaultEnv   map[string]string
-	keepalive    time.Duration
+	runner        Runner
+	shellLocator  ShellLocator
+	defaultEnv    map[string]string
+	keepalive     time.Duration
+	winPTYDllPath string
 }
 
 func NewSessionChannelHandler(
@@ -40,11 +37,13 @@ func NewSessionChannelHandler(
 	defaultEnv map[string]string,
 	keepalive time.Duration,
 ) *SessionChannelHandler {
+	winPTYDllPath := os.Getenv("WINPTY_DLL_PATH")
 	return &SessionChannelHandler{
-		runner:       runner,
-		shellLocator: shellLocator,
-		defaultEnv:   defaultEnv,
-		keepalive:    keepalive,
+		runner:        runner,
+		shellLocator:  shellLocator,
+		defaultEnv:    defaultEnv,
+		keepalive:     keepalive,
+		winPTYDllPath: winPTYDllPath,
 	}
 }
 
@@ -85,7 +84,8 @@ type session struct {
 	allocPty   bool
 	ptyRequest ptyRequestMsg
 
-	ptyMaster *os.File
+	winpty        *winpty.WinPTY
+	winPTYDllPath string
 }
 
 func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel, keepalive time.Duration) *session {
@@ -96,6 +96,7 @@ func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ss
 		shellPath:         handler.shellLocator.ShellPath(),
 		channel:           channel,
 		env:               handler.defaultEnv,
+		winPTYDllPath:     handler.winPTYDllPath,
 	}
 }
 
@@ -179,8 +180,13 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	cmd := sess.command
 
 	if cmd != nil {
+		var err error
 		signal := signals.SyscallSignals[ssh.Signal(signalMessage.Signal)]
-		err := sess.runner.Signal(cmd, signal)
+		if sess.winpty != nil {
+			err = sess.winpty.Signal(signal)
+		} else {
+			err = sess.runner.Signal(cmd, signal)
+		}
 		if err != nil {
 			logger.Error("process-signal-failed", err)
 		}
@@ -209,6 +215,15 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 	defer sess.Unlock()
 
 	sess.allocPty = true
+	sess.winpty, err = winpty.New(sess.winPTYDllPath)
+	if err != nil {
+		logger.Error("couldn't intialize winpty.dll", err)
+		if request.WantReply {
+			request.Reply(false, nil)
+		}
+		return
+	}
+
 	sess.ptyRequest = ptyRequestMessage
 	sess.env["TERM"] = ptyRequestMessage.Term
 
@@ -245,8 +260,8 @@ func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 		sess.ptyRequest.Rows = windowChangeMessage.Rows
 	}
 
-	if sess.ptyMaster != nil {
-		err = setWindowSize(logger, sess.ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+	if sess.winpty != nil {
+		err = setWindowSize(logger, sess.winpty, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 		if err != nil {
 			logger.Error("failed-to-set-window-size", err)
 		}
@@ -278,7 +293,7 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 		logger.Info("handling-scp-command", lager.Data{"Command": execMessage.Command})
 		sess.executeSCP(execMessage.Command, request)
 	} else {
-		sess.executeShell(request, "-c", execMessage.Command)
+		sess.executeShell(request, "/c", execMessage.Command)
 	}
 }
 
@@ -391,7 +406,7 @@ func (sess *session) createCommand(args ...string) (*exec.Cmd, error) {
 func (sess *session) environment() []string {
 	env := []string{}
 
-	env = append(env, "PATH=/bin:/usr/bin")
+	env = append(env, `PATH=C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0`)
 	env = append(env, "LANG=en_US.UTF8")
 
 	for k, v := range sess.env {
@@ -434,104 +449,56 @@ func (sess *session) sendExitMessage(err error) {
 		return
 	}
 
-	exitError, ok := err.(*exec.ExitError)
-	if !ok {
-		exitMessage := exitStatusMsg{Status: 255}
-		_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
-		if sendErr != nil {
-			logger.Error("send-exit-status-failed", sendErr)
+	var exitCode uint32
+	winptyError, ok := err.(*winpty.ExitError)
+	if ok {
+		exitCode = winptyError.WaitStatus.ExitCode
+	} else {
+		exitError, ok := err.(*exec.ExitError)
+		if !ok {
+			exitMessage := exitStatusMsg{Status: 255}
+			_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+			if sendErr != nil {
+				logger.Error("send-exit-status-failed", sendErr)
+			}
+			return
 		}
-		return
+
+		waitStatus, ok := exitError.Sys().(syscall.WaitStatus)
+		if !ok {
+			exitMessage := exitStatusMsg{Status: 255}
+			_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
+			if sendErr != nil {
+				logger.Error("send-exit-status-failed", sendErr)
+			}
+			return
+		}
+
+		if waitStatus.Signaled() {
+			exitMessage := exitSignalMsg{
+				Signal:     string(signals.SSHSignals[waitStatus.Signal()]),
+				CoreDumped: waitStatus.CoreDump(),
+			}
+			_, sendErr := sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
+			if sendErr != nil {
+				logger.Error("send-exit-status-failed", sendErr)
+			}
+			return
+		}
+
+		exitCode = uint32(waitStatus.ExitStatus())
 	}
 
-	waitStatus, ok := exitError.Sys().(syscall.WaitStatus)
-	if !ok {
-		exitMessage := exitStatusMsg{Status: 255}
-		_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
-		if sendErr != nil {
-			logger.Error("send-exit-status-failed", sendErr)
-		}
-		return
-	}
-
-	if waitStatus.Signaled() {
-		exitMessage := exitSignalMsg{
-			Signal:     string(signals.SSHSignals[waitStatus.Signal()]),
-			CoreDumped: waitStatus.CoreDump(),
-		}
-		_, sendErr := sess.channel.SendRequest("exit-signal", false, ssh.Marshal(exitMessage))
-		if sendErr != nil {
-			logger.Error("send-exit-status-failed", sendErr)
-		}
-		return
-	}
-
-	exitMessage := exitStatusMsg{Status: uint32(waitStatus.ExitStatus())}
+	exitMessage := exitStatusMsg{Status: exitCode}
 	_, sendErr := sess.channel.SendRequest("exit-status", false, ssh.Marshal(exitMessage))
 	if sendErr != nil {
 		logger.Error("send-exit-status-failed", sendErr)
 	}
 }
 
-func setWindowSize(logger lager.Logger, pseudoTty *os.File, columns, rows uint32) error {
+func setWindowSize(logger lager.Logger, pty *winpty.WinPTY, columns, rows uint32) error {
 	logger.Info("new-size", lager.Data{"columns": columns, "rows": rows})
-	return term.SetWinsize(pseudoTty.Fd(), &term.Winsize{
-		Width:  uint16(columns),
-		Height: uint16(rows),
-	})
-}
-
-func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist string) {
-	reader := bytes.NewReader([]byte(modelist))
-
-	for {
-		var opcode uint8
-		var value uint32
-
-		err := binary.Read(reader, binary.BigEndian, &opcode)
-		if err != nil {
-			logger.Error("failed-to-read-modelist-opcode", err)
-			break
-		}
-
-		if opcode == 0 || opcode >= 160 {
-			break
-		}
-
-		err = binary.Read(reader, binary.BigEndian, &value)
-		if err != nil {
-			logger.Error("failed-to-read-modelist-value", err)
-			break
-		}
-
-		logger.Info("set-terminal-attribute", lager.Data{
-			"opcode": opcode,
-			"value":  fmt.Sprintf("%x", value),
-		})
-
-		termios, err := termcodes.GetAttr(pseudoTty)
-		if err != nil {
-			logger.Error("failed-to-get-terminal-attrs", err)
-			continue
-		}
-
-		setter, ok := termcodes.TermAttrSetters[opcode]
-		if !ok {
-			logger.Error("failed-to-find-setter-for-opcode", errors.New("opcode-not-found"), lager.Data{
-				"opcode": opcode,
-			})
-			continue
-		}
-
-		err = setter.Set(pseudoTty, termios, value)
-		if err != nil {
-			logger.Error("failed-to-set-terminal-attrs", err, lager.Data{
-				"opcode": opcode,
-				"value":  fmt.Sprintf("%x", value),
-			})
-			continue
-		}
-	}
+	return pty.SetWinsize(columns, rows)
 }
 
 func (sess *session) run(command *exec.Cmd) error {
@@ -551,45 +518,32 @@ func (sess *session) run(command *exec.Cmd) error {
 }
 
 func (sess *session) runWithPty(command *exec.Cmd) error {
-	logger := sess.logger.Session("run-with-pty")
+	var err error
+	logger := sess.logger.Session("run")
 
-	ptyMaster, ptySlave, err := pty.Open()
-	if err != nil {
+	if err := sess.winpty.Open(); err != nil {
 		logger.Error("failed-to-open-pty", err)
 		return err
 	}
 
-	sess.ptyMaster = ptyMaster
-	defer ptySlave.Close()
-
-	command.Stdout = ptySlave
-	command.Stdin = ptySlave
-	command.Stderr = ptySlave
-
-	command.SysProcAttr = &syscall.SysProcAttr{
-		Setctty: true,
-		Setsid:  true,
-	}
-
-	setTerminalAttributes(logger, ptyMaster, sess.ptyRequest.Modelist)
-	setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+	setWindowSize(logger, sess.winpty, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
 
 	sess.wg.Add(1)
-	go helpers.Copy(logger.Session("to-pty"), nil, ptyMaster, sess.channel)
+	go helpers.Copy(logger.Session("to-pty"), nil, sess.winpty.StdIn, sess.channel)
 	go func() {
-		helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
+		helpers.Copy(logger.Session("from-pty-out"), &sess.wg, sess.channel, sess.winpty.StdOut)
 		sess.channel.CloseWrite()
 	}()
 
-	err = sess.runner.Start(command)
+	err = sess.winpty.Run(command)
 	if err == nil {
 		sess.keepaliveStopCh = make(chan struct{})
-		go sess.keepalive(command, sess.keepaliveStopCh)
+		go sess.keepalive(sess.keepaliveStopCh)
 	}
 	return err
 }
 
-func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {
+func (sess *session) keepalive(stopCh chan struct{}) {
 	logger := sess.logger.Session("keepalive")
 
 	ticker := time.NewTicker(sess.keepaliveDuration)
@@ -601,7 +555,7 @@ func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {
 			logger.Info("keepalive", lager.Data{"success": err == nil})
 
 			if err != nil {
-				err = sess.runner.Signal(command, syscall.SIGHUP)
+				err = sess.winpty.Signal(syscall.SIGINT)
 				logger.Info("process-signaled", lager.Data{"error": err})
 				return
 			}
@@ -615,7 +569,11 @@ func (sess *session) wait(command *exec.Cmd) error {
 	logger := sess.logger.Session("wait")
 	logger.Info("started")
 	defer logger.Info("done")
-	return sess.runner.Wait(command)
+	if sess.allocPty {
+		return sess.winpty.Wait()
+	} else {
+		return sess.runner.Wait(command)
+	}
 }
 
 func (sess *session) destroy() {
@@ -637,9 +595,9 @@ func (sess *session) destroy() {
 		sess.channel.Close()
 	}
 
-	if sess.ptyMaster != nil {
-		sess.ptyMaster.Close()
-		sess.ptyMaster = nil
+	if sess.winpty != nil {
+		sess.winpty.Close()
+		sess.winpty = nil
 	}
 
 	if sess.keepaliveStopCh != nil {

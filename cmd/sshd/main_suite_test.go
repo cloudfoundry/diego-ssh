@@ -2,6 +2,8 @@ package main_test
 
 import (
 	"encoding/json"
+	"os"
+	"runtime"
 
 	"code.cloudfoundry.org/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
@@ -26,6 +28,11 @@ func TestSSHDaemon(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
+	if runtime.GOOS == "windows" {
+		if os.Getenv("WINPTY_DLL_PATH") == "" {
+			Fail("Missing WINPTY_DLL_PATH environment variable")
+		}
+	}
 	sshd := buildSshd()
 
 	hostKey, err := keys.RSAKeyPairFactory.NewKeyPair(1024)

@@ -1,4 +1,4 @@
-// +build !windows
+// +build windows
 
 package handlers
 
@@ -11,11 +11,11 @@ func NewShellLocator() ShellLocator {
 }
 
 func (shellLocator) ShellPath() string {
-	for _, shell := range []string{"/bin/bash", "/usr/local/bin/bash", "/bin/sh", "bash", "sh"} {
+	for _, shell := range []string{"cmd.exe"} {
 		if path, err := exec.LookPath(shell); err == nil {
 			return path
 		}
 	}
 
-	return "/bin/sh"
+	return "cmd.exe"
 }

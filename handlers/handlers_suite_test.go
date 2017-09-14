@@ -1,6 +1,9 @@
 package handlers_test
 
 import (
+	"os"
+	"runtime"
+
 	"code.cloudfoundry.org/diego-ssh/keys"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,4 +24,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	TestHostKey = hostKey.PrivateKey()
+
+	if runtime.GOOS == "windows" {
+		if os.Getenv("WINPTY_DLL_PATH") == "" {
+			Fail("Missing WINPTY_DLL_PATH environment variable")
+		}
+	}
 })
