@@ -1,4 +1,4 @@
-// +build windows
+// +build windows2012R2
 
 package handlers_test
 
@@ -68,7 +68,6 @@ var _ = Describe("SessionChannelHandler", func() {
 	})
 
 	Context("when a session is opened", func() {
-
 		It("doesn't accept sessions", func() {
 			_, sessionErr := client.NewSession()
 

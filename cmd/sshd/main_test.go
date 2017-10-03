@@ -1,4 +1,4 @@
-// +build !windows
+// +build !windows2012R2
 
 package main_test
 
@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -241,6 +242,10 @@ var _ = Describe("SSH daemon", func() {
 
 		var ItDoesNotExposeSensitiveInformation = func() {
 			It("does not expose the key on the command line", func() {
+				if runtime.GOOS == "windows" {
+					Skip("no fork/exec on windows")
+				}
+
 				pid := runner.(*ginkgomon.Runner).Command.Process.Pid
 				command := exec.Command("ps", "-fp", strconv.Itoa(pid))
 				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
@@ -489,10 +494,17 @@ var _ = Describe("SSH daemon", func() {
 				session, err := client.NewSession()
 				Expect(err).NotTo(HaveOccurred())
 
-				result, err := session.Output("/bin/echo -n 'Hello there!'")
+				var cmd string
+				if runtime.GOOS == "windows" {
+					cmd = "echo Hello There!"
+				} else {
+					cmd = "/bin/echo -n 'Hello There!'"
+				}
+
+				result, err := session.Output(cmd)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(string(result)).To(Equal("Hello there!"))
+				Expect(strings.TrimSpace(string(result))).To(Equal(strings.TrimSpace("Hello There!")))
 			})
 		})
 
@@ -510,7 +522,7 @@ var _ = Describe("SSH daemon", func() {
 
 					stdout := &bytes.Buffer{}
 
-					session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
+					session.Stdin = strings.NewReader(envVarCmd("ENV_VAR"))
 					session.Stdout = stdout
 
 					session.Setenv("ENV_VAR", "env_var_value")
@@ -529,7 +541,7 @@ var _ = Describe("SSH daemon", func() {
 
 					stdout := &bytes.Buffer{}
 
-					session.Stdin = strings.NewReader("/bin/echo -n $TEST")
+					session.Stdin = strings.NewReader(envVarCmd("TEST"))
 					session.Stdout = stdout
 
 					err = session.Shell()
@@ -547,7 +559,7 @@ var _ = Describe("SSH daemon", func() {
 
 					stdout := &bytes.Buffer{}
 
-					session.Stdin = strings.NewReader("/bin/echo -n $PATH")
+					session.Stdin = strings.NewReader(envVarCmd("PATH"))
 					session.Stdout = stdout
 
 					err = session.Shell()
@@ -571,7 +583,7 @@ var _ = Describe("SSH daemon", func() {
 
 					stdout := &bytes.Buffer{}
 
-					session.Stdin = strings.NewReader("/bin/echo -n $ENV_VAR")
+					session.Stdin = strings.NewReader(envVarCmd("ENV_VAR"))
 					session.Stdout = stdout
 
 					session.Setenv("ENV_VAR", "env_var_value")
@@ -590,7 +602,7 @@ var _ = Describe("SSH daemon", func() {
 
 					stdout := &bytes.Buffer{}
 
-					session.Stdin = strings.NewReader("/bin/echo -n $TEST")
+					session.Stdin = strings.NewReader(envVarCmd("TEST"))
 					session.Stdout = stdout
 
 					err = session.Shell()
@@ -639,3 +651,11 @@ var _ = Describe("SSH daemon", func() {
 		})
 	})
 })
+
+func envVarCmd(envVar string) string {
+	if runtime.GOOS == "windows" {
+		return "echo %" + envVar + "%\r\n"
+	}
+
+	return fmt.Sprintf("/bin/echo -n $%s", envVar)
+}

@@ -1,4 +1,4 @@
-// +build !windows,!windows2012R2
+// +build windows,!windows2012R2
 
 package handlers_test
 
@@ -10,9 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -58,10 +56,18 @@ var _ = Describe("SessionChannelHandler", func() {
 		runner.SignalStub = realRunner.Signal
 
 		shellLocator = &fakes.FakeShellLocator{}
-		shellLocator.ShellPathReturns("/bin/sh")
+		shellLocator.ShellPathReturns("cmd.exe")
 
 		defaultEnv = map[string]string{}
+		for _, env := range os.Environ() {
+			k := strings.Split(env, "=")[0]
+			v := strings.Split(env, "=")[1]
+			defaultEnv[k] = v
+		}
 		defaultEnv["TEST"] = "FOO"
+
+		delete(defaultEnv, "Path")
+		delete(defaultEnv, "PATH")
 
 		sessionChannelHandler = handlers.NewSessionChannelHandler(runner, shellLocator, defaultEnv, time.Second)
 
@@ -106,23 +112,25 @@ var _ = Describe("SessionChannelHandler", func() {
 			stderr, err := session.StderrPipe()
 			Expect(err).NotTo(HaveOccurred())
 
-			err = session.Run("/bin/echo -n Hello; /bin/echo -n Goodbye >&2")
+			err = session.Run("echo Hello && echo Goodbye 1>&2")
 			Expect(err).NotTo(HaveOccurred())
 
 			stdoutBytes, err := ioutil.ReadAll(stdout)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(stdoutBytes).To(Equal([]byte("Hello")))
+			Expect(string(stdoutBytes)).To(ContainSubstring("Hello"))
+			Expect(string(stdoutBytes)).NotTo(ContainSubstring("Goodbye"))
 
 			stderrBytes, err := ioutil.ReadAll(stderr)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(stderrBytes).To(Equal([]byte("Goodbye")))
+			Expect(string(stderrBytes)).To(ContainSubstring("Goodbye"))
+			Expect(string(stderrBytes)).NotTo(ContainSubstring("Hello"))
 		})
 
 		It("returns when the process exits", func() {
 			stdin, err := session.StdinPipe()
 			Expect(err).NotTo(HaveOccurred())
 
-			err = session.Run("ls")
+			err = session.Run("dir")
 			Expect(err).NotTo(HaveOccurred())
 
 			stdin.Close()
@@ -166,7 +174,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				done := make(chan struct{})
 				go func() {
 					defer GinkgoRecover()
-					err := session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
+					err := session.Run(fmt.Sprintf("scp -v -t %s", strings.Replace(targetDir, `\`, `\\`, -1)))
 					Expect(err).NotTo(HaveOccurred())
 					close(done)
 				}()
@@ -221,7 +229,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				errCh := make(chan error)
 				go func() {
 					defer GinkgoRecover()
-					errCh <- session.Run(fmt.Sprintf("scp -v -t %s", targetDir))
+					errCh <- session.Run(fmt.Sprintf("scp -v -t %s", strings.Replace(targetDir, `\`, `\\`, -1)))
 				}()
 
 				confirmation := make([]byte, 1)
@@ -254,7 +262,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 		Describe("the shell locator", func() {
 			BeforeEach(func() {
-				err := session.Run("true")
+				err := session.Run("exit 0")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -262,7 +270,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(shellLocator.ShellPathCallCount()).To(Equal(1))
 
 				cmd := runner.StartArgsForCall(0)
-				Expect(cmd.Path).To(Equal("/bin/sh"))
+				Expect(cmd.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
 			})
 		})
 
@@ -272,9 +280,10 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("can use the session to execute a command that reads it", func() {
-				result, err := session.Output("cat")
+				result, err := session.Output(`findstr x*`)
+
 				Expect(err).NotTo(HaveOccurred())
-				Expect(string(result)).To(Equal("Hello"))
+				Expect(strings.TrimSpace(string(result))).To(Equal("Hello"))
 			})
 		})
 
@@ -289,17 +298,17 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 		})
 
-		Context("when a signal is sent across the session", func() {
+		Context("when SIGKILL is sent across the session", func() {
 			Context("before a command has been run", func() {
 				BeforeEach(func() {
-					err := session.Signal(ssh.SIGTERM)
+					err := session.Signal(ssh.SIGKILL)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("does not prevent the command from running", func() {
-					result, err := session.Output("/bin/echo -n 'still kicking'")
+					result, err := session.Output("echo still kicking")
 					Expect(err).NotTo(HaveOccurred())
-					Expect(string(result)).To(Equal("still kicking"))
+					Expect(strings.TrimSpace(string(result))).To(Equal(strings.TrimSpace("still kicking")))
 				})
 			})
 
@@ -315,34 +324,17 @@ var _ = Describe("SessionChannelHandler", func() {
 					stdout, err = session.StdoutPipe()
 					Expect(err).NotTo(HaveOccurred())
 
-					err = session.Start("trap 'echo Caught SIGUSR1' USR1; echo trapped; cat")
+					err = session.Shell()
 					Expect(err).NotTo(HaveOccurred())
 
 					reader := bufio.NewReader(stdout)
-					Eventually(reader.ReadLine).Should(ContainSubstring("trapped"))
+					Eventually(reader.ReadLine).Should(ContainSubstring("Microsoft Windows"))
 
 					Eventually(runner.StartCallCount).Should(Equal(1))
 				})
 
-				It("delivers the signal to the process", func() {
-					err := session.Signal(ssh.SIGUSR1)
-					Expect(err).NotTo(HaveOccurred())
-
-					Eventually(runner.SignalCallCount).Should(Equal(1))
-
-					err = stdin.Close()
-					Expect(err).NotTo(HaveOccurred())
-
-					err = session.Wait()
-					Expect(err).NotTo(HaveOccurred())
-
-					stdoutBytes, err := ioutil.ReadAll(stdout)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(stdoutBytes).To(ContainSubstring("Caught SIGUSR1"))
-				})
-
-				It("exits with an exit-signal response", func() {
-					err := session.Signal(ssh.SIGUSR2)
+				It("is sent to the process", func() {
+					err := session.Signal(ssh.SIGKILL)
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(runner.SignalCallCount).Should(Equal(1))
@@ -354,10 +346,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 					err = session.Wait()
 					Expect(err).To(HaveOccurred())
-
-					exitErr, ok := err.(*ssh.ExitError)
-					Expect(ok).To(BeTrue())
-					Expect(exitErr.Signal()).To(Equal("USR2"))
+					Expect(err.(*ssh.ExitError).ExitStatus()).To(Equal(1))
 				})
 			})
 		})
@@ -366,17 +355,18 @@ var _ = Describe("SessionChannelHandler", func() {
 			It("does not inherit daemon's environment", func() {
 				os.Setenv("DAEMON_ENV", "daemon_env_value")
 
-				result, err := session.Output("/usr/bin/env")
+				result, err := session.Output("set")
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result).NotTo(ContainSubstring("DAEMON_ENV=daemon_env_value"))
+				os.Unsetenv("DAEMON_ENV")
 			})
 
 			It("includes a default environment excluding PATH", func() {
-				result, err := session.Output("/usr/bin/env")
+				result, err := session.Output("set")
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(result).To(ContainSubstring(fmt.Sprintf("PATH=/bin:/usr/bin")))
+				Expect(string(result)).To(ContainSubstring(fmt.Sprintf(`PATH=C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0`)))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("LANG=en_US.UTF8")))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("TEST=FOO")))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
@@ -393,7 +383,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Setenv("ENV2", "value2")
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err := session.Output("/usr/bin/env")
+					result, err := session.Output("set")
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(result).To(ContainSubstring("ENV1=value1"))
@@ -407,7 +397,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Setenv("ENV1", "updated")
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err := session.Output("/usr/bin/env")
+					result, err := session.Output("set")
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(result).To(ContainSubstring("ENV1=updated"))
@@ -420,7 +410,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Setenv("LANG", "en_UK.UTF8")
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err := session.Output("/usr/bin/env")
+					result, err := session.Output("set")
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(result).To(ContainSubstring("PATH=/bin:/usr/local/bin:/sbin"))
@@ -434,7 +424,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Setenv("USER", "not-a-user")
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err := session.Output("/usr/bin/env")
+					result, err := session.Output("set")
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(result).To(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
@@ -445,7 +435,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err := session.Setenv("TEST", "BAR")
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err := session.Output("/usr/bin/env")
+					result, err := session.Output("set")
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(result).To(ContainSubstring("TEST=BAR"))
@@ -464,7 +454,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					stdout, err = session.StdoutPipe()
 					Expect(err).NotTo(HaveOccurred())
 
-					err = session.Start("cat && /usr/bin/env")
+					err = session.Start(`findstr x* & set`)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -480,7 +470,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					stdoutBytes, err := ioutil.ReadAll(stdout)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(stdoutBytes).NotTo(ContainSubstring("ENV3"))
+					Expect(string(stdoutBytes)).NotTo(ContainSubstring("ENV3"))
 				})
 			})
 		})
@@ -497,169 +487,46 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should allocate a tty for the session", func() {
-				result, err := session.Output("tty")
+			It("should allocate a console for the session", func() {
+				result, err := session.Output("timeout 1 2>nul >nul & if errorlevel 1 (echo redirect) else (echo console)")
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(result).NotTo(ContainSubstring("not a tty"))
+				Expect(string(result)).To(ContainSubstring("console"))
 			})
 
 			It("returns when the process exits", func() {
 				stdin, err := session.StdinPipe()
 				Expect(err).NotTo(HaveOccurred())
 
-				err = session.Run("ls")
+				err = session.Run("dir")
 				Expect(err).NotTo(HaveOccurred())
 
 				stdin.Close()
 			})
 
 			It("terminates the shell when the stdin closes", func() {
-				waitCh := make(chan error, 1)
-				waitStartedCh := make(chan struct{}, 1)
-				waitStub := runner.WaitStub
-				runner.WaitStub = func(command *exec.Cmd) error {
-					close(waitStartedCh)
-					err := waitStub(command)
-					waitCh <- err
-					return err
-				}
-
 				err := session.Shell()
 				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(waitStartedCh).Should(BeClosed())
+				time.Sleep(1 * time.Second)
 
 				err = client.Conn.Close()
 				client = nil
 				Expect(err).NotTo(HaveOccurred())
-				session.Wait()
-				Eventually(waitCh, 3).Should(Receive(MatchError("signal: hangup")))
+				err = session.Wait()
+				Expect(err.Error()).To(Equal("wait: remote command exited without exit status or exit signal"))
 			})
 
 			It("should set the terminal type", func() {
-				result, err := session.Output(`/bin/echo -n "$TERM"`)
+				result, err := session.Output(`echo %TERM%`)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(string(result)).To(Equal("vt100"))
+				Expect(string(result)).To(ContainSubstring("vt100"))
 			})
 
 			It("sets the correct window size for the terminal", func() {
-				result, err := session.Output("stty size")
+				result, err := session.Output("powershell.exe -command $w = $host.ui.rawui.WindowSize.Width; $h = $host.ui.rawui.WindowSize.Height; echo \"$h $w\"")
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(result).To(ContainSubstring("43 80"))
-			})
-
-			Context("when control character mappings are specified in TerminalModes", func() {
-				BeforeEach(func() {
-					// Swap CTRL-Z (suspend) with CTRL-D (eof)
-					terminalModes[ssh.VEOF] = 26
-					terminalModes[ssh.VSUSP] = 4
-				})
-
-				It("honors the control character changes", func() {
-					result, err := session.Output("stty -a")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(result)).To(ContainSubstring("susp = ^D"))
-					Expect(string(result)).To(ContainSubstring("eof = ^Z"))
-				})
-			})
-
-			Context("when an unrecognized terminal mode is specified", func() {
-				BeforeEach(func() {
-					terminalModes[42] = 1
-				})
-
-				It("ignores it", func() {
-					errCh := make(chan error)
-					go func() {
-						defer GinkgoRecover()
-
-						result, err := session.Output("echo -n hi")
-						Expect(string(result)).To(Equal("hi"))
-						errCh <- err
-					}()
-					var err error
-					Eventually(errCh).Should(Receive(&err))
-					Expect(err).NotTo(HaveOccurred())
-				})
-			})
-
-			Context("when input modes are specified in TerminalModes", func() {
-				BeforeEach(func() {
-					terminalModes[ssh.IGNPAR] = 1
-					terminalModes[ssh.IXON] = 0
-					terminalModes[ssh.IXANY] = 0
-				})
-
-				It("honors the input mode changes", func() {
-					result, err := session.Output("stty -a")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(result)).To(ContainSubstring(" ignpar"))
-					Expect(string(result)).To(ContainSubstring(" -ixon"))
-					Expect(string(result)).To(ContainSubstring(" -ixany"))
-				})
-			})
-
-			// Looks like there are some issues with terminal attributes on Linux.
-			// These need further investigation there.
-			Context("when local modes are specified in TerminalModes", func() {
-				BeforeEach(func() {
-					terminalModes[ssh.IEXTEN] = 0
-					terminalModes[ssh.ECHOCTL] = 1
-				})
-
-				It("honors the local mode changes", func() {
-					result, err := session.Output("stty -a")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(result)).To(ContainSubstring(" -iexten"))
-					Expect(string(result)).To(MatchRegexp("[^-]echoctl"))
-				})
-			})
-
-			Context("when output modes are specified in TerminalModes", func() {
-				BeforeEach(func() {
-					terminalModes[ssh.ONLCR] = 0
-				})
-
-				It("honors the output mode changes", func() {
-					result, err := session.Output("stty -a")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(result)).To(ContainSubstring(" -onlcr"))
-				})
-
-				if runtime.GOOS == "linux" {
-					Context("on linux", func() {
-						BeforeEach(func() {
-							terminalModes[ssh.ONLRET] = 1
-						})
-
-						It("honors the output mode changes", func() {
-							result, err := session.Output("stty -a")
-							Expect(err).NotTo(HaveOccurred())
-
-							Expect(string(result)).To(ContainSubstring(" onlret"))
-						})
-					})
-				}
-			})
-
-			Context("when control character modes are specified in TerminalModes", func() {
-				BeforeEach(func() {
-					terminalModes[ssh.PARODD] = 0
-				})
-
-				It("honors the control mode changes", func() {
-					result, err := session.Output("stty -a")
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(string(result)).To(ContainSubstring(" -parodd"))
-				})
 			})
 
 			Context("when an interactive command is executed", func() {
@@ -672,10 +539,10 @@ var _ = Describe("SessionChannelHandler", func() {
 				})
 
 				It("terminates the session when the shell exits", func() {
-					err := session.Start("/bin/sh")
+					err := session.Start("cmd.exe")
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = stdin.Write([]byte("exit\n"))
+					_, err = stdin.Write([]byte("exit\r\n"))
 					Expect(err).NotTo(HaveOccurred())
 
 					err = stdin.Close()
@@ -683,6 +550,90 @@ var _ = Describe("SessionChannelHandler", func() {
 
 					err = session.Wait()
 					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("when a signal is sent across the session", func() {
+				Context("before a command has been run", func() {
+					BeforeEach(func() {
+						err := session.Signal(ssh.SIGKILL)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("does not prevent the command from running", func() {
+						result, err := session.Output("echo still kicking")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(string(result)).To(ContainSubstring("still kicking"))
+					})
+				})
+
+				Context("SIGKILL is sent while a command is running", func() {
+					var stdin io.WriteCloser
+					var stdout io.Reader
+
+					JustBeforeEach(func() {
+						var err error
+						stdin, err = session.StdinPipe()
+						Expect(err).NotTo(HaveOccurred())
+
+						stdout, err = session.StdoutPipe()
+						Expect(err).NotTo(HaveOccurred())
+
+						err = session.Shell()
+						Expect(err).NotTo(HaveOccurred())
+
+						reader := bufio.NewReader(stdout)
+						Eventually(reader.ReadLine).Should(ContainSubstring("Microsoft Windows"))
+					})
+
+					It("kills the process", func() {
+						err := session.Signal(ssh.SIGKILL)
+						Expect(err).NotTo(HaveOccurred())
+
+						err = stdin.Close()
+						if err != nil {
+							Expect(err).To(Equal(io.EOF), "expected no error or ignorable EOF error")
+						}
+
+						err = session.Wait()
+						Expect(err).To(HaveOccurred())
+						Expect(err.(*ssh.ExitError).ExitStatus()).To(Equal(1))
+					})
+				})
+
+				Context("SIGINT is sent while a command is running", func() {
+					var stdin io.WriteCloser
+					var stdout io.Reader
+
+					JustBeforeEach(func() {
+						var err error
+						stdin, err = session.StdinPipe()
+						Expect(err).NotTo(HaveOccurred())
+
+						stdout, err = session.StdoutPipe()
+						Expect(err).NotTo(HaveOccurred())
+
+						err = session.Start("echo hello & findstr *x & echo goodbye")
+						Expect(err).NotTo(HaveOccurred())
+
+						reader := bufio.NewReader(stdout)
+						Eventually(reader.ReadLine).Should(ContainSubstring("hello"))
+					})
+
+					It("the process is interrupted", func() {
+						err := session.Signal(ssh.SIGINT)
+						Expect(err).NotTo(HaveOccurred())
+
+						err = stdin.Close()
+						if err != nil {
+							Expect(err).To(Equal(io.EOF), "expected no error or ignorable EOF error")
+						}
+
+						err = session.Wait()
+						Expect(err).NotTo(HaveOccurred())
+						reader := bufio.NewReader(stdout)
+						Eventually(reader.ReadLine).Should(ContainSubstring("goodbye"))
+					})
 				})
 			})
 		})
@@ -708,7 +659,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.RequestPty("vt100", 43, 80, ssh.TerminalModes{})
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err = session.Output("stty size")
+					result, err = session.Output("powershell.exe -command $w = $host.ui.rawui.WindowSize.Width; $h = $host.ui.rawui.WindowSize.Height; echo \"$h $w\"")
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -728,7 +679,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					}))
 					Expect(err).NotTo(HaveOccurred())
 
-					result, err = session.Output("stty size")
+					result, err = session.Output("powershell.exe -command $w = $host.ui.rawui.WindowSize.Width; $h = $host.ui.rawui.WindowSize.Height; echo \"$h $w\"")
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -740,12 +691,12 @@ var _ = Describe("SessionChannelHandler", func() {
 
 		Context("after executing a command", func() {
 			BeforeEach(func() {
-				err := session.Run("true")
+				err := session.Run("exit")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("the session is no longer usable", func() {
-				_, err := session.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{Command: "true"}))
+				_, err := session.SendRequest("exec", true, ssh.Marshal(struct{ Command string }{Command: "exit"}))
 				Expect(err).To(HaveOccurred())
 
 				_, err = session.SendRequest("bogus", true, nil)
@@ -772,8 +723,8 @@ var _ = Describe("SessionChannelHandler", func() {
 				Eventually(runner.StartCallCount).Should(Equal(1))
 
 				command := runner.StartArgsForCall(0)
-				Expect(command.Path).To(Equal("/bin/sh"))
-				Expect(command.Args).To(ConsistOf("/bin/sh"))
+				Expect(command.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
+				Expect(command.Args).To(ConsistOf("cmd.exe"))
 			})
 
 			It("terminates the session when the shell exits", func() {
@@ -792,7 +743,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 		Context("and a command is provided", func() {
 			BeforeEach(func() {
-				err := session.Run("true")
+				err := session.Run("exit")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -803,8 +754,8 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("passes the correct command to the runner", func() {
 				command := runner.StartArgsForCall(0)
-				Expect(command.Path).To(Equal("/bin/sh"))
-				Expect(command.Args).To(ConsistOf("/bin/sh", "-c", "true"))
+				Expect(command.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
+				Expect(command.Args).To(ConsistOf("cmd.exe", "/c", "exit"))
 			})
 
 			It("passes the same command to Start and Wait", func() {
@@ -868,9 +819,9 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("does not terminate the session", func() {
-				response, err := session.Output("/bin/echo -n Hello")
+				response, err := session.Output("echo Hello")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(response).To(Equal([]byte("Hello")))
+				Expect(strings.TrimSpace(string(response))).To(Equal("Hello"))
 			})
 		})
 
@@ -890,9 +841,9 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("does not terminate the session", func() {
-				response, err := session.Output("/bin/echo -n Hello")
+				response, err := session.Output("echo Hello")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(response).To(Equal([]byte("Hello")))
+				Expect(strings.TrimSpace(string(response))).To(Equal("Hello"))
 			})
 		})
 	})

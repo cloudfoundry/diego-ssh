@@ -1,4 +1,4 @@
-// +build external
+// +build windows2012R2
 
 package main
 
