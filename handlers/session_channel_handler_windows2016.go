@@ -24,11 +24,11 @@ import (
 var scpRegex = regexp.MustCompile(`^\s*scp($|\s+)`)
 
 type SessionChannelHandler struct {
-	runner        Runner
-	shellLocator  ShellLocator
-	defaultEnv    map[string]string
-	keepalive     time.Duration
-	winPTYDllPath string
+	runner       Runner
+	shellLocator ShellLocator
+	defaultEnv   map[string]string
+	keepalive    time.Duration
+	winPTYDLLDir string
 }
 
 func NewSessionChannelHandler(
@@ -37,13 +37,13 @@ func NewSessionChannelHandler(
 	defaultEnv map[string]string,
 	keepalive time.Duration,
 ) *SessionChannelHandler {
-	winPTYDllPath := os.Getenv("WINPTY_DLL_PATH")
+	winPTYDLLDir := os.Getenv("WINPTY_DLL_DIR")
 	return &SessionChannelHandler{
-		runner:        runner,
-		shellLocator:  shellLocator,
-		defaultEnv:    defaultEnv,
-		keepalive:     keepalive,
-		winPTYDllPath: winPTYDllPath,
+		runner:       runner,
+		shellLocator: shellLocator,
+		defaultEnv:   defaultEnv,
+		keepalive:    keepalive,
+		winPTYDLLDir: winPTYDLLDir,
 	}
 }
 
@@ -84,8 +84,8 @@ type session struct {
 	allocPty   bool
 	ptyRequest ptyRequestMsg
 
-	winpty        *winpty.WinPTY
-	winPTYDllPath string
+	winpty       *winpty.WinPTY
+	winPTYDLLDir string
 }
 
 func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ssh.Channel, keepalive time.Duration) *session {
@@ -96,7 +96,7 @@ func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ss
 		shellPath:         handler.shellLocator.ShellPath(),
 		channel:           channel,
 		env:               handler.defaultEnv,
-		winPTYDllPath:     handler.winPTYDllPath,
+		winPTYDLLDir:      handler.winPTYDLLDir,
 	}
 }
 
@@ -215,7 +215,7 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 	defer sess.Unlock()
 
 	sess.allocPty = true
-	sess.winpty, err = winpty.New(sess.winPTYDllPath)
+	sess.winpty, err = winpty.New(sess.winPTYDLLDir)
 	if err != nil {
 		logger.Error("couldn't intialize winpty.dll", err)
 		if request.WantReply {

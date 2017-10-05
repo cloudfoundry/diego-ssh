@@ -29,8 +29,8 @@ func TestSSHDaemon(t *testing.T) {
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	if runtime.GOOS == "windows" {
-		if os.Getenv("WINPTY_DLL_PATH") == "" {
-			Fail("Missing WINPTY_DLL_PATH environment variable")
+		if os.Getenv("WINPTY_DLL_DIR") == "" {
+			Fail("Missing WINPTY_DLL_DIR environment variable")
 		}
 	}
 	sshd := buildSshd()

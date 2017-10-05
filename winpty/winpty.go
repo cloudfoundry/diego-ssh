@@ -19,19 +19,19 @@ import (
 )
 
 var (
-	winpty                   *windows.LazyDLL
-	winpty_config_new        *windows.LazyProc
-	winpty_config_free       *windows.LazyProc
-	winpty_error_free        *windows.LazyProc
-	winpty_error_msg         *windows.LazyProc
-	winpty_open              *windows.LazyProc
-	winpty_free              *windows.LazyProc
-	winpty_conin_name        *windows.LazyProc
-	winpty_conout_name       *windows.LazyProc
-	winpty_spawn_config_new  *windows.LazyProc
-	winpty_spawn_config_free *windows.LazyProc
-	winpty_spawn             *windows.LazyProc
-	winpty_set_size          *windows.LazyProc
+	winpty                   *windows.DLL
+	winpty_config_new        *windows.Proc
+	winpty_config_free       *windows.Proc
+	winpty_error_free        *windows.Proc
+	winpty_error_msg         *windows.Proc
+	winpty_open              *windows.Proc
+	winpty_free              *windows.Proc
+	winpty_conin_name        *windows.Proc
+	winpty_conout_name       *windows.Proc
+	winpty_spawn_config_new  *windows.Proc
+	winpty_spawn_config_free *windows.Proc
+	winpty_spawn             *windows.Proc
+	winpty_set_size          *windows.Proc
 )
 
 var (
@@ -51,20 +51,60 @@ const (
 	WINPTY_SPAWN_FLAG_AUTO_SHUTDOWN = uint64(1)
 )
 
-func New(winPTYDllPath string) (*WinPTY, error) {
-	winpty = windows.NewLazyDLL(filepath.Join(winPTYDllPath, "winpty.dll"))
-	winpty_config_new = winpty.NewProc("winpty_config_new")
-	winpty_config_free = winpty.NewProc("winpty_config_free")
-	winpty_error_free = winpty.NewProc("winpty_error_free")
-	winpty_error_msg = winpty.NewProc("winpty_error_msg")
-	winpty_open = winpty.NewProc("winpty_open")
-	winpty_free = winpty.NewProc("winpty_free")
-	winpty_conin_name = winpty.NewProc("winpty_conin_name")
-	winpty_conout_name = winpty.NewProc("winpty_conout_name")
-	winpty_spawn_config_new = winpty.NewProc("winpty_spawn_config_new")
-	winpty_spawn_config_free = winpty.NewProc("winpty_spawn_config_free")
-	winpty_spawn = winpty.NewProc("winpty_spawn")
-	winpty_set_size = winpty.NewProc("winpty_set_size")
+func New(winPTYDLLDir string) (*WinPTY, error) {
+	var err error
+	winpty, err = windows.LoadDLL(filepath.Join(winPTYDLLDir, "winpty.dll"))
+	if err != nil {
+		return nil, err
+	}
+	winpty_config_new, err = winpty.FindProc("winpty_config_new")
+	if err != nil {
+		return nil, err
+	}
+	winpty_config_free, err = winpty.FindProc("winpty_config_free")
+	if err != nil {
+		return nil, err
+	}
+	winpty_error_free, err = winpty.FindProc("winpty_error_free")
+	if err != nil {
+		return nil, err
+	}
+	winpty_error_msg, err = winpty.FindProc("winpty_error_msg")
+	if err != nil {
+		return nil, err
+	}
+	winpty_open, err = winpty.FindProc("winpty_open")
+	if err != nil {
+		return nil, err
+	}
+	winpty_free, err = winpty.FindProc("winpty_free")
+	if err != nil {
+		return nil, err
+	}
+	winpty_conin_name, err = winpty.FindProc("winpty_conin_name")
+	if err != nil {
+		return nil, err
+	}
+	winpty_conout_name, err = winpty.FindProc("winpty_conout_name")
+	if err != nil {
+		return nil, err
+	}
+	winpty_spawn_config_new, err = winpty.FindProc("winpty_spawn_config_new")
+	if err != nil {
+		return nil, err
+	}
+	winpty_spawn_config_free, err = winpty.FindProc("winpty_spawn_config_free")
+	if err != nil {
+		return nil, err
+	}
+	winpty_spawn, err = winpty.FindProc("winpty_spawn")
+	if err != nil {
+		return nil, err
+	}
+	winpty_set_size, err = winpty.FindProc("winpty_set_size")
+	if err != nil {
+		return nil, err
+	}
 
 	var errorPtr uintptr
 	defer winpty_error_free.Call(errorPtr)

@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,9 +27,16 @@ import (
 )
 
 var _ = Describe("SessionChannelHandler", func() {
+	type command struct {
+		path string
+		args []string
+	}
+
 	var (
 		sshd   *daemon.Daemon
 		client *ssh.Client
+
+		commandsRan chan command
 
 		logger          *lagertest.TestLogger
 		serverSSHConfig *ssh.ServerConfig
@@ -49,9 +57,17 @@ var _ = Describe("SessionChannelHandler", func() {
 		}
 		serverSSHConfig.AddHostKey(TestHostKey)
 
+		commandsRan = make(chan command, 10)
+
 		runner = &fakes.FakeRunner{}
 		realRunner := handlers.NewCommandRunner()
-		runner.StartStub = realRunner.Start
+		runner.StartStub = func(cmd *exec.Cmd) error {
+			commandsRan <- command{
+				path: cmd.Path,
+				args: cmd.Args,
+			}
+			return realRunner.Start(cmd)
+		}
 		runner.WaitStub = realRunner.Wait
 		runner.SignalStub = realRunner.Signal
 
@@ -269,8 +285,10 @@ var _ = Describe("SessionChannelHandler", func() {
 			It("uses the shell locator to find the default shell path", func() {
 				Expect(shellLocator.ShellPathCallCount()).To(Equal(1))
 
-				cmd := runner.StartArgsForCall(0)
-				Expect(cmd.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
+				Eventually(commandsRan).Should(Receive(Equal(command{
+					path: "C:\\windows\\system32\\cmd.exe",
+					args: []string{"cmd.exe", "/c", "exit 0"},
+				})))
 			})
 		})
 
@@ -722,9 +740,10 @@ var _ = Describe("SessionChannelHandler", func() {
 			It("starts the shell with the runner", func() {
 				Eventually(runner.StartCallCount).Should(Equal(1))
 
-				command := runner.StartArgsForCall(0)
-				Expect(command.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
-				Expect(command.Args).To(ConsistOf("cmd.exe"))
+				Eventually(commandsRan).Should(Receive(Equal(command{
+					path: "C:\\windows\\system32\\cmd.exe",
+					args: []string{"cmd.exe"},
+				})))
 			})
 
 			It("terminates the session when the shell exits", func() {
@@ -753,9 +772,10 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("passes the correct command to the runner", func() {
-				command := runner.StartArgsForCall(0)
-				Expect(command.Path).To(Equal("C:\\Windows\\system32\\cmd.exe"))
-				Expect(command.Args).To(ConsistOf("cmd.exe", "/c", "exit"))
+				Eventually(commandsRan).Should(Receive(Equal(command{
+					path: "C:\\windows\\system32\\cmd.exe",
+					args: []string{"cmd.exe", "/c", "exit"},
+				})))
 			})
 
 			It("passes the same command to Start and Wait", func() {
