@@ -19,12 +19,14 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/diego-ssh/healthcheck"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
+	"code.cloudfoundry.org/go-loggregator/runtimeemitter"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
@@ -61,7 +63,11 @@ func main() {
 
 	cfhttp.Initialize(time.Duration(sshProxyConfig.CommunicationTimeout))
 
-	initializeDropsonde(logger, sshProxyConfig.DropsondePort)
+	metronClient, err := initializeMetron(logger, sshProxyConfig)
+	if err != nil {
+		logger.Error("failed-to-initialize-metron-client", err)
+		os.Exit(1)
+	}
 
 	proxySSHServerConfig, err := configureProxy(logger, sshProxyConfig)
 	if err != nil {
@@ -69,7 +75,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sshProxy := proxy.New(logger, proxySSHServerConfig)
+	sshProxy := proxy.New(logger, proxySSHServerConfig, metronClient)
 	server := server.NewServer(logger, sshProxyConfig.Address, sshProxy)
 
 	healthCheckHandler := healthcheck.NewHandler(logger)
@@ -222,14 +228,6 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 	return sshConfig, err
 }
 
-func initializeDropsonde(logger lager.Logger, dropsondePort int) {
-	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
-	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
-	if err != nil {
-		logger.Error("failed to initialize dropsonde: %v", err)
-	}
-}
-
 func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error) {
 	key, err := ssh.ParsePrivateKey([]byte(encodedKey))
 	if err != nil {
@@ -313,4 +311,28 @@ func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapte
 	}
 
 	return locket.NewRegistrationRunner(logger, registration, consulClient, locket.RetryInterval, clock)
+}
+
+func initializeMetron(logger lager.Logger, locketConfig config.SSHProxyConfig) (loggingclient.IngressClient, error) {
+	client, err := loggingclient.NewIngressClient(locketConfig.LoggregatorConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if locketConfig.LoggregatorConfig.UseV2API {
+		emitter := runtimeemitter.NewV1(client)
+		go emitter.Run()
+	} else {
+		initializeDropsonde(logger, locketConfig.DropsondePort)
+	}
+
+	return client, nil
+}
+
+func initializeDropsonde(logger lager.Logger, dropsondePort int) {
+	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
+	if err != nil {
+		logger.Error("failed to initialize dropsonde: %v", err)
+	}
 }

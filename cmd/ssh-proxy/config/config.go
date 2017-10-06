@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
 )
@@ -37,6 +38,7 @@ type SSHProxyConfig struct {
 	AllowedCiphers                  string                `json:"allowed_ciphers"`
 	AllowedMACs                     string                `json:"allowed_macs"`
 	AllowedKeyExchanges             string                `json:"allowed_key_exchanges"`
+	LoggregatorConfig               loggingclient.Config  `json:"loggregator"`
 	CommunicationTimeout            durationjson.Duration `json:"communication_timeout,omitempty"`
 	ConnectToInstanceAddress        bool                  `json:"connect_to_instance_address"`
 }

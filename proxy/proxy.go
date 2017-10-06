@@ -9,15 +9,14 @@ import (
 	"sync"
 	"unicode/utf8"
 
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/runtimeschema/metric"
-	"github.com/cloudfoundry/dropsonde/logs"
 	"golang.org/x/crypto/ssh"
 )
 
 const (
-	sshConnections = metric.Metric("ssh-connections")
+	sshConnections = "ssh-connections"
 )
 
 type Waiter interface {
@@ -44,16 +43,19 @@ type Proxy struct {
 
 	connectionLock *sync.Mutex
 	connections    int
+	metronClient   loggingclient.IngressClient
 }
 
 func New(
 	logger lager.Logger,
 	serverConfig *ssh.ServerConfig,
+	metronClient loggingclient.IngressClient,
 ) *Proxy {
 	return &Proxy{
 		logger:         logger,
 		serverConfig:   serverConfig,
 		connectionLock: &sync.Mutex{},
+		metronClient:   metronClient,
 	}
 }
 
@@ -77,13 +79,13 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	defer func() {
 		if logMessage != nil {
 			endMessage := fmt.Sprintf("Remote access ended for %s", serverConn.RemoteAddr().String())
-			logs.SendAppLog(logMessage.Guid, endMessage, "SSH", strconv.Itoa(logMessage.Index))
+			p.metronClient.SendAppLog(logMessage.Guid, endMessage, "SSH", strconv.Itoa(logMessage.Index))
 		}
 		clientConn.Close()
 	}()
 
 	if logMessage != nil {
-		logs.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
+		p.metronClient.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
 	}
 
 	fromClientLogger := logger.Session("from-client")
@@ -97,7 +99,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 
 	p.connectionLock.Lock()
 	p.connections++
-	err = sshConnections.Send(p.connections)
+	err = p.metronClient.SendMetric(sshConnections, p.connections)
 	if err != nil {
 		logger.Error("failed-to-send-ssh-connections-metric", err)
 	}
@@ -113,7 +115,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 func (p *Proxy) emitConnectionClosing(logger lager.Logger) {
 	p.connectionLock.Lock()
 	p.connections--
-	err := sshConnections.Send(p.connections)
+	err := p.metronClient.SendMetric(sshConnections, p.connections)
 	p.connectionLock.Unlock()
 
 	if err != nil {

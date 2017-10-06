@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/handlers"
@@ -33,8 +34,9 @@ import (
 
 var _ = Describe("Proxy", func() {
 	var (
-		logger        lager.Logger
-		fakeLogSender *fake_logs.FakeLogSender
+		logger           lager.Logger
+		fakeLogSender    *fake_logs.FakeLogSender
+		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
 	BeforeEach(func() {
@@ -71,6 +73,7 @@ var _ = Describe("Proxy", func() {
 			proxyDone = make(chan struct{})
 			daemonDone = make(chan struct{})
 
+			fakeMetronClient = &mfakes.FakeIngressClient{}
 			fakeLogSender = fake_logs.NewFakeLogSender()
 			logs.Initialize(fakeLogSender)
 
@@ -125,7 +128,7 @@ var _ = Describe("Proxy", func() {
 		})
 
 		JustBeforeEach(func() {
-			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig)
+			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig, fakeMetronClient)
 			proxyServer = server.NewServer(logger.Session("proxy-server"), "", sshProxy)
 			proxyServer.SetListener(proxyListener)
 			go func() {
@@ -206,13 +209,33 @@ var _ = Describe("Proxy", func() {
 					Expect(string(password)).To(Equal("fake-some-password"))
 				})
 
-				It("emits a successful log message on behalf of the lrp", func() {
-					Eventually(fakeLogSender.GetLogs).Should(HaveLen(1))
-					logMessage := fakeLogSender.GetLogs()[0]
-					Expect(logMessage.AppId).To(Equal("a-guid"))
-					Expect(logMessage.SourceType).To(Equal("SSH"))
-					Expect(logMessage.SourceInstance).To(Equal("1"))
-					Expect(logMessage.Message).To(Equal("a-message"))
+				Context("metron", func() {
+					type log struct {
+						appId          string
+						message        string
+						sourceType     string
+						sourceInstance string
+						messageType    string
+					}
+					var (
+						logChan = make(chan log, 1)
+					)
+
+					BeforeEach(func() {
+						fakeMetronClient.SendAppLogStub = func(appID, message, sourceType, sourceInstance string) error {
+							logChan <- log{appId: appID, message: message, sourceType: sourceType, sourceInstance: sourceInstance}
+							return nil
+						}
+					})
+
+					It("emits a successful log message on behalf of the lrp", func() {
+						Eventually(logChan).Should(Receive(Equal(log{
+							appId:          "a-guid",
+							sourceType:     "SSH",
+							sourceInstance: "1",
+							message:        "a-message",
+						})))
+					})
 				})
 
 				Context("when the target contains a host fingerprint", func() {
@@ -566,13 +589,25 @@ var _ = Describe("Proxy", func() {
 			})
 
 			Describe("connection metrics", func() {
+				type metric struct {
+					name  string
+					value int
+				}
+
 				var (
-					sender *fake.FakeMetricSender
+					sender     *fake.FakeMetricSender
+					metricChan chan metric
 				)
 
 				BeforeEach(func() {
 					sender = fake.NewFakeMetricSender()
 					metrics.Initialize(sender, nil)
+					metricChan = make(chan metric, 2)
+
+					fakeMetronClient.SendMetricStub = func(name string, value int) error {
+						metricChan <- metric{name: name, value: value}
+						return nil
+					}
 				})
 
 				Context("when a connection is received", func() {
@@ -580,20 +615,18 @@ var _ = Describe("Proxy", func() {
 						_, err := ssh.Dial("tcp", proxyAddress, clientConfig)
 						Expect(err).NotTo(HaveOccurred())
 
-						Eventually(
-							func() float64 {
-								return sender.GetValue("ssh-connections").Value
-							},
-						).Should(Equal(float64(1)))
+						Eventually(metricChan).Should(Receive(Equal(metric{
+							name:  "ssh-connections",
+							value: 1,
+						})))
 
 						_, err = ssh.Dial("tcp", proxyAddress, clientConfig)
 						Expect(err).NotTo(HaveOccurred())
 
-						Eventually(
-							func() float64 {
-								return sender.GetValue("ssh-connections").Value
-							},
-						).Should(Equal(float64(2)))
+						Eventually(metricChan).Should(Receive(Equal(metric{
+							name:  "ssh-connections",
+							value: 2,
+						})))
 					})
 				})
 
@@ -601,23 +634,32 @@ var _ = Describe("Proxy", func() {
 					It("emit a metric for the total number of connections", func() {
 						conn, err := ssh.Dial("tcp", proxyAddress, clientConfig)
 						Expect(err).NotTo(HaveOccurred())
-						Eventually(
-							func() float64 {
-								return sender.GetValue("ssh-connections").Value
-							},
-						).Should(Equal(float64(1)))
+						Eventually(metricChan).Should(Receive(Equal(metric{
+							name:  "ssh-connections",
+							value: 1,
+						})))
 
 						conn.Close()
-						Eventually(
-							func() float64 {
-								return sender.GetValue("ssh-connections").Value
-							},
-						).Should(Equal(float64(0)))
+						Eventually(metricChan).Should(Receive(Equal(metric{
+							name:  "ssh-connections",
+							value: 0,
+						})))
 					})
 				})
 			})
 
 			Describe("app logs", func() {
+				var (
+					logChan = make(chan string)
+				)
+
+				BeforeEach(func() {
+					fakeMetronClient.SendAppLogStub = func(appID, message, sourceType, sourceInstance string) error {
+						logChan <- message
+						return nil
+					}
+				})
+
 				Context("when a connection is closed", func() {
 					It("logs that the connection has been closed", func() {
 						conn, err := ssh.Dial("tcp", proxyAddress, clientConfig)
@@ -625,15 +667,7 @@ var _ = Describe("Proxy", func() {
 
 						conn.Close()
 
-						Eventually(
-							func() string {
-								lastIdx := len(fakeLogSender.GetLogs()) - 1
-								if lastIdx == -1 {
-									return ""
-								}
-								return fakeLogSender.GetLogs()[lastIdx].Message
-							},
-						).Should(ContainSubstring("Remote access ended for"))
+						Eventually(logChan).Should(Receive(ContainSubstring("Remote access ended for")))
 					})
 				})
 			})
