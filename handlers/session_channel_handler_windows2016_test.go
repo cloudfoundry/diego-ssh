@@ -63,7 +63,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		realRunner := handlers.NewCommandRunner()
 		runner.StartStub = func(cmd *exec.Cmd) error {
 			commandsRan <- command{
-				path: cmd.Path,
+				path: strings.ToLower(cmd.Path),
 				args: cmd.Args,
 			}
 			return realRunner.Start(cmd)
@@ -286,7 +286,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(shellLocator.ShellPathCallCount()).To(Equal(1))
 
 				Eventually(commandsRan).Should(Receive(Equal(command{
-					path: "C:\\windows\\system32\\cmd.exe",
+					path: "c:\\windows\\system32\\cmd.exe",
 					args: []string{"cmd.exe", "/c", "exit 0"},
 				})))
 			})
@@ -741,7 +741,7 @@ var _ = Describe("SessionChannelHandler", func() {
 				Eventually(runner.StartCallCount).Should(Equal(1))
 
 				Eventually(commandsRan).Should(Receive(Equal(command{
-					path: "C:\\windows\\system32\\cmd.exe",
+					path: "c:\\windows\\system32\\cmd.exe",
 					args: []string{"cmd.exe"},
 				})))
 			})
@@ -773,7 +773,7 @@ var _ = Describe("SessionChannelHandler", func() {
 
 			It("passes the correct command to the runner", func() {
 				Eventually(commandsRan).Should(Receive(Equal(command{
-					path: "C:\\windows\\system32\\cmd.exe",
+					path: "c:\\windows\\system32\\cmd.exe",
 					args: []string{"cmd.exe", "/c", "exit"},
 				})))
 			})
