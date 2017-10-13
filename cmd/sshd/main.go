@@ -171,7 +171,8 @@ func getDaemonEnvironment() map[string]string {
 		envs := os.Environ()
 		for _, env := range envs {
 			nvp := strings.SplitN(env, "=", 2)
-			if len(nvp) == 2 && nvp[0] != "PATH" {
+			// account for windows "Path" environment variable!
+			if len(nvp) == 2 && strings.ToUpper(nvp[0]) != "PATH" {
 				daemonEnv[nvp[0]] = nvp[1]
 			}
 		}
