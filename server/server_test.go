@@ -131,7 +131,7 @@ var _ = Describe("Server", func() {
 			conn.Read(nil)
 			Expect(fakeConn.SetDeadlineCallCount()).To(Equal(1))
 			t := fakeConn.SetDeadlineArgsForCall(0)
-			Expect(t.Sub(time.Now())).To(BeNumerically("<", 500*time.Millisecond))
+			Expect(t.Sub(time.Now())).To(BeNumerically("<=", 500*time.Millisecond))
 		})
 
 		Context("when accept returns a permanent error", func() {
