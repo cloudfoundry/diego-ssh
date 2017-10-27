@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
@@ -129,7 +130,7 @@ var _ = Describe("Proxy", func() {
 
 		JustBeforeEach(func() {
 			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig, fakeMetronClient)
-			proxyServer = server.NewServer(logger.Session("proxy-server"), "", sshProxy)
+			proxyServer = server.NewServer(logger.Session("proxy-server"), "", sshProxy, 500*time.Millisecond)
 			proxyServer.SetListener(proxyListener)
 			go func() {
 				proxyServer.Serve()
@@ -137,7 +138,7 @@ var _ = Describe("Proxy", func() {
 			}()
 
 			sshDaemon = daemon.New(logger.Session("sshd"), daemonSSHConfig, daemonGlobalRequestHandlers, daemonNewChannelHandlers)
-			sshdServer = server.NewServer(logger.Session("sshd-server"), "", sshDaemon)
+			sshdServer = server.NewServer(logger.Session("sshd-server"), "", sshDaemon, 500*time.Millisecond)
 			sshdServer.SetListener(sshdListener)
 			go func() {
 				sshdServer.Serve()
@@ -477,7 +478,7 @@ var _ = Describe("Proxy", func() {
 				})
 
 				JustBeforeEach(func() {
-					target = server.NewServer(logger.Session("target"), "", connectionHandler)
+					target = server.NewServer(logger.Session("target"), "", connectionHandler, 500*time.Millisecond)
 					target.SetListener(listener)
 					go func() {
 						target.Serve()
@@ -1177,7 +1178,7 @@ var _ = Describe("Proxy", func() {
 
 		JustBeforeEach(func() {
 			sshDaemon = daemon.New(logger.Session("sshd"), daemonSSHConfig, nil, nil)
-			sshdServer = server.NewServer(logger, "127.0.0.1:0", sshDaemon)
+			sshdServer = server.NewServer(logger, "127.0.0.1:0", sshDaemon, 500*time.Millisecond)
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 

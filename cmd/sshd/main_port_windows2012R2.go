@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"code.cloudfoundry.org/diego-ssh/server"
 	"code.cloudfoundry.org/lager"
@@ -36,5 +37,5 @@ func createServer(
 		}
 	}
 	address = strings.Join([]string{host, port}, ":")
-	return server.NewServer(logger, address, sshDaemon), err
+	return server.NewServer(logger, address, sshDaemon, 5*time.Minute), err
 }

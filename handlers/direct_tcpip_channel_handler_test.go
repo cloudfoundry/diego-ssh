@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/handlers"
@@ -51,7 +52,7 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		echoAddress = echoListener.Addr().String()
 
-		echoServer = server.NewServer(logger.Session("echo"), "", echoHandler)
+		echoServer = server.NewServer(logger.Session("echo"), "", echoHandler, 500*time.Millisecond)
 		echoServer.SetListener(echoListener)
 		go echoServer.Serve()
 

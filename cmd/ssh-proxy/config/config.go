@@ -40,6 +40,7 @@ type SSHProxyConfig struct {
 	AllowedKeyExchanges             string                `json:"allowed_key_exchanges"`
 	LoggregatorConfig               loggingclient.Config  `json:"loggregator"`
 	CommunicationTimeout            durationjson.Duration `json:"communication_timeout,omitempty"`
+	IdleConnectionTimeout           durationjson.Duration `json:"idle_connection_timeout,omitempty"`
 	ConnectToInstanceAddress        bool                  `json:"connect_to_instance_address"`
 }
 
@@ -51,6 +52,7 @@ func defaultConfig() SSHProxyConfig {
 		DropsondePort:            3457,
 		LagerConfig:              lagerflags.DefaultLagerConfig(),
 		ConnectToInstanceAddress: false,
+		IdleConnectionTimeout:    durationjson.Duration(5 * time.Minute),
 	}
 }
 

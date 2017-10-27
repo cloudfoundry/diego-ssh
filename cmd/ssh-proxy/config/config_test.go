@@ -45,7 +45,8 @@ var _ = Describe("SSHProxyConfig", func() {
 			"allowed_key_exchanges": "exchange1,exchange2,exchange3",
 			"log_level": "debug",
 			"debug_address": "5.5.5.5:9090",
-			"connect_to_instance_address": true
+			"connect_to_instance_address": true,
+			"idle_connection_timeout": "5ms"
 		}`
 	})
 
@@ -98,6 +99,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			AllowedMACs:                     "mac1,mac2,mac3",
 			AllowedKeyExchanges:             "exchange1,exchange2,exchange3",
 			ConnectToInstanceAddress:        true,
+			IdleConnectionTimeout:           durationjson.Duration(5 * time.Millisecond),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -192,6 +194,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				AllowedKeyExchanges:       "exchange1,exchange2,exchange3",
 				LagerConfig:               lagerflags.DefaultLagerConfig(),
 				ConnectToInstanceAddress:  false,
+				IdleConnectionTimeout:     durationjson.Duration(5 * time.Minute),
 				DebugServerConfig: debugserver.DebugServerConfig{
 					DebugAddress: "5.5.5.5:9090",
 				},

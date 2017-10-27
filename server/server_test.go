@@ -40,7 +40,7 @@ var _ = Describe("Server", func() {
 		var process ifrit.Process
 
 		BeforeEach(func() {
-			srv = server.NewServer(logger, address, handler)
+			srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 			process = ifrit.Invoke(srv)
 		})
 
@@ -73,7 +73,7 @@ var _ = Describe("Server", func() {
 		BeforeEach(func() {
 			fakeListener = &fake_net.FakeListener{}
 
-			srv = server.NewServer(logger, address, handler)
+			srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 			srv.SetListener(fakeListener)
 		})
 
@@ -109,7 +109,7 @@ var _ = Describe("Server", func() {
 		})
 
 		JustBeforeEach(func() {
-			srv = server.NewServer(logger, address, handler)
+			srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 			srv.SetListener(fakeListener)
 			srv.Serve()
 		})
@@ -120,7 +120,18 @@ var _ = Describe("Server", func() {
 
 		It("passes the connection to the connection handler", func() {
 			Eventually(handler.HandleConnectionCallCount).Should(Equal(1))
-			Expect(handler.HandleConnectionArgsForCall(0)).To(Equal(fakeConn))
+			conn := handler.HandleConnectionArgsForCall(0)
+			conn.Read(nil)
+			Expect(fakeConn.ReadCallCount()).To(Equal(1))
+		})
+
+		It("sets a deadline on the connection", func() {
+			Eventually(handler.HandleConnectionCallCount).Should(Equal(1))
+			conn := handler.HandleConnectionArgsForCall(0)
+			conn.Read(nil)
+			Expect(fakeConn.SetDeadlineCallCount()).To(Equal(1))
+			t := fakeConn.SetDeadlineArgsForCall(0)
+			Expect(t.Sub(time.Now())).To(BeNumerically("<", 500*time.Millisecond))
 		})
 
 		Context("when accept returns a permanent error", func() {
@@ -171,7 +182,7 @@ var _ = Describe("Server", func() {
 		BeforeEach(func() {
 			fakeListener = &fake_net.FakeListener{}
 
-			srv = server.NewServer(logger, address, handler)
+			srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 			srv.SetListener(fakeListener)
 		})
 
@@ -201,7 +212,7 @@ var _ = Describe("Server", func() {
 	Describe("ListenAddr", func() {
 		var listener net.Listener
 		BeforeEach(func() {
-			srv = server.NewServer(logger, address, handler)
+			srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 		})
 
 		Context("when the server has a listener", func() {
@@ -210,7 +221,7 @@ var _ = Describe("Server", func() {
 				listener, err = net.Listen("tcp", "127.0.0.1:0")
 				Expect(err).NotTo(HaveOccurred())
 
-				srv = server.NewServer(logger, address, handler)
+				srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
 				err = srv.SetListener(listener)
 				Expect(err).NotTo(HaveOccurred())
 			})

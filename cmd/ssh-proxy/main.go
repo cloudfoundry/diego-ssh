@@ -76,7 +76,7 @@ func main() {
 	}
 
 	sshProxy := proxy.New(logger, proxySSHServerConfig, metronClient)
-	server := server.NewServer(logger, sshProxyConfig.Address, sshProxy)
+	server := server.NewServer(logger, sshProxyConfig.Address, sshProxy, time.Duration(sshProxyConfig.IdleConnectionTimeout))
 
 	healthCheckHandler := healthcheck.NewHandler(logger)
 	httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)

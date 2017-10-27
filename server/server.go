@@ -28,12 +28,15 @@ type Server struct {
 	connections          map[net.Conn]struct{}
 	connectionsMutex     *sync.Mutex
 	connectionsWaitGroup *sync.WaitGroup
+
+	idleConnTimeout time.Duration
 }
 
 func NewServer(
 	logger lager.Logger,
 	listenAddress string,
 	connectionHandler ConnectionHandler,
+	idleConnTimeout time.Duration,
 ) *Server {
 	return &Server{
 		logger:               logger,
@@ -43,6 +46,7 @@ func NewServer(
 		connections:          make(map[net.Conn]struct{}),
 		connectionsMutex:     &sync.Mutex{},
 		connectionsWaitGroup: &sync.WaitGroup{},
+		idleConnTimeout:      idleConnTimeout,
 	}
 }
 
@@ -112,12 +116,34 @@ func (s *Server) ListenAddr() (net.Addr, error) {
 	return s.listener.Addr(), nil
 }
 
+type idleTimeoutConn struct {
+	Timeout time.Duration
+	net.Conn
+}
+
+func (c *idleTimeoutConn) Read(b []byte) (n int, err error) {
+	if err = c.Conn.SetDeadline(time.Now().Add(c.Timeout)); err != nil {
+		return
+	}
+	return c.Conn.Read(b)
+}
+
+func (c *idleTimeoutConn) Write(b []byte) (n int, err error) {
+	if err = c.Conn.SetDeadline(time.Now().Add(c.Timeout)); err != nil {
+		return
+	}
+	return c.Conn.Write(b)
+}
+
 func (s *Server) Serve() {
 	logger := s.logger.Session("serve")
 	defer s.listener.Close()
 
 	for {
 		netConn, err := s.listener.Accept()
+		if s.idleConnTimeout > 0 {
+			netConn = &idleTimeoutConn{s.idleConnTimeout, netConn}
+		}
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
 				logger.Error("accept-temporary-error", netErr)

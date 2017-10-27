@@ -23,6 +23,7 @@ import (
 	sshdtestrunner "code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/routes"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
@@ -97,6 +98,7 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.UAAUsername = "amandaplease"
 		sshProxyConfig.UAACACert = ""
 		sshProxyConfig.ConsulCluster = consulRunner.URL()
+		sshProxyConfig.IdleConnectionTimeout = durationjson.Duration(500 * time.Millisecond)
 
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
@@ -487,6 +489,23 @@ var _ = Describe("SSH proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(output)).To(Equal("hello"))
+		})
+
+		Context("when dealing with an idle connection", func() {
+			It("eventually times out", func() {
+				client, err := net.Dial("tcp", address)
+				Expect(err).NotTo(HaveOccurred())
+
+				errs := make(chan error)
+				go func() {
+					for {
+						bs := make([]byte, 10)
+						_, err := client.Read(bs)
+						errs <- err
+					}
+				}()
+				Eventually(errs).Should(Receive(MatchError("EOF")))
+			})
 		})
 
 		Context("metrics", func() {
