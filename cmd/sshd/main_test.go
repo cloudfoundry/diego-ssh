@@ -489,6 +489,12 @@ var _ = Describe("SSH daemon", func() {
 			client.Close()
 		})
 
+		Context("when a client connects", func() {
+			It("identifies itself as a diego-ssh server", func() {
+				Expect(string(client.Conn.ServerVersion())).To(Equal("SSH-2.0-diego-ssh"))
+			})
+		})
+
 		Context("when a client requests the execution of a command", func() {
 			It("runs the command", func() {
 				session, err := client.NewSession()
