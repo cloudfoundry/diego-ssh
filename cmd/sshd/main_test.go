@@ -491,7 +491,7 @@ var _ = Describe("SSH daemon", func() {
 
 		Context("when a client connects", func() {
 			It("identifies itself as a diego-ssh server", func() {
-				Expect(string(client.Conn.ServerVersion())).To(Equal("SSH-2.0-diego-ssh"))
+				Expect(string(client.Conn.ServerVersion())).To(Equal("SSH-2.0-diego-sshd"))
 			})
 		})
 

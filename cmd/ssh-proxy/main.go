@@ -193,6 +193,7 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 	authenticator := authenticators.NewCompositeAuthenticator(authens...)
 
 	sshConfig := &ssh.ServerConfig{
+		ServerVersion:    "SSH-2.0-diego-ssh-proxy",
 		PasswordCallback: authenticator.Authenticate,
 		AuthLogCallback: func(cmd ssh.ConnMetadata, method string, err error) {
 			if err != nil {

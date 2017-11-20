@@ -182,7 +182,7 @@ func getDaemonEnvironment() map[string]string {
 
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	errorStrings := []string{}
-	sshConfig := &ssh.ServerConfig{ServerVersion: "SSH-2.0-diego-ssh"}
+	sshConfig := &ssh.ServerConfig{ServerVersion: "SSH-2.0-diego-sshd"}
 
 	key, err := acquireHostKey(logger)
 	if err != nil {

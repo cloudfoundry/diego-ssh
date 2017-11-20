@@ -491,6 +491,13 @@ var _ = Describe("SSH proxy", func() {
 			Expect(string(output)).To(Equal("hello"))
 		})
 
+		It("identifies itself as a Diego SSH proxy server", func() {
+			client, err := ssh.Dial("tcp", address, clientConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(string(client.Conn.ServerVersion())).To(Equal("SSH-2.0-diego-ssh-proxy"))
+		})
+
 		Context("when dealing with an idle connection", func() {
 			It("eventually times out", func() {
 				client, err := net.Dial("tcp", address)
