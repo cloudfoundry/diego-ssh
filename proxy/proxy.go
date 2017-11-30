@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	sshConnections = "ssh-connections"
+	sshConnectionsMetric = "ssh-connections"
 )
 
 type Waiter interface {
@@ -99,7 +99,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 
 	p.connectionLock.Lock()
 	p.connections++
-	err = p.metronClient.SendMetric(sshConnections, p.connections)
+	err = p.metronClient.SendMetric(sshConnectionsMetric, p.connections)
 	if err != nil {
 		logger.Error("failed-to-send-ssh-connections-metric", err)
 	}
@@ -115,7 +115,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 func (p *Proxy) emitConnectionClosing(logger lager.Logger) {
 	p.connectionLock.Lock()
 	p.connections--
-	err := p.metronClient.SendMetric(sshConnections, p.connections)
+	err := p.metronClient.SendMetric(sshConnectionsMetric, p.connections)
 	p.connectionLock.Unlock()
 
 	if err != nil {
