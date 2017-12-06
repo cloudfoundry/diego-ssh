@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"code.cloudfoundry.org/diego-ssh/keys"
+	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -16,10 +17,12 @@ import (
 var (
 	sshdPath string
 
-	sshdPort            int
+	sshdPort            uint16
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
+
+	portAllocator portauthority.PortAllocator
 )
 
 func TestSSHDaemon(t *testing.T) {
@@ -61,7 +64,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	privateKeyPem = context["private-key"]
 	publicAuthorizedKey = context["authorized-key"]
 
-	sshdPort = 7001 + GinkgoParallelNode()
+	node := GinkgoParallelNode()
+	startPort := 1050 * node // make sure we don't conflict with etcd ports 4000+GinkgoParallelNode & 7000+GinkgoParallelNode (4000,7000,40001,70001...)
+	portRange := 1000
+	endPort := startPort + portRange*(node+1)
+
+	portAllocator, err = portauthority.New(startPort, endPort)
+	Expect(err).NotTo(HaveOccurred())
+
+	sshdPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+
 	sshdPath = context["sshd"]
 })
 

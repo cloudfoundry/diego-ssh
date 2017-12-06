@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/server/fakes"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
+	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -27,12 +28,27 @@ var _ = Describe("Server", func() {
 
 		handler *fakes.FakeConnectionHandler
 
-		address string
+		address       string
+		portAllocator portauthority.PortAllocator
 	)
 
+	BeforeSuite(func() {
+		node := GinkgoParallelNode()
+		startPort := 1050 * node // make sure we don't conflict with etcd ports 4000+GinkgoParallelNode & 7000+GinkgoParallelNode (4000,7000,40001,70001...)
+		portRange := 1000
+		endPort := startPort + portRange*(node+1)
+
+		var err error
+		portAllocator, err = portauthority.New(startPort, endPort)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	BeforeEach(func() {
+		port, err := portAllocator.ClaimPorts(1)
+		Expect(err).NotTo(HaveOccurred())
+
 		handler = &fakes.FakeConnectionHandler{}
-		address = fmt.Sprintf("127.0.0.1:%d", 7001+GinkgoParallelNode())
+		address = fmt.Sprintf("127.0.0.1:%d", port)
 		logger = lagertest.NewTestLogger("test")
 	})
 

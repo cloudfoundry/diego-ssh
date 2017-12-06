@@ -73,7 +73,7 @@ var _ = Describe("SSH daemon", func() {
 			InheritDaemonEnv:            inheritDaemonEnv,
 		}
 
-		runner, process = startSshd(sshdPath, args, "127.0.0.1", sshdPort)
+		runner, process = startSshd(sshdPath, args, "127.0.0.1", int(sshdPort))
 	})
 
 	AfterEach(func() {

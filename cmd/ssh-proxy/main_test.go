@@ -111,7 +111,7 @@ var _ = Describe("SSH proxy", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMapping(uint32(sshdPort), sshdContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMapping(uint32(sshdPort), uint32(sshdContainerPort))),
 				},
 			},
 		}
@@ -121,7 +121,7 @@ var _ = Describe("SSH proxy", func() {
 		}
 
 		sshRoute, err := json.Marshal(routes.SSHRoute{
-			ContainerPort:   sshdContainerPort,
+			ContainerPort:   uint32(sshdContainerPort),
 			PrivateKey:      privateKeyPem,
 			HostFingerprint: hostKeyFingerprint,
 		})
@@ -321,7 +321,7 @@ var _ = Describe("SSH proxy", func() {
 				service := &api.AgentService{
 					Service: "ssh-proxy",
 					ID:      "ssh-proxy",
-					Port:    sshProxyPort,
+					Port:    int(sshProxyPort),
 				}
 
 				if runtime.GOOS == "windows" {
@@ -822,7 +822,7 @@ var _ = Describe("SSH proxy", func() {
 
 				ginkgomon.Kill(sshdProcess)
 				sshdArgs := sshdtestrunner.Args{
-					Address:       fmt.Sprintf("127.0.0.1:%d", sshdContainerPort),
+					Address:       fmt.Sprintf("127.0.0.1:%d", uint32(sshdContainerPort)),
 					HostKey:       hostKeyPem,
 					AuthorizedKey: publicAuthorizedKey,
 				}

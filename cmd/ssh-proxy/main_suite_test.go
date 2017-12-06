@@ -11,6 +11,7 @@ import (
 	"code.cloudfoundry.org/consuladapter/consulrunner"
 	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 	"code.cloudfoundry.org/diego-ssh/keys"
+	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
@@ -24,15 +25,17 @@ var (
 	sshdPath     string
 	sshdProcess  ifrit.Process
 
-	sshdPort             int
-	sshdContainerPort    uint32
-	sshProxyPort         int
-	healthCheckProxyPort int
+	sshdPort             uint16
+	sshdContainerPort    uint16
+	sshProxyPort         uint16
+	healthCheckProxyPort uint16
 
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
 	consulRunner        *consulrunner.ClusterRunner
+
+	portAllocator portauthority.PortAllocator
 )
 
 func TestSSHProxy(t *testing.T) {
@@ -74,14 +77,27 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	privateKeyPem = context["private-key"]
 	publicAuthorizedKey = context["authorized-key"]
 
-	sshdPort = 7000 + GinkgoParallelNode()
-	sshdContainerPort = 8000 + uint32(GinkgoParallelNode())
+	node := GinkgoParallelNode()
+	startPort := 1050 * node // make sure we don't conflict with etcd ports 4000+GinkgoParallelNode & 7000+GinkgoParallelNode (4000,7000,40001,70001...)
+	portRange := 1000
+	endPort := startPort + portRange*(node+1)
+
+	portAllocator, err = portauthority.New(startPort, endPort)
+	Expect(err).NotTo(HaveOccurred())
+
+	sshdPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+
+	sshdContainerPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
 	sshdPath = context["sshd"]
 
-	sshProxyPort = 7100 + GinkgoParallelNode()
+	sshProxyPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
 	sshProxyPath = context["ssh-proxy"]
 
-	healthCheckProxyPort = 7200 + GinkgoParallelNode()
+	healthCheckProxyPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
 
 	consulRunner = consulrunner.NewClusterRunner(
 		consulrunner.ClusterRunnerConfig{
