@@ -20,6 +20,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	fake_logs "github.com/cloudfoundry/dropsonde/log_sender/fake"
@@ -605,7 +606,7 @@ var _ = Describe("Proxy", func() {
 					metrics.Initialize(sender, nil)
 					metricChan = make(chan metric, 2)
 
-					fakeMetronClient.SendMetricStub = func(name string, value int) error {
+					fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 						metricChan <- metric{name: name, value: value}
 						return nil
 					}
