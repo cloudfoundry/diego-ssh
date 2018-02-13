@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/cfhttp"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
@@ -64,7 +66,20 @@ var _ = Describe("SSH proxy", func() {
 	)
 
 	BeforeEach(func() {
-		fakeBBS = ghttp.NewServer()
+		fixturesPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+
+		caFile := path.Join(fixturesPath, "green-certs", "server-ca.crt")
+		serverCertFile := path.Join(fixturesPath, "green-certs", "server.crt")
+		serverKeyFile := path.Join(fixturesPath, "green-certs", "server.key")
+		clientCertFile := path.Join(fixturesPath, "green-certs", "client.crt")
+		clientKeyFile := path.Join(fixturesPath, "green-certs", "client.key")
+
+		var err error
+		fakeBBS = ghttp.NewUnstartedServer()
+		fakeBBS.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
+		Expect(err).NotTo(HaveOccurred())
+		fakeBBS.HTTPTestServer.StartTLS()
+
 		fakeUAA = ghttp.NewTLSServer()
 		fakeCC = ghttp.NewTLSServer()
 
@@ -86,6 +101,9 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.Address = address
 		sshProxyConfig.HealthCheckAddress = healthCheckAddress
 		sshProxyConfig.BBSAddress = fakeBBS.URL()
+		sshProxyConfig.BBSCACert = caFile
+		sshProxyConfig.BBSClientCert = clientCertFile
+		sshProxyConfig.BBSClientKey = clientKeyFile
 		sshProxyConfig.CCAPIURL = fakeCC.URL()
 		sshProxyConfig.DiegoCredentials = diegoCredentials
 		sshProxyConfig.EnableCFAuth = true
