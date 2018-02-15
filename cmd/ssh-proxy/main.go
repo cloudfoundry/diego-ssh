@@ -277,16 +277,7 @@ func initializeBBSClient(
 	bbsClientSessionCacheSize,
 	bbsMaxIdleConnsPerHost int,
 ) bbs.InternalClient {
-	bbsURL, err := url.Parse(bbsAddress)
-	if err != nil {
-		logger.Fatal("Invalid BBS URL", err)
-	}
-
-	if bbsURL.Scheme != "https" {
-		return bbs.NewClient(bbsAddress)
-	}
-
-	bbsClient, err := bbs.NewSecureClient(bbsAddress, bbsCACert, bbsClientCert, bbsClientKey, bbsClientSessionCacheSize, bbsMaxIdleConnsPerHost)
+	bbsClient, err := bbs.NewClient(bbsAddress, bbsCACert, bbsClientCert, bbsClientKey, bbsClientSessionCacheSize, bbsMaxIdleConnsPerHost)
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
