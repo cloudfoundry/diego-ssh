@@ -24,7 +24,6 @@ type SSHProxyConfig struct {
 	UAAUsername                     string                `json:"uaa_username"`
 	UAACACert                       string                `json:"uaa_ca_cert"`
 	SkipCertVerify                  bool                  `json:"skip_cert_verify"`
-	DropsondePort                   int                   `json:"dropsonde_port,omitempty"`
 	EnableCFAuth                    bool                  `json:"enable_cf_auth"`
 	EnableConsulServiceRegistration bool                  `json:"enable_consul_service_registration,omitempty"`
 	EnableDiegoAuth                 bool                  `json:"enable_diego_auth"`
@@ -49,7 +48,6 @@ func defaultConfig() SSHProxyConfig {
 		Address:                  ":2222",
 		HealthCheckAddress:       ":2223",
 		CommunicationTimeout:     durationjson.Duration(10 * time.Second),
-		DropsondePort:            3457,
 		LagerConfig:              lagerflags.DefaultLagerConfig(),
 		ConnectToInstanceAddress: false,
 		IdleConnectionTimeout:    durationjson.Duration(5 * time.Minute),

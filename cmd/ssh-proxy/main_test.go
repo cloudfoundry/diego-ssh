@@ -18,7 +18,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/cfhttp"
-	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/testrunner"
@@ -27,7 +27,6 @@ import (
 	"code.cloudfoundry.org/diego-ssh/routes"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
-	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
@@ -39,7 +38,6 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
-	"github.com/onsi/gomega/types"
 )
 
 var _ = Describe("SSH proxy", func() {
@@ -535,12 +533,33 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("metrics", func() {
 			var (
-				testMetricsChan   = make(chan interface{}, 10)
-				testIngressServer *mfakes.TestIngressServer
-
-				testMetricsListener net.PacketConn
-				err                 error
+				testMetricsChan   = make(chan *loggregator_v2.Envelope, 10)
+				signalMetricsChan = make(chan struct{})
+				testIngressServer *testhelpers.TestIngressServer
 			)
+
+			BeforeEach(func() {
+				var err error
+				testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+				Expect(err).NotTo(HaveOccurred())
+				receiversChan := testIngressServer.Receivers()
+				testIngressServer.Start()
+				port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+				Expect(err).NotTo(HaveOccurred())
+				sshProxyConfig.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
+				sshProxyConfig.LoggregatorConfig.BatchMaxSize = 1
+				sshProxyConfig.LoggregatorConfig.APIPort = port
+				sshProxyConfig.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+				sshProxyConfig.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+				sshProxyConfig.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+
+				testMetricsChan, signalMetricsChan = testhelpers.TestMetricChan(receiversChan)
+			})
+
+			AfterEach(func() {
+				testIngressServer.Stop()
+				close(signalMetricsChan)
+			})
 
 			JustBeforeEach(func() {
 				client, err := ssh.Dial("tcp", address, clientConfig)
@@ -551,71 +570,21 @@ var _ = Describe("SSH proxy", func() {
 
 			Context("when using loggregator v2 api", func() {
 				BeforeEach(func() {
-					testIngressServer, err = mfakes.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
-					Expect(err).NotTo(HaveOccurred())
-					receiversChan := testIngressServer.Receivers()
-					testIngressServer.Start()
-					port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
-					Expect(err).NotTo(HaveOccurred())
-					sshProxyConfig.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
-					sshProxyConfig.LoggregatorConfig.BatchMaxSize = 1
 					sshProxyConfig.LoggregatorConfig.UseV2API = true
-					sshProxyConfig.LoggregatorConfig.APIPort = port
-					sshProxyConfig.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
-					sshProxyConfig.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
-					sshProxyConfig.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
-
-					ch := testMetricsChan
-					go func() {
-						for {
-							receiver := <-receiversChan
-							go func() {
-								for {
-									batch, err := receiver.Recv()
-									if err != nil {
-										return
-									}
-									for _, elem := range batch.Batch {
-										ch <- elem
-									}
-								}
-							}()
-						}
-					}()
 				})
 
 				It("emits the number of current ssh-connections", func() {
-					Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ssh-connections", Value: int32(1)})))
+					Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ssh-connections", Value: int32(1)})))
 				})
 			})
 
-			Context("when using loggregator v1 api", func() {
+			Context("when not using the loggregator v2 api", func() {
 				BeforeEach(func() {
-					testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
-					go func() {
-						defer GinkgoRecover()
-						for {
-							buffer := make([]byte, 1024)
-							n, _, err := testMetricsListener.ReadFrom(buffer)
-							if err != nil {
-								close(testMetricsChan)
-								return
-							}
-
-							var envelope events.Envelope
-							err = proto.Unmarshal(buffer[:n], &envelope)
-							Expect(err).NotTo(HaveOccurred())
-							testMetricsChan <- &envelope
-						}
-					}()
-
-					dropsondePort, err := strconv.Atoi(strings.TrimPrefix(testMetricsListener.LocalAddr().String(), "127.0.0.1:"))
-					Expect(err).NotTo(HaveOccurred())
-					sshProxyConfig.DropsondePort = dropsondePort
+					sshProxyConfig.LoggregatorConfig.UseV2API = false
 				})
 
-				It("emits the number of current ssh-connections", func() {
-					Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ssh-connections", Value: int32(1)})))
+				It("doesn't emit any metrics", func() {
+					Consistently(testMetricsChan).ShouldNot(Receive())
 				})
 			})
 		})
@@ -898,37 +867,4 @@ func RespondWithProto(message proto.Message) http.HandlerFunc {
 	var headers = make(http.Header)
 	headers["Content-Type"] = []string{"application/x-protobuf"}
 	return ghttp.RespondWith(200, string(data), headers)
-}
-
-type metricAndValue struct {
-	Name  string
-	Value int32
-}
-
-func matchMetricAndValue(target metricAndValue) types.GomegaMatcher {
-	return SatisfyAll(
-		WithTransform(func(source *events.Envelope) events.Envelope_EventType {
-			return *source.EventType
-		}, Equal(events.Envelope_ValueMetric)),
-		WithTransform(func(source *events.Envelope) string {
-			return *source.ValueMetric.Name
-		}, Equal(target.Name)),
-		WithTransform(func(source *events.Envelope) int32 {
-			return int32(*source.ValueMetric.Value)
-		}, Equal(target.Value)),
-	)
-}
-
-func matchV2MetricAndValue(target metricAndValue) types.GomegaMatcher {
-	return SatisfyAll(
-		WithTransform(func(source *loggregator_v2.Envelope) *loggregator_v2.Gauge {
-			return source.GetGauge()
-		}, Not(BeNil())),
-		WithTransform(func(source *loggregator_v2.Envelope) map[string]*loggregator_v2.GaugeValue {
-			return source.GetGauge().GetMetrics()
-		}, HaveKey(target.Name)),
-		WithTransform(func(source *loggregator_v2.Envelope) int32 {
-			return int32(source.GetGauge().GetMetrics()[target.Name].Value)
-		}, Equal(target.Value)),
-	)
 }

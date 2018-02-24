@@ -30,17 +30,12 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
-	"github.com/cloudfoundry/dropsonde"
 	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/ifrit/sigmon"
 	"golang.org/x/crypto/ssh"
-)
-
-const (
-	dropsondeOrigin = "ssh-proxy"
 )
 
 var configPath = flag.String(
@@ -314,17 +309,7 @@ func initializeMetron(logger lager.Logger, locketConfig config.SSHProxyConfig) (
 	if locketConfig.LoggregatorConfig.UseV2API {
 		emitter := runtimeemitter.NewV1(client)
 		go emitter.Run()
-	} else {
-		initializeDropsonde(logger, locketConfig.DropsondePort)
 	}
 
 	return client, nil
-}
-
-func initializeDropsonde(logger lager.Logger, dropsondePort int) {
-	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
-	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
-	if err != nil {
-		logger.Error("failed to initialize dropsonde: %v", err)
-	}
 }
