@@ -23,10 +23,6 @@ import (
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	fake_logs "github.com/cloudfoundry/dropsonde/log_sender/fake"
-	"github.com/cloudfoundry/dropsonde/logs"
-	"github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"
@@ -37,7 +33,6 @@ import (
 var _ = Describe("Proxy", func() {
 	var (
 		logger           lager.Logger
-		fakeLogSender    *fake_logs.FakeLogSender
 		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
@@ -76,8 +71,6 @@ var _ = Describe("Proxy", func() {
 			daemonDone = make(chan struct{})
 
 			fakeMetronClient = &mfakes.FakeIngressClient{}
-			fakeLogSender = fake_logs.NewFakeLogSender()
-			logs.Initialize(fakeLogSender)
 
 			proxyAuthenticator = &fake_authenticators.FakePasswordAuthenticator{}
 
@@ -597,13 +590,10 @@ var _ = Describe("Proxy", func() {
 				}
 
 				var (
-					sender     *fake.FakeMetricSender
 					metricChan chan metric
 				)
 
 				BeforeEach(func() {
-					sender = fake.NewFakeMetricSender()
-					metrics.Initialize(sender, nil)
 					metricChan = make(chan metric, 2)
 
 					fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
