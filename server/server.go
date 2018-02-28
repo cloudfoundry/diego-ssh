@@ -16,20 +16,14 @@ type ConnectionHandler interface {
 }
 
 type Server struct {
-	logger        lager.Logger
-	listenAddress string
-
+	logger            lager.Logger
+	listenAddress     string
 	connectionHandler ConnectionHandler
-
-	listener net.Listener
-	mutex    *sync.Mutex
-	stopping bool
-
-	connections          map[net.Conn]struct{}
-	connectionsMutex     *sync.Mutex
-	connectionsWaitGroup *sync.WaitGroup
-
-	idleConnTimeout time.Duration
+	listener          net.Listener
+	mutex             *sync.Mutex
+	state             serverState
+	idleConnTimeout   time.Duration
+	store             connHandler
 }
 
 func NewServer(
@@ -39,14 +33,11 @@ func NewServer(
 	idleConnTimeout time.Duration,
 ) *Server {
 	return &Server{
-		logger:               logger,
-		listenAddress:        listenAddress,
-		connectionHandler:    connectionHandler,
-		mutex:                &sync.Mutex{},
-		connections:          make(map[net.Conn]struct{}),
-		connectionsMutex:     &sync.Mutex{},
-		connectionsWaitGroup: &sync.WaitGroup{},
-		idleConnTimeout:      idleConnTimeout,
+		logger:            logger,
+		listenAddress:     listenAddress,
+		connectionHandler: connectionHandler,
+		mutex:             &sync.Mutex{},
+		idleConnTimeout:   idleConnTimeout,
 	}
 }
 
@@ -70,29 +61,14 @@ func (s *Server) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 }
 
 func (s *Server) Shutdown() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	if !s.stopping {
+	if s.state.StopOnce() {
 		s.logger.Info("stopping-server")
-		s.stopping = true
 		s.listener.Close()
-
-		s.connectionsMutex.Lock()
-		for conn, _ := range s.connections {
-			conn.Close()
-		}
-		s.connectionsMutex.Unlock()
+		s.store.Shutdown()
 	}
-
-	s.connectionsWaitGroup.Wait()
 }
 
-func (s *Server) IsStopping() bool {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.stopping
-}
+func (s *Server) IsStopping() bool { return s.state.Stopped() }
 
 func (s *Server) SetListener(listener net.Listener) error {
 	s.mutex.Lock()
@@ -158,19 +134,6 @@ func (s *Server) Serve() {
 			logger.Error("accept-failed", err)
 			return
 		}
-
-		s.connectionsMutex.Lock()
-		s.connections[netConn] = struct{}{}
-		s.connectionsWaitGroup.Add(1)
-		s.connectionsMutex.Unlock()
-
-		go func() {
-			s.connectionHandler.HandleConnection(netConn)
-
-			s.connectionsMutex.Lock()
-			delete(s.connections, netConn)
-			s.connectionsWaitGroup.Done()
-			s.connectionsMutex.Unlock()
-		}()
+		s.store.Handle(s.connectionHandler, netConn)
 	}
 }
