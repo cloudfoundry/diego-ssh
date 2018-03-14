@@ -51,6 +51,9 @@ func defaultConfig() SSHProxyConfig {
 		LagerConfig:              lagerflags.DefaultLagerConfig(),
 		ConnectToInstanceAddress: false,
 		IdleConnectionTimeout:    durationjson.Duration(5 * time.Minute),
+		LoggregatorConfig: loggingclient.Config{
+			SourceID: "ssh_proxy",
+		},
 	}
 }
 
