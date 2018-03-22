@@ -183,6 +183,7 @@ func getDaemonEnvironment() map[string]string {
 func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	errorStrings := []string{}
 	sshConfig := &ssh.ServerConfig{ServerVersion: "SSH-2.0-diego-sshd"}
+	sshConfig.SetDefaults()
 
 	key, err := acquireHostKey(logger)
 	if err != nil {
@@ -210,12 +211,20 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 
 	if *allowedCiphers != "" {
 		sshConfig.Config.Ciphers = strings.Split(*allowedCiphers, ",")
+	} else {
+		sshConfig.Config.Ciphers = []string{"chacha20-poly1305@openssh.com", "aes128-gcm@openssh.com"}
 	}
+
 	if *allowedMACs != "" {
 		sshConfig.Config.MACs = strings.Split(*allowedMACs, ",")
+	} else {
+		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com"}
 	}
+
 	if *allowedKeyExchanges != "" {
 		sshConfig.Config.KeyExchanges = strings.Split(*allowedKeyExchanges, ",")
+	} else {
+		sshConfig.Config.KeyExchanges = []string{"curve25519-sha256@libssh.org"}
 	}
 
 	err = nil

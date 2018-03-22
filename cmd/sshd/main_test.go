@@ -391,6 +391,25 @@ var _ = Describe("SSH daemon", func() {
 			})
 		})
 
+		Context("when the daemon provides an unsupported cipher algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
+				clientConfig.Ciphers = []string{"arcfour128"}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("errors when the client doesn't provide one of the algorithm: 'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com'", func() {
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [chacha20-poly1305@openssh.com aes128-gcm@openssh.com]"))
+				Expect(client).To(BeNil())
+			})
+		})
+
 		Context("when the daemon provides an unsupported MAC algorithm", func() {
 			BeforeEach(func() {
 				allowedMACs = "unsupported"
@@ -428,7 +447,26 @@ var _ = Describe("SSH daemon", func() {
 			})
 		})
 
-		Context("when the daemon provides an unsupported key exchange algorithm", func() {
+		Context("when the daemon provides an unsupported MAC algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
+				clientConfig.MACs = []string{"arcfour128"}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("errors when the client doesn't provide the algorithm: 'hmac-sha2-256-etm@openssh.com'", func() {
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com]"))
+				Expect(client).To(BeNil())
+			})
+		})
+
+		Context("when the daemon provides an unsupported key exchange algorithm by the proxy", func() {
 			BeforeEach(func() {
 				allowedKeyExchanges = "unsupported"
 				clientConfig = &ssh.ClientConfig{
@@ -462,6 +500,25 @@ var _ = Describe("SSH daemon", func() {
 			It("allows a client to complete a handshake", func() {
 				Expect(dialErr).NotTo(HaveOccurred())
 				Expect(client).NotTo(BeNil())
+			})
+		})
+
+		Context("when the daemon provides an unsupported KeyExchange algorithm", func() {
+			BeforeEach(func() {
+				allowUnauthenticatedClients = true
+				clientConfig = &ssh.ClientConfig{
+					HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				}
+				clientConfig.KeyExchanges = []string{"arcfour128"}
+			})
+
+			It("starts the daemon", func() {
+				Expect(process).NotTo(BeNil())
+			})
+
+			It("errors when the client doesn't provide the algorithm: 'curve25519-sha256@libssh.org'", func() {
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [arcfour128], server offered: [curve25519-sha256@libssh.org]"))
+				Expect(client).To(BeNil())
 			})
 		})
 	})

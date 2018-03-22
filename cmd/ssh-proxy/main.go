@@ -199,6 +199,8 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 		},
 	}
 
+	sshConfig.SetDefaults()
+
 	if sshProxyConfig.HostKey == "" {
 		err := errors.New("hostKey is required")
 		logger.Fatal("host-key-required", err)
@@ -213,12 +215,20 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 
 	if sshProxyConfig.AllowedCiphers != "" {
 		sshConfig.Config.Ciphers = strings.Split(sshProxyConfig.AllowedCiphers, ",")
+	} else {
+		sshConfig.Config.Ciphers = []string{"chacha20-poly1305@openssh.com", "aes128-gcm@openssh.com"}
 	}
+
 	if sshProxyConfig.AllowedMACs != "" {
 		sshConfig.Config.MACs = strings.Split(sshProxyConfig.AllowedMACs, ",")
+	} else {
+		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com"}
 	}
+
 	if sshProxyConfig.AllowedKeyExchanges != "" {
 		sshConfig.Config.KeyExchanges = strings.Split(sshProxyConfig.AllowedKeyExchanges, ",")
+	} else {
+		sshConfig.Config.KeyExchanges = []string{"curve25519-sha256@libssh.org"}
 	}
 
 	return sshConfig, err
