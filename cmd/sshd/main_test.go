@@ -460,8 +460,8 @@ var _ = Describe("SSH daemon", func() {
 				Expect(process).NotTo(BeNil())
 			})
 
-			It("errors when the client doesn't provide the algorithm: 'hmac-sha2-256-etm@openssh.com'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com]"))
+			It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 				Expect(client).To(BeNil())
 			})
 		})

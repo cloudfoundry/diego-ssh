@@ -668,9 +668,9 @@ var _ = Describe("SSH proxy", func() {
 				clientConfig.MACs = []string{"arcfour128"}
 			})
 
-			It("errors when the client doesn't provide the algorithm: 'hmac-sha2-256-etm@openssh.com'", func() {
+			It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
 				_, err := ssh.Dial("tcp", address, clientConfig)
-				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com]"))
+				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 			})
 		})

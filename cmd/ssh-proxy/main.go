@@ -222,7 +222,7 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 	if sshProxyConfig.AllowedMACs != "" {
 		sshConfig.Config.MACs = strings.Split(sshProxyConfig.AllowedMACs, ",")
 	} else {
-		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com"}
+		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com", "hmac-sha2-256"}
 	}
 
 	if sshProxyConfig.AllowedKeyExchanges != "" {

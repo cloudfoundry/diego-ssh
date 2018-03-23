@@ -218,7 +218,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *allowedMACs != "" {
 		sshConfig.Config.MACs = strings.Split(*allowedMACs, ",")
 	} else {
-		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com"}
+		sshConfig.Config.MACs = []string{"hmac-sha2-256-etm@openssh.com", "hmac-sha2-256"}
 	}
 
 	if *allowedKeyExchanges != "" {
