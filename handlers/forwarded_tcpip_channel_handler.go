@@ -10,42 +10,42 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type DirectTcpipChannelHandler struct {
+type ForwardedTcpipChannelHandler struct {
 	dialer Dialer
 }
 
-func NewDirectTcpipChannelHandler(dialer Dialer) *DirectTcpipChannelHandler {
-	return &DirectTcpipChannelHandler{
+func NewForwardedTcpipChannelHandler(dialer Dialer) *ForwardedTcpipChannelHandler {
+	return &ForwardedTcpipChannelHandler{
 		dialer: dialer,
 	}
 }
 
-func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
-	logger = logger.Session("directtcip-handle-new-channel")
+func (handler *ForwardedTcpipChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
+	logger = logger.Session("forwardedtcip-handle-new-channel")
 	logger.Debug("starting")
 	defer logger.Debug("complete")
 
 	// RFC 4254 Section 7.1
-	type channelOpenDirectTcpipMsg struct {
-		TargetAddr string
-		TargetPort uint32
-		OriginAddr string
-		OriginPort uint32
+	type channelOpenForwardedTcpipMsg struct {
+		ConnectedAddr string
+		ConnectedPort uint32
+		OriginAddr    string
+		OriginPort    uint32
 	}
-	var directTcpipMessage channelOpenDirectTcpipMsg
+	var forwardedTcpipMessage channelOpenForwardedTcpipMsg
 
-	err := ssh.Unmarshal(newChannel.ExtraData(), &directTcpipMessage)
+	err := ssh.Unmarshal(newChannel.ExtraData(), &forwardedTcpipMessage)
 	if err != nil {
 		logger.Error("failed-unmarshalling-ssh-message", err)
 		newChannel.Reject(ssh.ConnectionFailed, "Failed to parse open channel message")
 		return
 	}
 
-	destination := fmt.Sprintf("%s:%d", directTcpipMessage.TargetAddr, directTcpipMessage.TargetPort)
+	destination := fmt.Sprintf("%s:%d", forwardedTcpipMessage.ConnectedAddr, forwardedTcpipMessage.ConnectedPort)
 	logger.Debug("dialing-connection", lager.Data{"destination": destination})
 	conn, err := handler.dialer.Dial("tcp", destination)
 	if err != nil {
-		logger.Error("failed-connecting-to-target", err)
+		logger.Error("failed-connecting-to-address", err)
 		newChannel.Reject(ssh.ConnectionFailed, err.Error())
 		return
 	}

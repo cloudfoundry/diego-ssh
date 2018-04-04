@@ -1,12 +1,18 @@
 package handlers
 
 import (
+	"net"
 	"os/exec"
 	"syscall"
 
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
+
+//go:generate counterfeiter -o fakes/fake_dialer.go . Dialer
+type Dialer interface {
+	Dial(net, addr string) (net.Conn, error)
+}
 
 //go:generate counterfeiter -o fake_handlers/fake_global_request_handler.go . GlobalRequestHandler
 type GlobalRequestHandler interface {
