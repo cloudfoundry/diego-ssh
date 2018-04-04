@@ -4,14 +4,17 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
+	"code.cloudfoundry.org/diego-ssh/handlers"
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
@@ -136,7 +139,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	sshDaemon := daemon.New(logger, serverConfig, nil, newChannelHandlers())
+	runner := handlers.NewCommandRunner()
+	shellLocator := handlers.NewShellLocator()
+	dialer := &net.Dialer{}
+	sshDaemon := daemon.New(
+		logger,
+		serverConfig,
+		map[string]handlers.GlobalRequestHandler{
+			"tcpip-forward": handlers.NewTcpipForwardGlobalRequestHandler(),
+		},
+		map[string]handlers.NewChannelHandler{
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
+			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
+		},
+	)
 	server, err := createServer(logger, *address, sshDaemon)
 
 	members := grouper.Members{
