@@ -95,11 +95,11 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 		return []byte("Doesntmatter"), nil
 	})
 
-	username, ok := token.Claims["user_name"].(string)
+	username, ok := token.Claims.(jwt.MapClaims)["user_name"].(string)
 	if !ok {
 		username = "unknown"
 	}
-	principal, ok := token.Claims["user_id"].(string)
+	principal, ok := token.Claims.(jwt.MapClaims)["user_id"].(string)
 	if !ok {
 		principal = "unknown"
 	}
