@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"runtime"
@@ -75,13 +76,34 @@ var allowedKeyExchanges = flag.String(
 var hostKeyPEM string
 var authorizedKeyValue string
 
+func NewLogFile() (*os.File, error) {
+	var last error
+	for i := 0; i < 1000; i++ {
+		name := fmt.Sprintf("sshd.%d.log", i)
+		f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			last = err
+			continue
+		}
+		return f, err
+	}
+	return nil, fmt.Errorf("could not create file: %s", last)
+}
+
 func main() {
+	logFile, err := NewLogFile()
+	if err != nil {
+		panic(err)
+	}
+	sink := lager.NewWriterSink(io.MultiWriter(logFile, os.Stdout), lager.DEBUG)
+
 	debugserver.AddFlags(flag.CommandLine)
 	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
 	exec := false
 
-	logger, reconfigurableSink := lagerflags.New("sshd")
+	// logger, reconfigurableSink := lagerflags.New("sshd")
+	logger, reconfigurableSink := lagerflags.NewFromSink("sshd", sink)
 
 	hostKeyPEM = os.Getenv("SSHD_HOSTKEY")
 	if hostKeyPEM != "" {
