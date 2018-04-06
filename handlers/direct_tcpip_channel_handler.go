@@ -21,9 +21,10 @@ func NewDirectTcpipChannelHandler(dialer Dialer) *DirectTcpipChannelHandler {
 }
 
 func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
-	logger = logger.Session("directtcip-handle-new-channel")
-	logger.Debug("starting")
-	defer logger.Debug("complete")
+	logger = logger.Session("direct-tcp-ip-handle-new-channel")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	// RFC 4254 Section 7.1
 	type channelOpenDirectTcpipMsg struct {
@@ -40,9 +41,12 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 		newChannel.Reject(ssh.ConnectionFailed, "Failed to parse open channel message")
 		return
 	}
+	logger.Info("channel-open-direct-tcp-ip-msg", lager.Data{
+		"message": directTcpipMessage,
+	})
 
 	destination := fmt.Sprintf("%s:%d", directTcpipMessage.TargetAddr, directTcpipMessage.TargetPort)
-	logger.Debug("dialing-connection", lager.Data{"destination": destination})
+	logger.Info("dialing-connection", lager.Data{"destination": destination})
 	conn, err := handler.dialer.Dial("tcp", destination)
 	if err != nil {
 		logger.Error("failed-connecting-to-target", err)
@@ -50,9 +54,21 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 		return
 	}
 
-	logger.Debug("dialed-connection", lager.Data{"destintation": destination})
+	logger.Info("dialed-connection", lager.Data{"destintation": destination})
+
 	channel, requests, err := newChannel.Accept()
-	go ssh.DiscardRequests(requests)
+	if err != nil {
+		logger.Error("failed-to-accept-channel", err)
+		newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		return
+	}
+
+	go func(logger lager.Logger) {
+		logger.Info("start")
+		defer logger.Info("done")
+		defer handlePanic(logger)
+		ssh.DiscardRequests(requests)
+	}(logger.Session("discard-requests"))
 
 	wg := &sync.WaitGroup{}
 
@@ -63,17 +79,24 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 		channel.Close()
 	}()
 
-	logger.Debug("copying-channel-data")
-	go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel,
-		func() {
+	logger.Info("copying-channel-data")
+	go func(logger lager.Logger) {
+		logger.Info("start")
+		defer logger.Info("done")
+		defer handlePanic(logger)
+		helpers.CopyAndClose(logger, wg, conn, channel, func() {
 			conn.(*net.TCPConn).CloseWrite()
-		},
-	)
-	go helpers.CopyAndClose(logger.Session("to-channel"), wg, channel, conn,
-		func() {
+		})
+	}(logger.Session("to-target"))
+
+	go func(logger lager.Logger) {
+		logger.Info("start")
+		defer logger.Info("done")
+		defer handlePanic(logger)
+		helpers.CopyAndClose(logger, wg, channel, conn, func() {
 			channel.CloseWrite()
-		},
-	)
+		})
+	}(logger.Session("to-channel"))
 
 	wg.Wait()
 }

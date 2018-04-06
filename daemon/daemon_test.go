@@ -143,7 +143,7 @@ var _ = Describe("Daemon", func() {
 					name = "known-handler"
 					wantReply = true
 
-					fakeHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request) {
+					fakeHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request, conn ssh.Conn) {
 						request.Reply(true, []byte("response"))
 					}
 				})

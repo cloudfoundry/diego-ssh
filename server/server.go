@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -33,7 +34,7 @@ func NewServer(
 	idleConnTimeout time.Duration,
 ) *Server {
 	return &Server{
-		logger:            logger,
+		logger:            logger.Session("server"),
 		listenAddress:     listenAddress,
 		connectionHandler: connectionHandler,
 		mutex:             &sync.Mutex{},
@@ -42,6 +43,18 @@ func NewServer(
 }
 
 func (s *Server) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	logger := s.logger.Session("run")
+	logger.Info("start")
+	defer logger.Info("done")
+
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Error("PANIC", fmt.Errorf("%#v  --  %s", e, e), lager.Data{"panic": e})
+		} else {
+			logger.Info("clean-exit")
+		}
+	}()
+
 	listener, err := net.Listen("tcp", s.listenAddress)
 	if err != nil {
 		return err
@@ -113,6 +126,17 @@ func (c *idleTimeoutConn) Write(b []byte) (n int, err error) {
 
 func (s *Server) Serve() {
 	logger := s.logger.Session("serve")
+	logger.Info("start")
+	defer logger.Info("done")
+
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Error("PANIC", fmt.Errorf("%#v  --  %s", e, e), lager.Data{"panic": e})
+		} else {
+			logger.Info("clean-exit")
+		}
+	}()
+
 	defer s.listener.Close()
 
 	for {

@@ -49,6 +49,13 @@ func NewSessionChannelHandler(
 }
 
 func (handler *SessionChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
+	logger = logger.Session("session-channel-handler", lager.Data{
+		"request-channel-type": newChannel.ChannelType(),
+	})
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
+
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
 		logger.Error("handle-new-session-channel-failed", err)
@@ -100,14 +107,18 @@ func (handler *SessionChannelHandler) newSession(logger lager.Logger, channel ss
 }
 
 func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
-	logger := sess.logger
-	logger.Info("starting")
-	defer logger.Info("finished")
+	logger := sess.logger.Session("service-requests")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	defer sess.destroy()
 
 	for req := range requests {
-		sess.logger.Info("received-request", lager.Data{"type": req.Type})
+		logger.Info("received-request", lager.Data{
+			"type":       req.Type,
+			"want-reply": req.WantReply,
+		})
 		switch req.Type {
 		case "env":
 			sess.handleEnvironmentRequest(req)
@@ -133,6 +144,9 @@ func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
 
 func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-environment-request")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	type envMsg struct {
 		Name  string
@@ -158,6 +172,9 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 
 func (sess *session) handleSignalRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-signal-request")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	type signalMsg struct {
 		Signal string
@@ -193,6 +210,9 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 
 func (sess *session) handlePtyRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-pty-request")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	var ptyRequestMessage ptyRequestMsg
 
@@ -219,6 +239,9 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 
 func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-window-change")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	type windowChangeMsg struct {
 		Columns  uint32
@@ -259,6 +282,9 @@ func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 
 func (sess *session) handleExecRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-exec-request")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	type execMsg struct {
 		Command string
@@ -288,8 +314,9 @@ func (sess *session) handleShellRequest(request *ssh.Request) {
 
 func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 	logger := sess.logger.Session("handle-subsystem-request")
-	logger.Info("starting")
-	defer logger.Info("finished")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	type subsysMsg struct {
 		Subsystem string
@@ -339,6 +366,9 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 
 func (sess *session) executeShell(request *ssh.Request, args ...string) {
 	logger := sess.logger.Session("execute-shell")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	sess.Lock()
 	cmd, err := sess.createCommand(args...)
@@ -419,8 +449,9 @@ type exitSignalMsg struct {
 
 func (sess *session) sendExitMessage(err error) {
 	logger := sess.logger.Session("send-exit-message")
-	logger.Info("started")
-	defer logger.Info("finished")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	if err != nil {
 		logger.Error("building-exit-message-from-error", err)
@@ -482,6 +513,11 @@ func setWindowSize(logger lager.Logger, pseudoTty *os.File, columns, rows uint32
 }
 
 func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist string) {
+	logger = logger.Session("set-terminal-attributes")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
+
 	reader := bytes.NewReader([]byte(modelist))
 
 	for {
@@ -536,6 +572,9 @@ func setTerminalAttributes(logger lager.Logger, pseudoTty *os.File, modelist str
 
 func (sess *session) run(command *exec.Cmd) error {
 	logger := sess.logger.Session("run")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	command.Stdout = sess.channel
 	command.Stderr = sess.channel.Stderr()
@@ -552,6 +591,9 @@ func (sess *session) run(command *exec.Cmd) error {
 
 func (sess *session) runWithPty(command *exec.Cmd) error {
 	logger := sess.logger.Session("run-with-pty")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	ptyMaster, ptySlave, err := pty.Open()
 	if err != nil {
@@ -591,6 +633,9 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 
 func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {
 	logger := sess.logger.Session("keepalive")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	ticker := time.NewTicker(sess.keepaliveDuration)
 	defer ticker.Stop()
@@ -613,15 +658,17 @@ func (sess *session) keepalive(command *exec.Cmd, stopCh chan struct{}) {
 
 func (sess *session) wait(command *exec.Cmd) error {
 	logger := sess.logger.Session("wait")
-	logger.Info("started")
+	logger.Info("start")
 	defer logger.Info("done")
+	defer handlePanic(logger)
 	return sess.runner.Wait(command)
 }
 
 func (sess *session) destroy() {
 	logger := sess.logger.Session("destroy")
-	logger.Info("started")
+	logger.Info("start")
 	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	sess.Lock()
 	defer sess.Unlock()
@@ -649,6 +696,9 @@ func (sess *session) destroy() {
 
 func (sess *session) executeSCP(command string, request *ssh.Request) {
 	logger := sess.logger.Session("execute-scp")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	if request.WantReply {
 		request.Reply(true, nil)
@@ -665,8 +715,9 @@ func (sess *session) executeSCP(command string, request *ssh.Request) {
 
 func (sess *session) sendSCPExitMessage(err error) {
 	logger := sess.logger.Session("send-scp-exit-message")
-	logger.Info("started")
-	defer logger.Info("finished")
+	logger.Info("start")
+	defer logger.Info("done")
+	defer handlePanic(logger)
 
 	var exitMessage exitStatusMsg
 	if err != nil {

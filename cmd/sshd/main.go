@@ -80,7 +80,7 @@ func NewLogFile() (*os.File, error) {
 	var last error
 	for i := 0; i < 1000; i++ {
 		name := fmt.Sprintf("sshd.%d.log", i)
-		f, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		f, err := os.OpenFile(name, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			last = err
 			continue
@@ -90,11 +90,12 @@ func NewLogFile() (*os.File, error) {
 	return nil, fmt.Errorf("could not create file: %s", last)
 }
 
-func main() {
+func realMain() error {
 	logFile, err := NewLogFile()
 	if err != nil {
-		panic(err)
+		return err
 	}
+	defer logFile.Close()
 	sink := lager.NewWriterSink(io.MultiWriter(logFile, os.Stdout), lager.DEBUG)
 
 	debugserver.AddFlags(flag.CommandLine)
@@ -104,6 +105,17 @@ func main() {
 
 	// logger, reconfigurableSink := lagerflags.New("sshd")
 	logger, reconfigurableSink := lagerflags.NewFromSink("sshd", sink)
+
+	defer func() {
+		if e := recover(); e != nil {
+			b := make([]byte, 1024*1024*8)
+			n := runtime.Stack(b, true)
+			fmt.Fprintf(logFile, "##### PANIC (%#v - %s) #####\n%s\n", e, e, string(b[:n]))
+		} else {
+			fmt.Fprintln(logFile, "clean exit")
+		}
+		logger.Info("EXITING NOW")
+	}()
 
 	hostKeyPEM = os.Getenv("SSHD_HOSTKEY")
 	if hostKeyPEM != "" {
@@ -119,7 +131,7 @@ func main() {
 			hostKeyPEM, err = generateNewHostKey()
 			if err != nil {
 				logger.Error("failed-to-generate-host-key", err)
-				os.Exit(1)
+				return err
 			}
 		}
 		authorizedKeyValue = *authorizedKey
@@ -151,14 +163,14 @@ func main() {
 		}, os.Environ())
 		if err != nil {
 			logger.Error("failed-exec", err)
-			os.Exit(1)
+			return err
 		}
 	}
 
 	serverConfig, err := configure(logger)
 	if err != nil {
 		logger.Error("configure-failed", err)
-		os.Exit(1)
+		return err
 	}
 
 	runner := handlers.NewCommandRunner()
@@ -195,11 +207,17 @@ func main() {
 	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("exited")
-	os.Exit(0)
+	return nil
+}
+
+func main() {
+	if err := realMain(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func getDaemonEnvironment() map[string]string {

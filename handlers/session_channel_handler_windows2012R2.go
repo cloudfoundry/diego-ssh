@@ -3,6 +3,8 @@
 package handlers
 
 import (
+	"time"
+
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -10,7 +12,12 @@ import (
 type SessionChannelHandler struct {
 }
 
-func NewSessionChannelHandler() *SessionChannelHandler {
+func NewSessionChannelHandler(
+	runner Runner,
+	shellLocator ShellLocator,
+	defaultEnv map[string]string,
+	keepalive time.Duration,
+) *SessionChannelHandler {
 	return &SessionChannelHandler{}
 }
 

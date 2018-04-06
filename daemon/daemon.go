@@ -42,13 +42,18 @@ func (d *Daemon) HandleConnection(netConn net.Conn) {
 		return
 	}
 
-	go d.handleGlobalRequests(logger, serverRequests)
+	go d.handleGlobalRequests(logger, serverRequests, serverConn)
 	go d.handleNewChannels(logger, serverChannels)
 
 	serverConn.Wait()
 }
 
-func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.Request) {
+// CEV: This is what handles the requests being passed to TcpipForwardGlobalRequestHandler,
+// which means that we aren't getting an ssh.NewChannel with it (I think this is true).
+//
+// I think the above is may be important because (or at least I wrote it) because having
+// the ssh.NewChannel would appear to make forwarding (dark magic) easier.
+func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.Request, conn ssh.Conn) {
 	logger = logger.Session("handle-global-requests")
 	logger.Info("starting")
 	defer logger.Info("finished")
@@ -61,7 +66,7 @@ func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.
 
 		handler, ok := d.globalRequestHandlers[req.Type]
 		if ok {
-			handler.HandleRequest(logger, req)
+			handler.HandleRequest(logger, req, conn)
 			continue
 		}
 

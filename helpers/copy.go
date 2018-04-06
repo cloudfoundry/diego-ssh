@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
@@ -9,7 +10,17 @@ import (
 
 func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader) {
 	logger = logger.Session("copy")
-	logger.Info("started")
+	logger.Info("start")
+	defer logger.Info("done")
+
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Error("PANIC", fmt.Errorf("%#v  --  %s", e, e), lager.Data{"panic": e})
+		} else {
+			logger.Info("clean-exit")
+		}
+	}()
+
 	defer func() {
 		if wg != nil {
 			wg.Done()
@@ -26,7 +37,16 @@ func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader
 
 func CopyAndClose(logger lager.Logger, wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader, closeFunc func()) {
 	logger = logger.Session("copy-and-close")
-	logger.Info("started")
+	logger.Info("start")
+	defer logger.Info("done")
+
+	defer func() {
+		if e := recover(); e != nil {
+			logger.Error("PANIC", fmt.Errorf("%#v  --  %s", e, e), lager.Data{"panic": e})
+		} else {
+			logger.Info("clean-exit")
+		}
+	}()
 
 	defer func() {
 		closeFunc()
