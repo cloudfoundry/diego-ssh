@@ -57,7 +57,7 @@ var _ = FDescribe("TcpipForwardGlobalRequestHandler", func() {
 		}
 		serverSSHConfig.AddHostKey(TestHostKey)
 
-		handler = handlers.NewTcpipForwardGlobalRequestHandler()
+		handler = new(handlers.TcpipForwardGlobalRequestHandler)
 
 		globalRequestHandlers := map[string]handlers.GlobalRequestHandler{
 			"tcpip-forward": handler,

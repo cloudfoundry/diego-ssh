@@ -13,17 +13,14 @@ import (
 
 const TCP_IP_FORWARD = "tcpip-forward"
 
-type TcpipForwardGlobalRequestHandler struct {
-	listeners map[string]net.Listener
+type TcpipForwardGlobalRequestHandler struct{}
+
+type tcpipForwardMsg struct {
+	Address string
+	Port    uint32
 }
 
-func NewTcpipForwardGlobalRequestHandler() *TcpipForwardGlobalRequestHandler {
-	return &TcpipForwardGlobalRequestHandler{
-		listeners: make(map[string]net.Listener),
-	}
-}
-
-func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn) {
+func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore) {
 	logger = logger.Session("tcpip-forward", lager.Data{
 		"type":       request.Type,
 		"want-reply": request.WantReply,
@@ -31,10 +28,6 @@ func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, re
 	logger.Info("start")
 	defer logger.Info("done")
 
-	type tcpipForwardMsg struct {
-		Address string
-		Port    uint32
-	}
 	var tcpipForwardMessage tcpipForwardMsg
 
 	err := ssh.Unmarshal(request.Payload, &tcpipForwardMessage)
@@ -58,7 +51,7 @@ func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, re
 		return // CEV: This was missing and causing forwardAcceptLoop to panic
 	}
 
-	h.listeners[address] = listener
+	lnStore.AddListener(address, listener)
 
 	var (
 		listenerAddr string
@@ -73,7 +66,7 @@ func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, re
 		"port": listenerPort,
 	})
 
-	go h.forwardAcceptLoop(listener, logger, conn, listenerAddr, listenerPort)
+	go h.forwardAcceptLoop(listener, logger, conn, tcpipForwardMessage.Address, listenerPort)
 
 	var tcpipForwardResponse struct {
 		Port uint32

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"syscall"
 
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -17,7 +18,7 @@ type Dialer interface {
 
 //go:generate counterfeiter -o fake_handlers/fake_global_request_handler.go . GlobalRequestHandler
 type GlobalRequestHandler interface {
-	HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn)
+	HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore)
 }
 
 //go:generate counterfeiter -o fake_handlers/fake_new_channel_handler.go . NewChannelHandler

@@ -105,6 +105,7 @@ func realMain() error {
 
 	// logger, reconfigurableSink := lagerflags.New("sshd")
 	logger, reconfigurableSink := lagerflags.NewFromSink("sshd", sink)
+	reconfigurableSink.SetMinLevel(lager.DEBUG)
 
 	defer func() {
 		if e := recover(); e != nil {
@@ -176,11 +177,13 @@ func realMain() error {
 	runner := handlers.NewCommandRunner()
 	shellLocator := handlers.NewShellLocator()
 	dialer := &net.Dialer{}
+
 	sshDaemon := daemon.New(
 		logger,
 		serverConfig,
 		map[string]handlers.GlobalRequestHandler{
-			"tcpip-forward": handlers.NewTcpipForwardGlobalRequestHandler(),
+			"tcpip-forward":        new(handlers.TcpipForwardGlobalRequestHandler),
+			"cancel-tcpip-forward": new(handlers.CancelTcpipForwardGlobalRequestHandler),
 		},
 		map[string]handlers.NewChannelHandler{
 			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
