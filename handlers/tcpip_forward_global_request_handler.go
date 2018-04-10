@@ -60,14 +60,25 @@ func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, re
 
 	h.listeners[address] = listener
 
-	go h.forwardAcceptLoop(listener, logger, conn)
+	var (
+		listenerAddr string
+		listenerPort uint32
+	)
+	if addr, ok := listener.Addr().(*net.TCPAddr); ok {
+		listenerAddr = addr.IP.String()
+		listenerPort = uint32(addr.Port)
+	}
+	logger.Info("actual-listener-address", lager.Data{
+		"addr": listenerAddr,
+		"port": listenerPort,
+	})
+
+	go h.forwardAcceptLoop(listener, logger, conn, listenerAddr, listenerPort)
 
 	var tcpipForwardResponse struct {
 		Port uint32
 	}
-	if lnAddr, ok := listener.Addr().(*net.TCPAddr); ok {
-		tcpipForwardResponse.Port = uint32(lnAddr.Port)
-	}
+	tcpipForwardResponse.Port = listenerPort
 
 	var replyPayload []byte
 
@@ -89,7 +100,7 @@ type forwardedTCPPayload struct {
 
 // CEV: here we need to figure out what to do with the listener...
 // EX: We need to start a new channel for each accepted connection, so we need to do this with the SSH Conn
-func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn) {
+func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn, lnAddr string, lnPort uint32) {
 	logger = logger.Session("forwardAcceptLoop")
 	logger.Info("start")
 	defer logger.Info("done")
@@ -111,13 +122,37 @@ func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listen
 			return
 		}
 
-		channel, requests, err := sshConn.OpenChannel("some-forwarded-tcpip-ch-name", nil)
-		if err != nil {
-			logger.Error("failed-to-open channel", err)
-			continue
-		}
-		go ssh.DiscardRequests(requests)
 		go func() {
+			var (
+				remoteAddr string
+				remotePort uint32
+			)
+			if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+				remoteAddr = addr.IP.String()
+				remotePort = uint32(addr.Port)
+			}
+			payload := forwardedTCPPayload{
+				Addr:       lnAddr,
+				Port:       lnPort,
+				OriginAddr: remoteAddr,
+				OriginPort: remotePort,
+			}
+			logger.Info("forwardedTCPPayload", lager.Data{
+				"payload": payload,
+			})
+
+			channel, requests, err := sshConn.OpenChannel("forwarded-tcpip", ssh.Marshal(payload))
+			if err != nil {
+				logger.Error("failed-to-open channel", err)
+				logger.Info("open-channel", lager.Data{
+					"channel":  channel,
+					"requests": requests,
+				})
+				return
+			}
+			logger.Info("opened-channel", lager.Data{"payload": payload})
+			go ssh.DiscardRequests(requests)
+
 			wg := &sync.WaitGroup{}
 
 			wg.Add(2)
@@ -130,11 +165,13 @@ func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listen
 			logger.Debug("copying-channel-data")
 			go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel,
 				func() {
+					logger.Info("connection-closewrite")
 					conn.(*net.TCPConn).CloseWrite()
 				},
 			)
 			go helpers.CopyAndClose(logger.Session("to-channel"), wg, channel, conn,
 				func() {
+					logger.Info("channel-closewrite")
 					channel.CloseWrite()
 				},
 			)

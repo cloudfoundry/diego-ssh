@@ -12,6 +12,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/server"
 	fake_server "code.cloudfoundry.org/diego-ssh/server/fakes"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -37,17 +38,19 @@ var _ = FDescribe("TcpipForwardGlobalRequestHandler", func() {
 
 		echoHandler = &fake_server.FakeConnectionHandler{}
 		echoHandler.HandleConnectionStub = func(conn net.Conn) {
-			io.Copy(conn, conn)
+			logger.Info("echo-server-handling-conn")
+			n, err := io.Copy(conn, conn)
+			logger.Info("echo-server-finished-copy", lager.Data{
+				"n":   n,
+				"err": err,
+			})
 			conn.Close()
 		}
 
 		echoListener, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())
 		echoAddress = echoListener.Addr().String()
-
-		echoServer = server.NewServer(logger.Session("echo"), echoAddress, echoHandler, 5*time.Minute)
-		echoServer.SetListener(echoListener)
-		go echoServer.Serve()
+		echoListener.Close()
 
 		serverSSHConfig = &ssh.ServerConfig{
 			NoClientAuth: true,
@@ -78,22 +81,9 @@ var _ = FDescribe("TcpipForwardGlobalRequestHandler", func() {
 
 			defer listener.Close()
 
-			done := make(chan struct{})
-
-			go func() {
-				GinkgoRecover()
-				localConn, err := listener.Accept()
-				Expect(err).NotTo(HaveOccurred())
-
-				msg := make([]byte, 5)
-				n, err := localConn.Read(msg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(n).To(Equal(5))
-
-				Expect(msg).To(Equal([]byte("Hello")))
-
-				close(done)
-			}()
+			echoServer = server.NewServer(logger.Session("echo"), echoAddress, echoHandler, 5*time.Minute)
+			echoServer.SetListener(listener)
+			go echoServer.Serve()
 
 			remoteConn, err := net.Dial("tcp", echoAddress)
 			Expect(err).NotTo(HaveOccurred())
@@ -105,7 +95,10 @@ var _ = FDescribe("TcpipForwardGlobalRequestHandler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(n).To(Equal(len(msg)))
 
-			Eventually(done).Should(BeClosed())
+			resp := make([]byte, 5)
+			n, err = remoteConn.Read(resp)
+			Expect(n).To(Equal(len(msg)))
+			Expect(resp).To(Equal(msg))
 		})
 	})
 })
