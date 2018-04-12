@@ -6,25 +6,25 @@ import (
 	"sync"
 )
 
-type TCPIPListenerStore struct {
+type ListenerStore struct {
 	store map[string]net.Listener
 	lock  sync.Mutex
 }
 
-func NewTCPIPListenerStore() *TCPIPListenerStore {
-	return &TCPIPListenerStore{
+func NewListenerStore() *ListenerStore {
+	return &ListenerStore{
 		store: make(map[string]net.Listener),
 		lock:  sync.Mutex{},
 	}
 }
 
-func (t *TCPIPListenerStore) AddListener(addr string, ln net.Listener) {
+func (t *ListenerStore) AddListener(addr string, ln net.Listener) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.store[addr] = ln
 }
 
-func (t *TCPIPListenerStore) RemoveListener(addr string) error {
+func (t *ListenerStore) RemoveListener(addr string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if ln, ok := t.store[addr]; ok {
@@ -35,10 +35,20 @@ func (t *TCPIPListenerStore) RemoveListener(addr string) error {
 		delete(t.store, addr)
 		return nil
 	}
-	return fmt.Errorf("Cannot remove listener addr %s since it doesn't exist", addr)
+	return fmt.Errorf("RemoveListener error: addr %s doesn't exist", addr)
 }
 
-func (t *TCPIPListenerStore) RemoveAll() {
+func (t *ListenerStore) ListAll() []string {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	var l []string
+	for k := range t.store {
+		l = append(l, k)
+	}
+	return l
+}
+
+func (t *ListenerStore) RemoveAll() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	for k := range t.store {

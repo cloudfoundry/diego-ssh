@@ -1,4 +1,4 @@
-package handlers
+package globalrequest
 
 import (
 	"fmt"
@@ -11,16 +11,16 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const TCP_IP_FORWARD = "tcpip-forward"
+const TCPIPForward = "tcpip-forward"
 
-type TcpipForwardGlobalRequestHandler struct{}
+type TCPIPForwardHandler struct{}
 
 type tcpipForwardMsg struct {
 	Address string
 	Port    uint32
 }
 
-func (h *TcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore) {
+func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 	logger = logger.Session("tcpip-forward", lager.Data{
 		"type":       request.Type,
 		"want-reply": request.WantReply,
@@ -93,7 +93,7 @@ type forwardedTCPPayload struct {
 
 // CEV: here we need to figure out what to do with the listener...
 // EX: We need to start a new channel for each accepted connection, so we need to do this with the SSH Conn
-func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn, lnAddr string, lnPort uint32) {
+func (h *TCPIPForwardHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn, lnAddr string, lnPort uint32) {
 	logger = logger.Session("forwardAcceptLoop")
 	logger.Info("start")
 	defer logger.Info("done")
@@ -123,10 +123,15 @@ func (h *TcpipForwardGlobalRequestHandler) forwardAcceptLoop(listener net.Listen
 			if addr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 				remoteAddr = addr.IP.String()
 				remotePort = uint32(addr.Port)
+			} else {
+				// TODO: What do we do?
 			}
 			payload := forwardedTCPPayload{
-				Addr:       lnAddr,
-				Port:       lnPort,
+				// CEV: the address must match the address of the original request and
+				// does the port unless 0 was given in the original request.
+				Addr: lnAddr,
+				Port: lnPort,
+				// CEV: here is where we get the address we forward to
 				OriginAddr: remoteAddr,
 				OriginPort: remotePort,
 			}

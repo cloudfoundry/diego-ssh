@@ -1,4 +1,4 @@
-package handlers
+package globalrequest
 
 import (
 	"net"
@@ -9,10 +9,12 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type CancelTcpipForwardGlobalRequestHandler struct{}
+const CancelTCPIPForward = "cancel-tcpip-forward"
 
-func (h *CancelTcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore) {
-	logger = logger.Session("tcpip-forward", lager.Data{
+type CancelTCPIPForwardHandler struct{}
+
+func (h *CancelTCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
+	logger = logger.Session("cancel-tcpip-forward", lager.Data{
 		"type":       request.Type,
 		"want-reply": request.WantReply,
 	})
@@ -29,7 +31,7 @@ func (h *CancelTcpipForwardGlobalRequestHandler) HandleRequest(logger lager.Logg
 
 	address := net.JoinHostPort(tcpipForwardMessage.Address, strconv.FormatUint(uint64(tcpipForwardMessage.Port), 10))
 
-	logger.Info("cancel-tcpip-forward", lager.Data{
+	logger.Info("recieved-payload", lager.Data{
 		"message-address": tcpipForwardMessage.Address,
 		"message-port":    tcpipForwardMessage.Port,
 		"listen-address":  address,

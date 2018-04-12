@@ -11,25 +11,25 @@ import (
 )
 
 type FakeGlobalRequestHandler struct {
-	HandleRequestStub        func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore)
+	HandleRequestStub        func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore)
 	handleRequestMutex       sync.RWMutex
 	handleRequestArgsForCall []struct {
 		logger  lager.Logger
 		request *ssh.Request
 		conn    ssh.Conn
-		lnStore *helpers.TCPIPListenerStore
+		lnStore *helpers.ListenerStore
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore) {
+func (fake *FakeGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 	fake.handleRequestMutex.Lock()
 	fake.handleRequestArgsForCall = append(fake.handleRequestArgsForCall, struct {
 		logger  lager.Logger
 		request *ssh.Request
 		conn    ssh.Conn
-		lnStore *helpers.TCPIPListenerStore
+		lnStore *helpers.ListenerStore
 	}{logger, request, conn, lnStore})
 	fake.recordInvocation("HandleRequest", []interface{}{logger, request, conn, lnStore})
 	fake.handleRequestMutex.Unlock()
@@ -44,7 +44,7 @@ func (fake *FakeGlobalRequestHandler) HandleRequestCallCount() int {
 	return len(fake.handleRequestArgsForCall)
 }
 
-func (fake *FakeGlobalRequestHandler) HandleRequestArgsForCall(i int) (lager.Logger, *ssh.Request, ssh.Conn, *helpers.TCPIPListenerStore) {
+func (fake *FakeGlobalRequestHandler) HandleRequestArgsForCall(i int) (lager.Logger, *ssh.Request, ssh.Conn, *helpers.ListenerStore) {
 	fake.handleRequestMutex.RLock()
 	defer fake.handleRequestMutex.RUnlock()
 	return fake.handleRequestArgsForCall[i].logger, fake.handleRequestArgsForCall[i].request, fake.handleRequestArgsForCall[i].conn, fake.handleRequestArgsForCall[i].lnStore

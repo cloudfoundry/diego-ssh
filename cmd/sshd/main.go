@@ -16,6 +16,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest"
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
@@ -182,8 +183,8 @@ func realMain() error {
 		logger,
 		serverConfig,
 		map[string]handlers.GlobalRequestHandler{
-			"tcpip-forward":        new(handlers.TcpipForwardGlobalRequestHandler),
-			"cancel-tcpip-forward": new(handlers.CancelTcpipForwardGlobalRequestHandler),
+			globalrequest.TCPIPForward:       new(globalrequest.TCPIPForwardHandler),
+			globalrequest.CancelTCPIPForward: new(globalrequest.CancelTCPIPForwardHandler),
 		},
 		map[string]handlers.NewChannelHandler{
 			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),

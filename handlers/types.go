@@ -18,7 +18,7 @@ type Dialer interface {
 
 //go:generate counterfeiter -o fake_handlers/fake_global_request_handler.go . GlobalRequestHandler
 type GlobalRequestHandler interface {
-	HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.TCPIPListenerStore)
+	HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore)
 }
 
 //go:generate counterfeiter -o fake_handlers/fake_new_channel_handler.go . NewChannelHandler

@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/handlers"
 	"code.cloudfoundry.org/diego-ssh/handlers/fake_handlers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"code.cloudfoundry.org/lager"
@@ -143,7 +144,7 @@ var _ = Describe("Daemon", func() {
 					name = "known-handler"
 					wantReply = true
 
-					fakeHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request, conn ssh.Conn) {
+					fakeHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 						request.Reply(true, []byte("response"))
 					}
 				})

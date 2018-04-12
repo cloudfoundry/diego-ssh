@@ -409,7 +409,7 @@ var _ = Describe("Proxy", func() {
 
 					BeforeEach(func() {
 						globalRequestHandler = &fake_handlers.FakeGlobalRequestHandler{}
-						globalRequestHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request) {
+						globalRequestHandler.HandleRequestStub = func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 							request.Reply(true, []byte("response-payload"))
 						}
 						daemonGlobalRequestHandlers["test-global-request"] = globalRequestHandler
@@ -423,7 +423,7 @@ var _ = Describe("Proxy", func() {
 
 						Expect(globalRequestHandler.HandleRequestCallCount()).To(Equal(1))
 
-						_, request := globalRequestHandler.HandleRequestArgsForCall(0)
+						_, request, _, _ := globalRequestHandler.HandleRequestArgsForCall(0)
 						Expect(request.Type).To(Equal("test-global-request"))
 						Expect(request.WantReply).To(BeTrue())
 						Expect(request.Payload).To(Equal([]byte("request-payload")))
