@@ -4,14 +4,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
+	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest"
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
@@ -72,7 +76,7 @@ var allowedKeyExchanges = flag.String(
 var hostKeyPEM string
 var authorizedKeyValue string
 
-func main() {
+func runServer() error {
 	debugserver.AddFlags(flag.CommandLine)
 	lagerflags.AddFlags(flag.CommandLine)
 	flag.Parse()
@@ -94,7 +98,7 @@ func main() {
 			hostKeyPEM, err = generateNewHostKey()
 			if err != nil {
 				logger.Error("failed-to-generate-host-key", err)
-				os.Exit(1)
+				return err
 			}
 		}
 		authorizedKeyValue = *authorizedKey
@@ -126,18 +130,37 @@ func main() {
 		}, os.Environ())
 		if err != nil {
 			logger.Error("failed-exec", err)
-			os.Exit(1)
+			return err
 		}
 	}
 
 	serverConfig, err := configure(logger)
 	if err != nil {
 		logger.Error("configure-failed", err)
-		os.Exit(1)
+		return err
 	}
 
-	sshDaemon := daemon.New(logger, serverConfig, nil, newChannelHandlers())
+	runner := handlers.NewCommandRunner()
+	shellLocator := handlers.NewShellLocator()
+	dialer := &net.Dialer{}
+
+	sshDaemon := daemon.New(
+		logger,
+		serverConfig,
+		map[string]handlers.GlobalRequestHandler{
+			globalrequest.TCPIPForward:       new(globalrequest.TCPIPForwardHandler),
+			globalrequest.CancelTCPIPForward: new(globalrequest.CancelTCPIPForwardHandler),
+		},
+		map[string]handlers.NewChannelHandler{
+			"session":      handlers.NewSessionChannelHandler(runner, shellLocator, getDaemonEnvironment(), 15*time.Second),
+			"direct-tcpip": handlers.NewDirectTcpipChannelHandler(dialer),
+		},
+	)
 	server, err := createServer(logger, *address, sshDaemon)
+	if err != nil {
+		logger.Error("create-server-failure", err)
+		return err
+	}
 
 	members := grouper.Members{
 		{"sshd", server},
@@ -154,14 +177,19 @@ func main() {
 
 	logger.Info("started")
 
-	err = <-monitor.Wait()
-	if err != nil {
+	if err := <-monitor.Wait(); err != nil {
 		logger.Error("exited-with-failure", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("exited")
-	os.Exit(0)
+	return nil
+}
+
+func main() {
+	if err := runServer(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func getDaemonEnvironment() map[string]string {

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
@@ -710,6 +712,60 @@ var _ = Describe("SSH daemon", func() {
 				line, err := reader.ReadString('\n')
 				Expect(err).NotTo(HaveOccurred())
 				Expect(line).To(ContainSubstring("hi from jim"))
+			})
+		})
+
+		Context("when a client requests a remote port forward", func() {
+			var server *ghttp.Server
+
+			BeforeEach(func() {
+				server = ghttp.NewServer()
+				server.AppendHandlers(
+					ghttp.RespondWith(http.StatusOK, "hello from the other side\n"),
+				)
+			})
+
+			It("forwards the remote port from server side to the target", func() {
+				ln, err := client.Listen("tcp", "127.0.0.1:0")
+				Expect(err).NotTo(HaveOccurred())
+
+				go func() {
+					for {
+						conn, err := ln.Accept()
+						if err != nil {
+							return
+						}
+
+						proxyConn, err := net.Dial("tcp", server.Addr())
+						if err != nil {
+							return
+						}
+
+						wg := sync.WaitGroup{}
+						wg.Add(2)
+
+						go func() {
+							_, _ = io.Copy(conn, proxyConn)
+							wg.Done()
+						}()
+
+						go func() {
+							_, _ = io.Copy(proxyConn, conn)
+							wg.Done()
+						}()
+
+						wg.Wait()
+					}
+				}()
+
+				resp, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+				reader := bufio.NewReader(resp.Body)
+				line, err := reader.ReadString('\n')
+				Expect(err).NotTo(HaveOccurred())
+				Expect(line).To(ContainSubstring("hello from the other side"))
 			})
 		})
 	})

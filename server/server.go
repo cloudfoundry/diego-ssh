@@ -33,7 +33,7 @@ func NewServer(
 	idleConnTimeout time.Duration,
 ) *Server {
 	return &Server{
-		logger:            logger,
+		logger:            logger.Session("server"),
 		listenAddress:     listenAddress,
 		connectionHandler: connectionHandler,
 		mutex:             &sync.Mutex{},
