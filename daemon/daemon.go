@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
@@ -42,13 +43,15 @@ func (d *Daemon) HandleConnection(netConn net.Conn) {
 		return
 	}
 
-	go d.handleGlobalRequests(logger, serverRequests)
+	lnStore := helpers.NewListenerStore()
+	go d.handleGlobalRequests(logger, serverRequests, serverConn, lnStore)
 	go d.handleNewChannels(logger, serverChannels)
 
 	serverConn.Wait()
+	lnStore.RemoveAll()
 }
 
-func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.Request) {
+func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 	logger = logger.Session("handle-global-requests")
 	logger.Info("starting")
 	defer logger.Info("finished")
@@ -61,7 +64,7 @@ func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.
 
 		handler, ok := d.globalRequestHandlers[req.Type]
 		if ok {
-			handler.HandleRequest(logger, req)
+			handler.HandleRequest(logger, req, conn, lnStore)
 			continue
 		}
 

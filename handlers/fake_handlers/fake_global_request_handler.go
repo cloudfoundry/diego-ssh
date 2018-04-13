@@ -5,31 +5,36 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/diego-ssh/handlers"
+	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
 )
 
 type FakeGlobalRequestHandler struct {
-	HandleRequestStub        func(logger lager.Logger, request *ssh.Request)
+	HandleRequestStub        func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore)
 	handleRequestMutex       sync.RWMutex
 	handleRequestArgsForCall []struct {
 		logger  lager.Logger
 		request *ssh.Request
+		conn    ssh.Conn
+		lnStore *helpers.ListenerStore
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request) {
+func (fake *FakeGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 	fake.handleRequestMutex.Lock()
 	fake.handleRequestArgsForCall = append(fake.handleRequestArgsForCall, struct {
 		logger  lager.Logger
 		request *ssh.Request
-	}{logger, request})
-	fake.recordInvocation("HandleRequest", []interface{}{logger, request})
+		conn    ssh.Conn
+		lnStore *helpers.ListenerStore
+	}{logger, request, conn, lnStore})
+	fake.recordInvocation("HandleRequest", []interface{}{logger, request, conn, lnStore})
 	fake.handleRequestMutex.Unlock()
 	if fake.HandleRequestStub != nil {
-		fake.HandleRequestStub(logger, request)
+		fake.HandleRequestStub(logger, request, conn, lnStore)
 	}
 }
 
@@ -39,10 +44,10 @@ func (fake *FakeGlobalRequestHandler) HandleRequestCallCount() int {
 	return len(fake.handleRequestArgsForCall)
 }
 
-func (fake *FakeGlobalRequestHandler) HandleRequestArgsForCall(i int) (lager.Logger, *ssh.Request) {
+func (fake *FakeGlobalRequestHandler) HandleRequestArgsForCall(i int) (lager.Logger, *ssh.Request, ssh.Conn, *helpers.ListenerStore) {
 	fake.handleRequestMutex.RLock()
 	defer fake.handleRequestMutex.RUnlock()
-	return fake.handleRequestArgsForCall[i].logger, fake.handleRequestArgsForCall[i].request
+	return fake.handleRequestArgsForCall[i].logger, fake.handleRequestArgsForCall[i].request, fake.handleRequestArgsForCall[i].conn, fake.handleRequestArgsForCall[i].lnStore
 }
 
 func (fake *FakeGlobalRequestHandler) Invocations() map[string][][]interface{} {

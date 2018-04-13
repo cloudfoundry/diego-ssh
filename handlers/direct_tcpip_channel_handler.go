@@ -10,11 +10,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-//go:generate counterfeiter -o fakes/fake_dialer.go . Dialer
-type Dialer interface {
-	Dial(net, addr string) (net.Conn, error)
-}
-
 type DirectTcpipChannelHandler struct {
 	dialer Dialer
 }
@@ -48,25 +43,29 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 
 	destination := fmt.Sprintf("%s:%d", directTcpipMessage.TargetAddr, directTcpipMessage.TargetPort)
 	logger.Debug("dialing-connection", lager.Data{"destination": destination})
+
 	conn, err := handler.dialer.Dial("tcp", destination)
 	if err != nil {
 		logger.Error("failed-connecting-to-target", err)
 		newChannel.Reject(ssh.ConnectionFailed, err.Error())
 		return
 	}
+	defer conn.Close()
 
 	logger.Debug("dialed-connection", lager.Data{"destintation": destination})
 	channel, requests, err := newChannel.Accept()
+	if err != nil {
+		logger.Error("failed-to-accept-channel", err)
+		newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		return
+	}
+	defer channel.Close()
+
 	go ssh.DiscardRequests(requests)
 
 	wg := &sync.WaitGroup{}
 
 	wg.Add(2)
-
-	defer func() {
-		conn.Close()
-		channel.Close()
-	}()
 
 	logger.Debug("copying-channel-data")
 	go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel,
