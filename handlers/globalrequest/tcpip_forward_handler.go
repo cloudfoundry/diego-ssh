@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 
+	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest/internal"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
@@ -14,11 +15,6 @@ const TCPIPForward = "tcpip-forward"
 
 type TCPIPForwardHandler struct{}
 
-type tcpipForwardMsg struct {
-	Address string
-	Port    uint32
-}
-
 func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
 	logger = logger.Session("tcpip-forward", lager.Data{
 		"type":       request.Type,
@@ -27,8 +23,7 @@ func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Re
 	logger.Info("start")
 	defer logger.Info("done")
 
-	var tcpipForwardMessage tcpipForwardMsg
-
+	var tcpipForwardMessage internal.TCPIPForwardRequest
 	err := ssh.Unmarshal(request.Payload, &tcpipForwardMessage)
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
@@ -50,11 +45,10 @@ func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Re
 		return
 	}
 
-	lnStore.AddListener(address, listener)
-
 	var listenerAddr string
 	var listenerPort uint32
 	if addr, ok := listener.Addr().(*net.TCPAddr); ok {
+		address = addr.String()
 		listenerAddr = addr.IP.String()
 		listenerPort = uint32(addr.Port)
 	}
@@ -63,21 +57,20 @@ func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Re
 		"port": listenerPort,
 	})
 
+	lnStore.AddListener(address, listener)
+
 	go h.forwardAcceptLoop(listener, logger, conn, tcpipForwardMessage.Address, listenerPort)
 
-	var tcpipForwardResponse struct {
-		Port uint32
-	}
+	var tcpipForwardResponse internal.TCPIPForwardResponse
 	tcpipForwardResponse.Port = listenerPort
 
 	var replyPayload []byte
+
 	if tcpipForwardMessage.Port == 0 {
+		// See RFC 4254, section 7.1
 		replyPayload = ssh.Marshal(tcpipForwardResponse)
 	}
 
-	// WARN (CEV): I think we only want to reply if WantReply
-	// is true and this appears to always reply!
-	//
 	// Reply() will only send something when WantReply is true
 	_ = request.Reply(true, replyPayload)
 }
@@ -90,9 +83,7 @@ type forwardedTCPPayload struct {
 	OriginPort uint32
 }
 
-func (h *TCPIPForwardHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn,
-	lnAddr string, lnPort uint32) {
-
+func (h *TCPIPForwardHandler) forwardAcceptLoop(listener net.Listener, logger lager.Logger, sshConn ssh.Conn, lnAddr string, lnPort uint32) {
 	logger = logger.Session("forward-accept-loop")
 	logger.Info("start")
 	defer logger.Info("done")
@@ -130,11 +121,12 @@ func (h *TCPIPForwardHandler) forwardAcceptLoop(listener net.Listener, logger la
 			var wg sync.WaitGroup
 			wg.Add(2)
 
-			go helpers.CopyAndClose(logger.Session("to-target"), &wg, conn, channel,
-				func() { conn.(*net.TCPConn).CloseWrite() })
-
-			go helpers.CopyAndClose(logger.Session("to-channel"), &wg, channel, conn,
-				func() { channel.CloseWrite() })
+			go helpers.CopyAndClose(logger.Session("to-target"), &wg, conn, channel, func() {
+				conn.Close()
+			})
+			go helpers.CopyAndClose(logger.Session("to-channel"), &wg, channel, conn, func() {
+				channel.CloseWrite()
+			})
 
 			wg.Wait()
 		}(conn)

@@ -45,9 +45,9 @@ func (t *ListenerStore) ListAll() []string {
 
 func (t *ListenerStore) RemoveAll() {
 	t.lock.Lock()
-	for k, v := range t.store {
-		v.Close()
+	for k, ln := range t.store {
 		delete(t.store, k)
+		ln.Close()
 	}
 	t.lock.Unlock()
 }

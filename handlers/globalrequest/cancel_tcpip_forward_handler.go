@@ -4,6 +4,7 @@ import (
 	"net"
 	"strconv"
 
+	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest/internal"
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/lager"
 	"golang.org/x/crypto/ssh"
@@ -21,7 +22,7 @@ func (h *CancelTCPIPForwardHandler) HandleRequest(logger lager.Logger, request *
 	logger.Info("start")
 	defer logger.Info("done")
 
-	var tcpipForwardMessage tcpipForwardMsg
+	var tcpipForwardMessage internal.TCPIPForwardRequest
 
 	err := ssh.Unmarshal(request.Payload, &tcpipForwardMessage)
 	if err != nil {

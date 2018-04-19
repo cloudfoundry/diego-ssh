@@ -716,7 +716,10 @@ var _ = Describe("SSH daemon", func() {
 		})
 
 		Context("when a client requests a remote port forward", func() {
-			var server *ghttp.Server
+			var (
+				server *ghttp.Server
+				ln     net.Listener
+			)
 
 			BeforeEach(func() {
 				server = ghttp.NewServer()
@@ -725,10 +728,13 @@ var _ = Describe("SSH daemon", func() {
 				)
 			})
 
-			It("forwards the remote port from server side to the target", func() {
-				ln, err := client.Listen("tcp", "127.0.0.1:0")
+			JustBeforeEach(func() {
+				var err error
+				ln, err = client.Listen("tcp", "127.0.0.1:0")
 				Expect(err).NotTo(HaveOccurred())
+			})
 
+			It("forwards the remote port from server side to the target", func() {
 				go func() {
 					for {
 						conn, err := ln.Accept()
@@ -766,6 +772,30 @@ var _ = Describe("SSH daemon", func() {
 				line, err := reader.ReadString('\n')
 				Expect(err).NotTo(HaveOccurred())
 				Expect(line).To(ContainSubstring("hello from the other side"))
+			})
+
+			Context("when the connection is closed", func() {
+				JustBeforeEach(func() {
+					Expect(client.Close()).To(Succeed())
+				})
+
+				It("closes the listeners associated with this conn", func() {
+					Eventually(func() error {
+						_, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
+						return err
+					}).Should(MatchError(ContainSubstring("connection refused")))
+				})
+			})
+
+			Context("when the listener is closed", func() {
+				JustBeforeEach(func() {
+					Expect(ln.Close()).To(Succeed())
+				})
+
+				It("responds with a client refused error to clients", func() {
+					_, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
+					Expect(err).To(MatchError(ContainSubstring("connection refused")))
+				})
 			})
 		})
 	})

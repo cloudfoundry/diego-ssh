@@ -1,8 +1,10 @@
 package globalrequest_test
 
 import (
+	"bufio"
+	"fmt"
+	"io"
 	"net"
-	"sync"
 
 	"golang.org/x/crypto/ssh"
 
@@ -12,6 +14,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/localip"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -23,18 +26,12 @@ var _ = Describe("TCPIPForward Handler", func() {
 		logger        *lagertest.TestLogger
 	)
 
-	randomUnusedAddress := func() string {
-		remoteListener, err := net.Listen("tcp", "127.0.0.1:0")
-		Expect(err).NotTo(HaveOccurred())
-		addr := remoteListener.Addr().String()
-		remoteListener.Close()
-		return addr
-	}
-
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("tcpip-forward-test")
 
-		remoteAddress = randomUnusedAddress()
+		remotePort, err := localip.LocalPort()
+		Expect(err).NotTo(HaveOccurred())
+		remoteAddress = fmt.Sprintf("127.0.0.1:%d", remotePort)
 
 		globalRequestHandlers := map[string]handlers.GlobalRequestHandler{
 			globalrequest.TCPIPForward:       new(globalrequest.TCPIPForwardHandler),
@@ -53,17 +50,23 @@ var _ = Describe("TCPIPForward Handler", func() {
 		sshClient = test_helpers.NewClient(clientNetConn, nil)
 	})
 
-	testTCPIPForward := func(remoteAddr string) {
+	testTCPIPForwardAndReturnConn := func(remoteAddr string) net.Conn {
 		remoteConn, err := net.Dial("tcp", remoteAddr)
 		Expect(err).NotTo(HaveOccurred())
 
-		defer remoteConn.Close()
-
-		expectedMsg := []byte("hello")
-		resp := make([]byte, 5)
-		_, err = remoteConn.Read(resp)
+		expectedMsg := "hello\n"
+		_, err = fmt.Fprint(remoteConn, expectedMsg)
+		Expect(err).NotTo(HaveOccurred())
+		r := bufio.NewReader(remoteConn)
+		l, err := r.ReadString('\n')
 		Expect(err).ToNot(HaveOccurred())
-		Expect(resp).To(Equal(expectedMsg))
+		Expect(l).To(Equal(expectedMsg))
+		return remoteConn
+	}
+
+	testTCPIPForward := func(remoteAddr string) {
+		conn := testTCPIPForwardAndReturnConn(remoteAddr)
+		Expect(conn.Close()).To(Succeed())
 	}
 
 	It("listens for multiple connections on the interface/port specified", func() {
@@ -73,16 +76,11 @@ var _ = Describe("TCPIPForward Handler", func() {
 		defer listener.Close()
 		go ServeListener(listener, logger.Session("local"))
 
-		wg := new(sync.WaitGroup)
-		for i := 0; i < 20; i++ {
-			wg.Add(1)
-			go func() {
-				defer GinkgoRecover()
-				defer wg.Done()
-				testTCPIPForward(remoteAddress)
-			}()
-		}
-		wg.Wait()
+		conn1 := testTCPIPForwardAndReturnConn(remoteAddress)
+		conn2 := testTCPIPForwardAndReturnConn(remoteAddress)
+
+		Expect(conn1.Close()).To(Succeed())
+		Expect(conn2.Close()).To(Succeed())
 	})
 
 	It("allows the requester to ask for connections to be forwarded from an unused port", func() {
@@ -116,22 +114,54 @@ var _ = Describe("TCPIPForward Handler", func() {
 
 		testTCPIPForward(remoteAddress)
 	})
+
+	Context("when listener cannot be created", func() {
+		var (
+			ln net.Listener
+		)
+
+		BeforeEach(func() {
+			var err error
+			ln, err = net.Listen("tcp", ":0")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(ln.Close()).To(Succeed())
+		})
+
+		It("reject the request", func() {
+			_, err := sshClient.Listen("tcp", ln.Addr().String())
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
 
 func ServeListener(ln net.Listener, logger lager.Logger) {
-	defer GinkgoRecover()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			logger.Error("listener-failed-to-accept", err)
 			return
 		}
-		n, err := conn.Write([]byte("hello"))
-		conn.Close()
-		if err != nil {
-			logger.Error("server-sent-message-error", err)
-			Expect(err).NotTo(HaveOccurred())
-		}
-		logger.Info("server-sent-message-success", lager.Data{"bytes-sent": n})
+
+		go func() {
+			defer conn.Close()
+			defer GinkgoRecover()
+
+			for {
+				r := bufio.NewReader(conn)
+				l, err := r.ReadString('\n')
+				if err == io.EOF {
+					return
+				}
+				n, err := conn.Write([]byte(l))
+				if err != nil {
+					logger.Error("server-sent-message-error", err)
+					return
+				}
+				logger.Info("server-sent-message-success", lager.Data{"bytes-sent": n})
+			}
+		}()
 	}
 }

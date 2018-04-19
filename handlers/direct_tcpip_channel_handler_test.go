@@ -37,6 +37,8 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		echoHandler *fake_server.FakeConnectionHandler
 		echoServer  *server.Server
 		echoAddress string
+
+		handleConnFinished chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -76,7 +78,12 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 		serverNetConn, clientNetConn := test_helpers.Pipe()
 
 		sshd = daemon.New(logger, serverSSHConfig, nil, newChannelHandlers)
-		go sshd.HandleConnection(serverNetConn)
+
+		handleConnFinished = make(chan struct{})
+		go func() {
+			sshd.HandleConnection(serverNetConn)
+			close(handleConnFinished)
+		}()
 
 		client = test_helpers.NewClient(clientNetConn, nil)
 	})
@@ -84,6 +91,7 @@ var _ = Describe("DirectTcpipChannelHandler", func() {
 	AfterEach(func() {
 		client.Close()
 		echoServer.Shutdown()
+		Eventually(handleConnFinished).Should(BeClosed())
 	})
 
 	Context("when a session is opened", func() {

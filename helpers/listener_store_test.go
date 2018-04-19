@@ -1,10 +1,11 @@
 package helpers_test
 
 import (
-	"net"
+	"fmt"
 	"sync"
 
 	"code.cloudfoundry.org/diego-ssh/helpers"
+	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -16,29 +17,29 @@ var _ = Describe("ListenerStore", func() {
 	})
 
 	It("concurrently adds and removes", func() {
+		addrs := make(chan string, 100)
+		ln := &fake_net.FakeListener{}
+
 		wg := sync.WaitGroup{}
-		wg.Add(20)
 		for i := 0; i < 20; i++ {
-			go func() {
+			wg.Add(1)
+			go func(i int) {
+				addr := fmt.Sprintf("127.0.0.1:%d", 8080+i)
 				defer wg.Done()
-				ln, err := net.Listen("tcp", "127.0.0.1:0")
-				Expect(err).ToNot(HaveOccurred())
-				lnStore.AddListener(ln.Addr().String(), ln)
-			}()
+				lnStore.AddListener(addr, ln)
+				addrs <- addr
+			}(i)
 		}
-		wg.Wait()
 
-		addrs := lnStore.ListAll()
-		Expect(addrs).To(HaveLen(20))
-
-		wg.Add(20)
 		for i := 0; i < 20; i++ {
-			go func(n int) {
+			wg.Add(1)
+			go func() {
+				addr := <-addrs
 				defer GinkgoRecover()
 				defer wg.Done()
-				err := lnStore.RemoveListener(addrs[n])
+				err := lnStore.RemoveListener(addr)
 				Expect(err).ToNot(HaveOccurred())
-			}(i)
+			}()
 		}
 		wg.Wait()
 
@@ -47,12 +48,11 @@ var _ = Describe("ListenerStore", func() {
 
 	Describe("RemoveListener", func() {
 		It("closes listeners when it removes them", func() {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
-			Expect(err).ToNot(HaveOccurred())
-			lnStore.AddListener(ln.Addr().String(), ln)
-			lnStore.RemoveListener(ln.Addr().String())
-			_, err = ln.Accept()
-			Expect(err).To(HaveOccurred())
+			ln := &fake_net.FakeListener{}
+			addr := "127.0.0.1:8080"
+			lnStore.AddListener(addr, ln)
+			lnStore.RemoveListener(addr)
+			Expect(ln.CloseCallCount()).To(Equal(1))
 		})
 
 		It("errors if the requested listener does not exist", func() {
@@ -63,20 +63,18 @@ var _ = Describe("ListenerStore", func() {
 
 	Describe("RemoveAll", func() {
 		It("removes and closes all listeners", func() {
-			ln1, err := net.Listen("tcp", "127.0.0.1:0")
-			Expect(err).ToNot(HaveOccurred())
-			ln2, err := net.Listen("tcp", "127.0.0.1:0")
-			Expect(err).ToNot(HaveOccurred())
+			ln1 := &fake_net.FakeListener{}
+			addr1 := "127.0.0.1:8080"
+			ln2 := &fake_net.FakeListener{}
+			addr2 := "127.0.0.1:8081"
 
-			lnStore.AddListener(ln1.Addr().String(), ln1)
-			lnStore.AddListener(ln2.Addr().String(), ln2)
+			lnStore.AddListener(addr1, ln1)
+			lnStore.AddListener(addr2, ln2)
 
 			lnStore.RemoveAll()
 			Expect(lnStore.ListAll()).To(HaveLen(0))
-			_, err = ln1.Accept()
-			Expect(err).To(HaveOccurred())
-			_, err = ln2.Accept()
-			Expect(err).To(HaveOccurred())
+			Expect(ln1.CloseCallCount()).To(Equal(1))
+			Expect(ln2.CloseCallCount()).To(Equal(1))
 		})
 	})
 })
