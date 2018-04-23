@@ -102,7 +102,7 @@ var _ = Describe("CancelTcpipForwardHandler", func() {
 
 		It("stops listening to the port", func() {
 			_, err := net.Dial("tcp", "127.0.0.1:9090")
-			Expect(err).To(MatchError(ContainSubstring("connection refused")))
+			Expect(err).To(MatchError(ContainSubstring("refused")))
 		})
 	})
 })

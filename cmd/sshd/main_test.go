@@ -783,7 +783,7 @@ var _ = Describe("SSH daemon", func() {
 					Eventually(func() error {
 						_, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
 						return err
-					}).Should(MatchError(ContainSubstring("connection refused")))
+					}).Should(MatchError(ContainSubstring("refused")))
 				})
 			})
 
@@ -794,7 +794,7 @@ var _ = Describe("SSH daemon", func() {
 
 				It("responds with a client refused error to clients", func() {
 					_, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
-					Expect(err).To(MatchError(ContainSubstring("connection refused")))
+					Expect(err).To(MatchError(ContainSubstring("refused")))
 				})
 			})
 		})
