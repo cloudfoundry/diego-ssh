@@ -606,9 +606,9 @@ var _ = Describe("SSH proxy", func() {
 				clientConfig.Ciphers = []string{"arcfour128"}
 			})
 
-			It("errors when the client doesn't provide any of the algorithms: 'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com'", func() {
+			It("errors when the client doesn't provide any of the algorithms: 'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'", func() {
 				_, err := ssh.Dial("tcp", address, clientConfig)
-				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [chacha20-poly1305@openssh.com aes128-gcm@openssh.com]"))
+				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [chacha20-poly1305@openssh.com aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
 				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 			})
 		})

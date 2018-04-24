@@ -406,8 +406,8 @@ var _ = Describe("SSH daemon", func() {
 				Expect(process).NotTo(BeNil())
 			})
 
-			It("errors when the client doesn't provide one of the algorithm: 'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [chacha20-poly1305@openssh.com aes128-gcm@openssh.com]"))
+			It("errors when the client doesn't provide one of the algorithm: 'chacha20-poly1305@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'", func() {
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [chacha20-poly1305@openssh.com aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
 				Expect(client).To(BeNil())
 			})
 		})
