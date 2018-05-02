@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
@@ -104,6 +105,9 @@ var _ = Describe("SSHProxyConfig", func() {
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "5.5.5.5:9090",
 			},
+			LoggregatorConfig: loggingclient.Config{
+				SourceID: "ssh_proxy",
+			},
 		}))
 	})
 
@@ -194,6 +198,9 @@ var _ = Describe("SSHProxyConfig", func() {
 				IdleConnectionTimeout:     durationjson.Duration(5 * time.Minute),
 				DebugServerConfig: debugserver.DebugServerConfig{
 					DebugAddress: "5.5.5.5:9090",
+				},
+				LoggregatorConfig: loggingclient.Config{
+					SourceID: "ssh_proxy",
 				},
 			}))
 		})
