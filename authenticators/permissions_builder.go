@@ -42,7 +42,10 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 
 	logMessage := fmt.Sprintf("Successful remote access by %s", metadata.RemoteAddr().String())
 
-	actualLRP, _ := actual.Resolve()
+	actualLRP, _, resolveErr := actual.Resolve()
+	if resolveErr != nil {
+		return nil, resolveErr
+	}
 	return pb.createPermissions(sshRoute, actualLRP, desired.LogGuid, logMessage, index)
 }
 
