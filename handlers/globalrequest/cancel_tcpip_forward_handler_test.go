@@ -1,7 +1,6 @@
 package globalrequest_test
 
 import (
-	"fmt"
 	"net"
 
 	"code.cloudfoundry.org/diego-ssh/daemon"
@@ -10,7 +9,6 @@ import (
 	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest/internal"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/lager/lagertest"
-	"code.cloudfoundry.org/localip"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo"
@@ -19,17 +17,12 @@ import (
 
 var _ = Describe("CancelTcpipForwardHandler", func() {
 	var (
-		remoteAddress string
-		sshClient     *ssh.Client
-		logger        *lagertest.TestLogger
+		sshClient *ssh.Client
+		logger    *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("tcpip-forward-test")
-
-		remotePort, err := localip.LocalPort()
-		Expect(err).NotTo(HaveOccurred())
-		remoteAddress = fmt.Sprintf("127.0.0.1:%d", remotePort)
 
 		globalRequestHandlers := map[string]handlers.GlobalRequestHandler{
 			globalrequest.TCPIPForward:       new(globalrequest.TCPIPForwardHandler),
