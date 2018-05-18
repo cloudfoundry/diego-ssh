@@ -13,7 +13,6 @@ import (
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/ifrit"
@@ -99,9 +98,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	healthCheckProxyPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
 
+	consulPort, err := portAllocator.ClaimPorts(consulrunner.PortOffsetLength)
+	Expect(err).NotTo(HaveOccurred())
 	consulRunner = consulrunner.NewClusterRunner(
 		consulrunner.ClusterRunnerConfig{
-			StartingPort: 9001 + config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+			StartingPort: int(consulPort),
 			NumNodes:     1,
 			Scheme:       "http",
 		},
