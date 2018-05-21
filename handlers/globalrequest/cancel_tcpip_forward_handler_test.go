@@ -2,6 +2,7 @@ package globalrequest_test
 
 import (
 	"net"
+	"strconv"
 
 	"code.cloudfoundry.org/diego-ssh/daemon"
 	"code.cloudfoundry.org/diego-ssh/handlers"
@@ -68,22 +69,30 @@ var _ = Describe("CancelTcpipForwardHandler", func() {
 
 	Context("when the listener exists", func() {
 		var (
-			ok  bool
-			err error
+			ok      bool
+			err     error
+			address string
 		)
 
 		BeforeEach(func() {
-			addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:9090")
+			addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
 			Expect(err).NotTo(HaveOccurred())
-			_, err = sshClient.ListenTCP(addr)
+			ln, err := sshClient.ListenTCP(addr)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = net.Dial("tcp", "127.0.0.1:9090")
+			_, portStr, err := net.SplitHostPort(ln.Addr().String())
+			Expect(err).NotTo(HaveOccurred())
+
+			address = "127.0.0.1:" + portStr
+			port, err := strconv.Atoi(portStr)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = net.Dial("tcp", address)
 			Expect(err).NotTo(HaveOccurred())
 
 			payload := ssh.Marshal(internal.TCPIPForwardRequest{
 				Address: "127.0.0.1",
-				Port:    9090,
+				Port:    uint32(port),
 			})
 			ok, _, err = sshClient.SendRequest("cancel-tcpip-forward", true, payload)
 		})
@@ -94,8 +103,14 @@ var _ = Describe("CancelTcpipForwardHandler", func() {
 		})
 
 		It("stops listening to the port", func() {
-			_, err := net.Dial("tcp", "127.0.0.1:9090")
-			Expect(err).To(MatchError(ContainSubstring("refused")))
+			// the reason for the eventually instead of Expect is that a Close
+			// doesn't guarantee that the linux socket is actually closed. See
+			// https://github.com/golang/go/issues/10527 and build failures in
+			// https://diego.ci.cf-app.com/teams/main/pipelines/main/jobs/units-common/builds/1207
+			Eventually(func() error {
+				_, err := net.Dial("tcp", address)
+				return err
+			}).Should(MatchError(ContainSubstring("refused")))
 		})
 	})
 })
