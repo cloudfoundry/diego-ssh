@@ -792,17 +792,11 @@ var _ = Describe("SSH daemon", func() {
 					Expect(ln.Close()).To(Succeed())
 				})
 
-				It("responds with a client refused error to clients", func() {
-					// use a new client without keep alive to make sure we don't reuse
-					// connections. Otherwise, the listener will get a connection reset
-					// instead of a connection refused
-					client := http.Client{
-						Transport: &http.Transport{
-							DisableKeepAlives: true,
-						},
-					}
-					_, err := client.Get(fmt.Sprintf("http://%s", ln.Addr()))
-					Expect(err).To(MatchError(ContainSubstring("refused")))
+				It("responds with a connection refused error to clients", func() {
+					Eventually(func() error {
+						_, err := http.Get(fmt.Sprintf("http://%s", ln.Addr()))
+						return err
+					}).Should(MatchError(ContainSubstring("refused")))
 				})
 			})
 		})
