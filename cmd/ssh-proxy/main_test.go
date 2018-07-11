@@ -540,20 +540,15 @@ var _ = Describe("SSH proxy", func() {
 
 			BeforeEach(func() {
 				var err error
-				testIngressServer, err = testhelpers.NewTestIngressServer(
-					"fixtures/metron/metron.crt",
-					"fixtures/metron/metron.key",
-					"fixtures/metron/CA.crt",
-				)
+				testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
 				Expect(err).NotTo(HaveOccurred())
 				receiversChan := testIngressServer.Receivers()
-				Expect(testIngressServer.Start()).To(Succeed())
+				testIngressServer.Start()
 				port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
 				Expect(err).NotTo(HaveOccurred())
 				sshProxyConfig.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
 				sshProxyConfig.LoggregatorConfig.BatchMaxSize = 1
 				sshProxyConfig.LoggregatorConfig.APIPort = port
-				sshProxyConfig.LoggregatorConfig.UseV2API = true
 				sshProxyConfig.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
 				sshProxyConfig.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
 				sshProxyConfig.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
@@ -566,42 +561,30 @@ var _ = Describe("SSH proxy", func() {
 				close(signalMetricsChan)
 			})
 
-			Context("when the loggregator server isn't up", func() {
+			JustBeforeEach(func() {
+				client, err := ssh.Dial("tcp", address, clientConfig)
+				Expect(err).NotTo(HaveOccurred())
+				_, err = client.NewSession()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("when using loggregator v2 api", func() {
 				BeforeEach(func() {
-					testIngressServer.Stop()
+					sshProxyConfig.LoggregatorConfig.UseV2API = true
 				})
 
-				It("exits with non-zero status code", func() {
-					Eventually(process.Wait()).Should(Receive(HaveOccurred()))
+				It("emits the number of current ssh-connections", func() {
+					Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ssh-connections", Value: int32(1)})))
 				})
 			})
 
-			Context("when the loggregator agent is up", func() {
-				JustBeforeEach(func() {
-					client, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).NotTo(HaveOccurred())
-					_, err = client.NewSession()
-					Expect(err).NotTo(HaveOccurred())
+			Context("when not using the loggregator v2 api", func() {
+				BeforeEach(func() {
+					sshProxyConfig.LoggregatorConfig.UseV2API = false
 				})
 
-				Context("when using loggregator v2 api", func() {
-					BeforeEach(func() {
-						sshProxyConfig.LoggregatorConfig.UseV2API = true
-					})
-
-					It("emits the number of current ssh-connections", func() {
-						Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ssh-connections", Value: int32(1)})))
-					})
-				})
-
-				Context("when not using the loggregator v2 api", func() {
-					BeforeEach(func() {
-						sshProxyConfig.LoggregatorConfig.UseV2API = false
-					})
-
-					It("doesn't emit any metrics", func() {
-						Consistently(testMetricsChan).ShouldNot(Receive())
-					})
+				It("doesn't emit any metrics", func() {
+					Consistently(testMetricsChan).ShouldNot(Receive())
 				})
 			})
 		})
