@@ -64,7 +64,7 @@ var _ = Describe("SSH proxy", func() {
 	)
 
 	BeforeEach(func() {
-		fixturesPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+		fixturesPath := path.Join(os.Getenv("TOPDIR"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
 
 		caFile := path.Join(fixturesPath, "green-certs", "server-ca.crt")
 		serverCertFile := path.Join(fixturesPath, "green-certs", "server.crt")
