@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"os"
-	"time"
 
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -43,19 +42,8 @@ type SSHProxyConfig struct {
 	ConnectToInstanceAddress        bool                  `json:"connect_to_instance_address"`
 }
 
-func defaultConfig() SSHProxyConfig {
-	return SSHProxyConfig{
-		Address:                  ":2222",
-		HealthCheckAddress:       ":2223",
-		CommunicationTimeout:     durationjson.Duration(10 * time.Second),
-		LagerConfig:              lagerflags.DefaultLagerConfig(),
-		ConnectToInstanceAddress: false,
-		IdleConnectionTimeout:    durationjson.Duration(5 * time.Minute),
-	}
-}
-
 func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
-	proxyConfig := defaultConfig()
+	proxyConfig := SSHProxyConfig{}
 
 	configFile, err := os.Open(configPath)
 	if err != nil {

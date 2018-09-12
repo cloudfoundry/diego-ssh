@@ -27,6 +27,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/routes"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
@@ -115,6 +116,9 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.UAACACert = ""
 		sshProxyConfig.ConsulCluster = consulRunner.URL()
 		sshProxyConfig.IdleConnectionTimeout = durationjson.Duration(500 * time.Millisecond)
+		sshProxyConfig.CommunicationTimeout = durationjson.Duration(10 * time.Second)
+		sshProxyConfig.ConnectToInstanceAddress = false
+		sshProxyConfig.LagerConfig = lagerflags.DefaultLagerConfig()
 
 		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
 			ProcessGuid: processGuid,
