@@ -631,11 +631,11 @@ var _ = Describe("SessionChannelHandler", func() {
 						stdout, err = session.StdoutPipe()
 						Expect(err).NotTo(HaveOccurred())
 
-						err = session.Start("echo hello & findstr *x & echo goodbye")
+						err = session.Start("ping -t 127.0.0.1 & echo goodbye")
 						Expect(err).NotTo(HaveOccurred())
 
 						reader := bufio.NewReader(stdout)
-						Eventually(reader.ReadLine).Should(ContainSubstring("hello"))
+						Eventually(reader.ReadLine).Should(ContainSubstring("127.0.0.1"))
 					})
 
 					It("the process is interrupted", func() {
@@ -647,8 +647,11 @@ var _ = Describe("SessionChannelHandler", func() {
 							Expect(err).To(Equal(io.EOF), "expected no error or ignorable EOF error")
 						}
 
-						err = session.Wait()
-						Expect(err).NotTo(HaveOccurred())
+						resultCh := make(chan error)
+						go func() {
+							resultCh <- session.Wait()
+						}()
+						Eventually(resultCh).Should(Receive(BeNil()))
 						reader := bufio.NewReader(stdout)
 						Eventually(reader.ReadLine).Should(ContainSubstring("goodbye"))
 					})
