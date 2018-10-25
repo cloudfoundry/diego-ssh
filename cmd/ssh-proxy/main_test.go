@@ -1,9 +1,11 @@
 package main_test
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -65,14 +68,6 @@ var _ = Describe("SSH proxy", func() {
 	)
 
 	BeforeEach(func() {
-		fixturesPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
-
-		caFile := path.Join(fixturesPath, "green-certs", "server-ca.crt")
-		serverCertFile := path.Join(fixturesPath, "green-certs", "server.crt")
-		serverKeyFile := path.Join(fixturesPath, "green-certs", "server.key")
-		clientCertFile := path.Join(fixturesPath, "green-certs", "client.crt")
-		clientKeyFile := path.Join(fixturesPath, "green-certs", "client.key")
-
 		var err error
 		fakeBBS = ghttp.NewUnstartedServer()
 		fakeBBS.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
@@ -131,7 +126,7 @@ var _ = Describe("SSH proxy", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMapping(uint32(sshdPort), uint32(sshdContainerPort))),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMappingWithTLSProxy(uint32(sshdPort), uint32(sshdContainerPort), uint32(sshdTLSPort), uint32(sshdContainerTLSPort))),
 				},
 			},
 		}
@@ -509,6 +504,123 @@ var _ = Describe("SSH proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(output)).To(Equal("hello"))
+		})
+
+		Context("when tls is configured", func() {
+			var (
+				listener       net.Listener
+				connectedToTLS chan struct{}
+			)
+
+			BeforeEach(func() {
+				tlsConfig, err := cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				sshdTLSAddress := fmt.Sprintf("127.0.0.1:%d", sshdTLSPort)
+				listener, err = tls.Listen("tcp", sshdTLSAddress, tlsConfig)
+				Expect(err).NotTo(HaveOccurred())
+
+				connectedToTLS = make(chan struct{}, 1)
+				go forwardTLSConn(sshdAddress, listener, connectedToTLS)
+			})
+
+			AfterEach(func() {
+				listener.Close()
+				close(connectedToTLS)
+			})
+
+			Context("with correct client certs", func() {
+				BeforeEach(func() {
+					caCertBytes, err := ioutil.ReadFile(caFile)
+					Expect(err).NotTo(HaveOccurred())
+					certBytes, err := ioutil.ReadFile(clientCertFile)
+					Expect(err).NotTo(HaveOccurred())
+					keyBytes, err := ioutil.ReadFile(clientKeyFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					sshProxyConfig.BackendTLSEnabled = true
+					sshProxyConfig.BackendTLSCACerts = append(sshProxyConfig.BackendTLSCACerts, string(caCertBytes))
+					sshProxyConfig.BackendTLSClientCert = string(certBytes)
+					sshProxyConfig.BackendTLSClientKey = string(keyBytes)
+				})
+
+				It("connects to the target daemon using tls", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(connectedToTLS).Should(Receive())
+				})
+
+				Context("when backend TLS is disabled", func() {
+					BeforeEach(func() {
+						sshProxyConfig.BackendTLSEnabled = false
+					})
+
+					It("connects to the target daemon without using tls", func() {
+						client, err := ssh.Dial("tcp", address, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						_, err = client.NewSession()
+						Expect(err).NotTo(HaveOccurred())
+						Consistently(connectedToTLS).ShouldNot(Receive())
+					})
+				})
+
+				Context("when the ssh proxy tls server is not running", func() {
+					BeforeEach(func() {
+						listener.Close()
+					})
+
+					It("connects to the target daemon without using tls", func() {
+						client, err := ssh.Dial("tcp", address, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						_, err = client.NewSession()
+						Expect(err).NotTo(HaveOccurred())
+						Consistently(connectedToTLS).ShouldNot(Receive())
+					})
+				})
+			})
+
+			Context("with incorrect client certs", func() {
+				BeforeEach(func() {
+					badCaFile := path.Join(fixturesPath, "blue-certs", "server-ca.crt")
+					badClientCertFile := path.Join(fixturesPath, "blue-certs", "client.crt")
+					badClientKeyFile := path.Join(fixturesPath, "blue-certs", "client.key")
+
+					caCertBytes, err := ioutil.ReadFile(badCaFile)
+					Expect(err).NotTo(HaveOccurred())
+					certBytes, err := ioutil.ReadFile(badClientCertFile)
+					Expect(err).NotTo(HaveOccurred())
+					keyBytes, err := ioutil.ReadFile(badClientKeyFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					sshProxyConfig.BackendTLSEnabled = true
+					sshProxyConfig.BackendTLSCACerts = append(sshProxyConfig.BackendTLSCACerts, string(caCertBytes))
+					sshProxyConfig.BackendTLSClientCert = string(certBytes)
+					sshProxyConfig.BackendTLSClientKey = string(keyBytes)
+				})
+
+				It("connects to the deamon without TLS", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+					Consistently(connectedToTLS).ShouldNot(Receive())
+				})
+
+				It("logs message on using the non-tls ssh port", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(runner).Should(gbytes.Say("falling-back-to-non-tls-ssh-port"))
+				})
+			})
 		})
 
 		It("identifies itself as a Diego SSH proxy server", func() {
@@ -924,4 +1036,43 @@ func RespondWithProto(message proto.Message) http.HandlerFunc {
 	var headers = make(http.Header)
 	headers["Content-Type"] = []string{"application/x-protobuf"}
 	return ghttp.RespondWith(200, string(data), headers)
+}
+
+func forwardTLSConn(serverAddress string, proxy net.Listener, onConnectionReceived chan struct{}) {
+	for {
+		conn, err := proxy.Accept()
+		if err != nil {
+			return
+		}
+
+		tlsConn := conn.(*tls.Conn)
+		err = tlsConn.Handshake()
+		if err != nil {
+			return
+		}
+
+		if onConnectionReceived != nil {
+			onConnectionReceived <- struct{}{}
+		}
+
+		proxyConn, err := net.Dial("tcp", serverAddress)
+		if err != nil {
+			return
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		go func() {
+			_, _ = io.Copy(conn, proxyConn)
+			wg.Done()
+		}()
+
+		go func() {
+			_, _ = io.Copy(proxyConn, conn)
+			wg.Done()
+		}()
+
+		wg.Wait()
+	}
 }

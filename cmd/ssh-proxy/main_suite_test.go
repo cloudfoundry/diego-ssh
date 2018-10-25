@@ -3,6 +3,8 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 	"runtime"
 
 	"testing"
@@ -25,14 +27,25 @@ var (
 	sshdProcess  ifrit.Process
 
 	sshdPort             uint16
+	sshdTLSPort          uint16
 	sshdContainerPort    uint16
+	sshdContainerTLSPort uint16
 	sshProxyPort         uint16
 	healthCheckProxyPort uint16
+
+	sshdAddress string
 
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
 	consulRunner        *consulrunner.ClusterRunner
+
+	fixturesPath   string
+	caFile         string
+	serverCertFile string
+	serverKeyFile  string
+	clientCertFile string
+	clientKeyFile  string
 
 	portAllocator portauthority.PortAllocator
 )
@@ -43,6 +56,14 @@ func TestSSHProxy(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
+	fixturesPath = path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+
+	caFile = path.Join(fixturesPath, "green-certs", "server-ca.crt")
+	serverCertFile = path.Join(fixturesPath, "green-certs", "server.crt")
+	serverKeyFile = path.Join(fixturesPath, "green-certs", "server.key")
+	clientCertFile = path.Join(fixturesPath, "green-certs", "client.crt")
+	clientKeyFile = path.Join(fixturesPath, "green-certs", "client.key")
+
 	sshProxy, err := gexec.Build("code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -61,6 +82,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		"host-key":       hostKey.PEMEncodedPrivateKey(),
 		"private-key":    privateKey.PEMEncodedPrivateKey(),
 		"authorized-key": privateKey.AuthorizedKey(),
+
+		"fixturesPath": fixturesPath,
+
+		"caFile":         caFile,
+		"serverCertFile": serverCertFile,
+		"serverKeyFile":  serverKeyFile,
+		"clientCertFile": clientCertFile,
+		"clientKeyFile":  clientKeyFile,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
@@ -71,6 +100,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
+
+	fixturesPath = context["fixturesPath"]
+
+	caFile = context["caFile"]
+	serverCertFile = context["serverCertFile"]
+	serverKeyFile = context["serverKeyFile"]
+	clientCertFile = context["clientCertFile"]
+	clientKeyFile = context["clientKeyFile"]
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
@@ -88,6 +125,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(err).NotTo(HaveOccurred())
 
 	sshdContainerPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+	sshdPath = context["sshd"]
+
+	sshdTLSPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+
+	sshdContainerTLSPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
 	sshdPath = context["sshd"]
 
@@ -121,8 +165,9 @@ var _ = BeforeEach(func() {
 	err := consulRunner.Reset()
 	Expect(err).NotTo(HaveOccurred())
 
+	sshdAddress = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	sshdArgs := testrunner.Args{
-		Address:       fmt.Sprintf("127.0.0.1:%d", sshdPort),
+		Address:       sshdAddress,
 		HostKey:       hostKeyPem,
 		AuthorizedKey: publicAuthorizedKey,
 	}

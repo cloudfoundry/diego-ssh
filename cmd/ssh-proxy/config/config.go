@@ -1,7 +1,10 @@
 package config
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"code.cloudfoundry.org/debugserver"
@@ -40,6 +43,11 @@ type SSHProxyConfig struct {
 	CommunicationTimeout            durationjson.Duration `json:"communication_timeout,omitempty"`
 	IdleConnectionTimeout           durationjson.Duration `json:"idle_connection_timeout,omitempty"`
 	ConnectToInstanceAddress        bool                  `json:"connect_to_instance_address"`
+
+	BackendTLSEnabled    bool     `json:"backend_tls_enabled,omitempty"`
+	BackendTLSCACerts    []string `json:"backend_tls_ca_certs,omitempty"`
+	BackendTLSClientCert string   `json:"backend_tls_client_cert,omitempty"`
+	BackendTLSClientKey  string   `json:"backend_tls_client_key,omitempty"`
 }
 
 func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
@@ -60,4 +68,27 @@ func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
 	}
 
 	return proxyConfig, nil
+}
+
+func (c SSHProxyConfig) BackendTLSConfig() (*tls.Config, error) {
+	if !c.BackendTLSEnabled {
+		return nil, nil
+	}
+
+	tlsConfig := tls.Config{
+		RootCAs: x509.NewCertPool(),
+	}
+	for i, certStr := range c.BackendTLSCACerts {
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM([]byte(certStr))
+		if !ok {
+			return nil, fmt.Errorf("Failed to parse cert %d of BackendTLSCACerts", i)
+		}
+	}
+	clientCertificate, err := tls.X509KeyPair([]byte(c.BackendTLSClientCert), []byte(c.BackendTLSClientKey))
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse client cert: %s", err)
+	}
+	tlsConfig.Certificates = []tls.Certificate{clientCertificate}
+
+	return &tlsConfig, nil
 }

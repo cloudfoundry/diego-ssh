@@ -68,6 +68,7 @@ func (pb *permissionsBuilder) createPermissions(
 			}
 			targetConfig = &proxy.TargetConfig{
 				Address:         fmt.Sprintf("%s:%d", address, port),
+				TLSAddress:      fmt.Sprintf("%s:%d", actual.Address, mapping.HostTlsProxyPort),
 				HostFingerprint: sshRoute.HostFingerprint,
 				User:            sshRoute.User,
 				Password:        sshRoute.Password,

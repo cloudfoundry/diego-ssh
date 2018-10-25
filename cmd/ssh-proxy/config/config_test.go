@@ -9,7 +9,6 @@ import (
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -45,7 +44,12 @@ var _ = Describe("SSHProxyConfig", func() {
 			"log_level": "debug",
 			"debug_address": "5.5.5.5:9090",
 			"connect_to_instance_address": true,
-			"idle_connection_timeout": "5ms"
+			"idle_connection_timeout": "5ms",
+
+			"backend_tls_enabled": true,
+			"backend_tls_ca_certs": ["cert1", "cert2"],
+			"backend_tls_client_cert": "I am a proxy client cert.",
+			"backend_tls_client_key": "I am a proxy client key."
 		}`
 	})
 
@@ -104,6 +108,11 @@ var _ = Describe("SSHProxyConfig", func() {
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "5.5.5.5:9090",
 			},
+
+			BackendTLSEnabled:    true,
+			BackendTLSCACerts:    []string{"cert1", "cert2"},
+			BackendTLSClientCert: "I am a proxy client cert.",
+			BackendTLSClientKey:  "I am a proxy client key.",
 		}))
 	})
 

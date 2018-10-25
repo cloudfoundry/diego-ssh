@@ -62,7 +62,7 @@ var _ = Describe("PermissionsBuilder", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(3333, 1111)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
 				},
 			}
 
@@ -107,6 +107,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			It("saves container information in the critical options of the permissions", func() {
 				expectedConfig := `{
 				"address": "2.2.2.2:1111",
+				"tls_address": "1.2.3.4:2222",
 				"host_fingerprint": "host-fingerprint",
 				"private_key": "fake-pem-encoded-key",
 				"user": "user",
@@ -122,6 +123,7 @@ var _ = Describe("PermissionsBuilder", func() {
 		It("saves container information in the critical options of the permissions", func() {
 			expectedConfig := `{
 				"address": "1.2.3.4:3333",
+				"tls_address": "1.2.3.4:2222",
 				"host_fingerprint": "host-fingerprint",
 				"private_key": "fake-pem-encoded-key",
 				"user": "user",
