@@ -3,8 +3,10 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"runtime"
-
 	"testing"
 	"time"
 
@@ -25,14 +27,25 @@ var (
 	sshdProcess  ifrit.Process
 
 	sshdPort             uint16
+	sshdTLSPort          uint16
 	sshdContainerPort    uint16
+	sshdContainerTLSPort uint16
 	sshProxyPort         uint16
 	healthCheckProxyPort uint16
+
+	sshdAddress string
 
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
 	consulRunner        *consulrunner.ClusterRunner
+
+	fixturesPath      string
+	bbsCAFile         string
+	bbsServerCertFile string
+	bbsServerKeyFile  string
+	bbsClientCertFile string
+	bbsClientKeyFile  string
 
 	portAllocator portauthority.PortAllocator
 )
@@ -72,6 +85,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
 
+	fixturesPath = path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+
+	bbsCAFile = filepath.Join(fixturesPath, "bbs", "server-ca.crt")
+	bbsServerCertFile = filepath.Join(fixturesPath, "bbs", "server.crt")
+	bbsServerKeyFile = filepath.Join(fixturesPath, "bbs", "server.key")
+	bbsClientCertFile = filepath.Join(fixturesPath, "bbs", "client.crt")
+	bbsClientKeyFile = filepath.Join(fixturesPath, "bbs", "client.key")
+
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
 	publicAuthorizedKey = context["authorized-key"]
@@ -88,6 +109,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(err).NotTo(HaveOccurred())
 
 	sshdContainerPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+	sshdPath = context["sshd"]
+
+	sshdTLSPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
+
+	sshdContainerTLSPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
 	sshdPath = context["sshd"]
 
@@ -121,8 +149,9 @@ var _ = BeforeEach(func() {
 	err := consulRunner.Reset()
 	Expect(err).NotTo(HaveOccurred())
 
+	sshdAddress = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	sshdArgs := testrunner.Args{
-		Address:       fmt.Sprintf("127.0.0.1:%d", sshdPort),
+		Address:       sshdAddress,
 		HostKey:       hostKeyPem,
 		AuthorizedKey: publicAuthorizedKey,
 	}

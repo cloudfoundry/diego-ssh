@@ -123,7 +123,7 @@ var _ = Describe("Proxy", func() {
 		})
 
 		JustBeforeEach(func() {
-			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig, fakeMetronClient)
+			sshProxy = proxy.New(logger.Session("proxy"), proxySSHConfig, fakeMetronClient, nil)
 			proxyServer = server.NewServer(logger.Session("proxy-server"), "", sshProxy, 500*time.Millisecond)
 			proxyServer.SetListener(proxyListener)
 			go func() {
@@ -1173,7 +1173,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 
-			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions)
+			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, nil)
 		})
 
 		AfterEach(func() {

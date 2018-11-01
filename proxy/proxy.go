@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,11 +25,13 @@ type Waiter interface {
 }
 
 type TargetConfig struct {
-	Address         string `json:"address"`
-	HostFingerprint string `json:"host_fingerprint"`
-	User            string `json:"user,omitempty"`
-	Password        string `json:"password,omitempty"`
-	PrivateKey      string `json:"private_key,omitempty"`
+	Address             string `json:"address"`
+	TLSAddress          string `json:"tls_address"`
+	ServerCertDomainSAN string `json:"server_cert_domain_san"`
+	HostFingerprint     string `json:"host_fingerprint"`
+	User                string `json:"user,omitempty"`
+	Password            string `json:"password,omitempty"`
+	PrivateKey          string `json:"private_key,omitempty"`
 }
 
 type LogMessage struct {
@@ -44,18 +47,22 @@ type Proxy struct {
 	connectionLock *sync.Mutex
 	connections    int
 	metronClient   loggingclient.IngressClient
+
+	tlsConfig *tls.Config
 }
 
 func New(
 	logger lager.Logger,
 	serverConfig *ssh.ServerConfig,
 	metronClient loggingclient.IngressClient,
+	tlsConfig *tls.Config,
 ) *Proxy {
 	return &Proxy{
 		logger:         logger,
 		serverConfig:   serverConfig,
 		connectionLock: &sync.Mutex{},
 		metronClient:   metronClient,
+		tlsConfig:      tlsConfig,
 	}
 }
 
@@ -69,7 +76,7 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	}
 	defer serverConn.Close()
 
-	clientConn, clientChannels, clientRequests, err := NewClientConn(logger, serverConn.Permissions)
+	clientConn, clientChannels, clientRequests, err := NewClientConn(logger, serverConn.Permissions, p.tlsConfig)
 	if err != nil {
 		return
 	}
@@ -277,7 +284,7 @@ func Wait(logger lager.Logger, waiters ...Waiter) {
 	wg.Wait()
 }
 
-func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
+func NewClientConn(logger lager.Logger, permissions *ssh.Permissions, tlsConfig *tls.Config) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
 	if permissions == nil || permissions.CriticalOptions == nil {
 		err := errors.New("Invalid permissions from authentication")
 		logger.Error("permissions-and-critical-options-required", err)
@@ -298,11 +305,34 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn,
 		return nil, nil, nil, err
 	}
 
-	nConn, err := net.Dial("tcp", targetConfig.Address)
+	dialer := func() (net.Conn, error) {
+		tlsConfig := tlsConfigWithServerName(tlsConfig, targetConfig.ServerCertDomainSAN)
+		if tlsConfig != nil {
+			nConn, err := tls.Dial("tcp", targetConfig.TLSAddress, tlsConfig)
+			if err == nil {
+				return nConn, nil
+			}
+
+			logger.Error("tls-dial-failed", err)
+		}
+
+		nConn, err := net.Dial("tcp", targetConfig.Address)
+		if err != nil {
+			logger.Error("dial-failed", err)
+			return nil, err
+		}
+
+		return nConn, nil
+	}
+
+	nConn, err := dialer()
 	if err != nil {
-		logger.Error("dial-failed", err)
 		return nil, nil, nil, err
 	}
+
+	logger.Info("connected-to-backend", lager.Data{
+		"backend-address": nConn.RemoteAddr().String(),
+	})
 
 	clientConfig := &ssh.ClientConfig{}
 
@@ -354,4 +384,13 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions) (ssh.Conn,
 	}
 
 	return conn, ch, req, nil
+}
+
+func tlsConfigWithServerName(original *tls.Config, serverName string) *tls.Config {
+	if original == nil {
+		return nil
+	}
+	new := original.Clone()
+	new.ServerName = serverName
+	return new
 }

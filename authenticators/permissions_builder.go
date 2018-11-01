@@ -67,11 +67,13 @@ func (pb *permissionsBuilder) createPermissions(
 				port = mapping.ContainerPort
 			}
 			targetConfig = &proxy.TargetConfig{
-				Address:         fmt.Sprintf("%s:%d", address, port),
-				HostFingerprint: sshRoute.HostFingerprint,
-				User:            sshRoute.User,
-				Password:        sshRoute.Password,
-				PrivateKey:      sshRoute.PrivateKey,
+				Address:             fmt.Sprintf("%s:%d", address, port),
+				TLSAddress:          fmt.Sprintf("%s:%d", actual.Address, mapping.HostTlsProxyPort),
+				ServerCertDomainSAN: actual.ActualLRPInstanceKey.InstanceGuid,
+				HostFingerprint:     sshRoute.HostFingerprint,
+				User:                sshRoute.User,
+				Password:            sshRoute.Password,
+				PrivateKey:          sshRoute.PrivateKey,
 			}
 			break
 		}

@@ -1,13 +1,18 @@
 package config
 
 import (
+	"crypto/tls"
 	"encoding/json"
+	"errors"
+	"io/ioutil"
 	"os"
 
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/systemcerts"
 )
 
 type SSHProxyConfig struct {
@@ -40,6 +45,11 @@ type SSHProxyConfig struct {
 	CommunicationTimeout            durationjson.Duration `json:"communication_timeout,omitempty"`
 	IdleConnectionTimeout           durationjson.Duration `json:"idle_connection_timeout,omitempty"`
 	ConnectToInstanceAddress        bool                  `json:"connect_to_instance_address"`
+
+	BackendsTLSEnabled    bool   `json:"backends_tls_enabled,omitempty"`
+	BackendsTLSCACerts    string `json:"backends_tls_ca_certificates,omitempty"`
+	BackendsTLSClientCert string `json:"backends_tls_client_certificate,omitempty"`
+	BackendsTLSClientKey  string `json:"backends_tls_client_private_key,omitempty"`
 }
 
 func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
@@ -60,4 +70,33 @@ func NewSSHProxyConfig(configPath string) (SSHProxyConfig, error) {
 	}
 
 	return proxyConfig, nil
+}
+
+func (c SSHProxyConfig) BackendsTLSConfig() (*tls.Config, error) {
+	if !c.BackendsTLSEnabled {
+		return nil, nil
+	}
+
+	rootCAs := systemcerts.SystemRootsPool().AsX509CertPool()
+	if c.BackendsTLSCACerts != "" {
+		ca, err := ioutil.ReadFile(c.BackendsTLSCACerts)
+		if err != nil {
+			return nil, err
+		}
+
+		ok := rootCAs.AppendCertsFromPEM(ca)
+		if !ok {
+			return nil, errors.New("Failed to parse backends_tls_ca_certificates")
+		}
+	}
+
+	config := &tls.Config{
+		RootCAs: rootCAs,
+	}
+
+	if c.BackendsTLSClientCert == "" || c.BackendsTLSClientKey == "" {
+		return config, nil
+	}
+
+	return cfhttp.NewTLSConfigWithCertPool(c.BackendsTLSClientCert, c.BackendsTLSClientKey, rootCAs)
 }

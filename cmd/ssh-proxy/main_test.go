@@ -1,19 +1,22 @@
 package main_test
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -30,15 +33,14 @@ import (
 	"code.cloudfoundry.org/lager/lagerflags"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
-	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
-	"golang.org/x/crypto/ssh"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/onsi/gomega/ghttp"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
+	"golang.org/x/crypto/ssh"
 )
 
 var _ = Describe("SSH proxy", func() {
@@ -65,17 +67,9 @@ var _ = Describe("SSH proxy", func() {
 	)
 
 	BeforeEach(func() {
-		fixturesPath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
-
-		caFile := path.Join(fixturesPath, "green-certs", "server-ca.crt")
-		serverCertFile := path.Join(fixturesPath, "green-certs", "server.crt")
-		serverKeyFile := path.Join(fixturesPath, "green-certs", "server.key")
-		clientCertFile := path.Join(fixturesPath, "green-certs", "client.crt")
-		clientKeyFile := path.Join(fixturesPath, "green-certs", "client.key")
-
 		var err error
 		fakeBBS = ghttp.NewUnstartedServer()
-		fakeBBS.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
+		fakeBBS.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(bbsServerCertFile, bbsServerKeyFile, bbsCAFile)
 		Expect(err).NotTo(HaveOccurred())
 		fakeBBS.HTTPTestServer.StartTLS()
 
@@ -100,9 +94,9 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.Address = address
 		sshProxyConfig.HealthCheckAddress = healthCheckAddress
 		sshProxyConfig.BBSAddress = fakeBBS.URL()
-		sshProxyConfig.BBSCACert = caFile
-		sshProxyConfig.BBSClientCert = clientCertFile
-		sshProxyConfig.BBSClientKey = clientKeyFile
+		sshProxyConfig.BBSCACert = bbsCAFile
+		sshProxyConfig.BBSClientCert = bbsClientCertFile
+		sshProxyConfig.BBSClientKey = bbsClientKeyFile
 		sshProxyConfig.CCAPIURL = fakeCC.URL()
 		sshProxyConfig.DiegoCredentials = diegoCredentials
 		sshProxyConfig.EnableCFAuth = true
@@ -131,7 +125,7 @@ var _ = Describe("SSH proxy", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMapping(uint32(sshdPort), uint32(sshdContainerPort))),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMappingWithTLSProxy(uint32(sshdPort), uint32(sshdContainerPort), uint32(sshdTLSPort), uint32(sshdContainerTLSPort))),
 				},
 			},
 		}
@@ -480,12 +474,39 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	Describe("authenticating with the diego realm", func() {
+		var (
+			intermediaryTLSConfig *tls.Config
+			intermediaryListener  net.Listener
+			connectedToTLS        chan struct{}
+		)
+
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
 				User:            "diego:" + processGuid + "/99",
 				Auth:            []ssh.AuthMethod{ssh.Password(diegoCredentials)},
 				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			}
+
+			serverCAFile := filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+			serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
+			serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
+			var err error
+			intermediaryTLSConfig, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, serverCAFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			intermediaryListener, err = tls.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", sshdTLSPort), intermediaryTLSConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			connectedToTLS = make(chan struct{}, 1)
+		})
+
+		JustBeforeEach(func() {
+			go forwardTLSConn(sshdAddress, intermediaryListener, connectedToTLS)
+		})
+
+		AfterEach(func() {
+			intermediaryListener.Close()
+			close(connectedToTLS)
 		})
 
 		It("acquires the desired and actual LRP info from the BBS", func() {
@@ -504,11 +525,120 @@ var _ = Describe("SSH proxy", func() {
 
 			session, err := client.NewSession()
 			Expect(err).NotTo(HaveOccurred())
-
 			output, err := session.Output("echo -n hello")
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(string(output)).To(Equal("hello"))
+		})
+
+		Context("when a tls intermediary is configured", func() {
+			Context("when ssh-proxy is configured to connect to the intermediary", func() {
+				BeforeEach(func() {
+					sshProxyConfig.BackendsTLSEnabled = true
+				})
+
+				Context("when the tls handshake is via non-MTLS", func() {
+					BeforeEach(func() {
+						sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+
+						intermediaryTLSConfig.ClientAuth = tls.NoClientCert
+					})
+
+					It("connects to the target daemon using tls", func() {
+						client, err := ssh.Dial("tcp", address, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(connectedToTLS).Should(Receive())
+
+						_, err = client.NewSession()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+
+				Context("when the tls handshake is via MTLS", func() {
+					BeforeEach(func() {
+						sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+						sshProxyConfig.BackendsTLSClientCert = filepath.Join(fixturesPath, "green-certs", "client.crt")
+						sshProxyConfig.BackendsTLSClientKey = filepath.Join(fixturesPath, "green-certs", "client.key")
+
+						intermediaryTLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+					})
+
+					It("connects to the target daemon using MTLS", func() {
+						client, err := ssh.Dial("tcp", address, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(connectedToTLS).Should(Receive())
+
+						_, err = client.NewSession()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+
+				Context("when connecting using TLS fails", func() {
+					BeforeEach(func() {
+						// force TLS handshake to fail
+						badCertPath := filepath.Join(fixturesPath, "blue-certs", "server-ca.crt")
+						sshProxyConfig.BackendsTLSCACerts = badCertPath
+
+						intermediaryTLSConfig.ClientAuth = tls.NoClientCert
+					})
+
+					It("connects to the daemon without TLS", func() {
+						client, err := ssh.Dial("tcp", address, clientConfig)
+						Expect(err).NotTo(HaveOccurred())
+
+						Consistently(connectedToTLS).ShouldNot(Receive())
+
+						session, err := client.NewSession()
+						Expect(err).NotTo(HaveOccurred())
+						output, err := session.Output("echo -n hello")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(string(output)).To(Equal("hello"))
+					})
+				})
+			})
+
+			Context("when ssh-proxy is NOT configured to connect to the intermediary", func() {
+				BeforeEach(func() {
+					sshProxyConfig.BackendsTLSEnabled = false
+				})
+
+				It("connects to the target daemon without using tls", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+
+					Consistently(connectedToTLS).ShouldNot(Receive())
+
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+					output, err := session.Output("echo -n hello")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(output)).To(Equal("hello"))
+				})
+			})
+		})
+
+		Context("when there is NO tls intermediary configured", func() {
+			BeforeEach(func() {
+				intermediaryListener.Close()
+			})
+
+			Context("when ssh-proxy is configured to connect to a tls intermediary", func() {
+				BeforeEach(func() {
+					sshProxyConfig.BackendsTLSEnabled = true
+				})
+
+				It("connects to the daemon without using tls and logs appropriately", func() {
+					client, err := ssh.Dial("tcp", address, clientConfig)
+					Expect(err).NotTo(HaveOccurred())
+
+					Consistently(connectedToTLS).ShouldNot(Receive())
+
+					session, err := client.NewSession()
+					Expect(err).NotTo(HaveOccurred())
+					output, err := session.Output("echo -n hello")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(output)).To(Equal("hello"))
+				})
+			})
 		})
 
 		It("identifies itself as a Diego SSH proxy server", func() {
@@ -924,4 +1054,43 @@ func RespondWithProto(message proto.Message) http.HandlerFunc {
 	var headers = make(http.Header)
 	headers["Content-Type"] = []string{"application/x-protobuf"}
 	return ghttp.RespondWith(200, string(data), headers)
+}
+
+func forwardTLSConn(serverAddress string, proxy net.Listener, onConnectionReceived chan struct{}) {
+	for {
+		conn, err := proxy.Accept()
+		if err != nil {
+			return
+		}
+
+		tlsConn := conn.(*tls.Conn)
+		err = tlsConn.Handshake()
+		if err != nil {
+			return
+		}
+
+		if onConnectionReceived != nil {
+			onConnectionReceived <- struct{}{}
+		}
+
+		proxyConn, err := net.Dial("tcp", serverAddress)
+		if err != nil {
+			return
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		go func() {
+			_, _ = io.Copy(conn, proxyConn)
+			wg.Done()
+		}()
+
+		go func() {
+			_, _ = io.Copy(proxyConn, conn)
+			wg.Done()
+		}()
+
+		wg.Wait()
+	}
 }
