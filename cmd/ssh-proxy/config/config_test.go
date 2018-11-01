@@ -189,9 +189,8 @@ var _ = Describe("SSHProxyConfig", func() {
 					sshProxyConfig.BackendsTLSCACerts = ""
 				})
 
-				It("should use the OS system CA certs", func() {
-					Expect(getConfigErr).ToNot(HaveOccurred())
-					Expect(len(tlsConfig.RootCAs.Subjects())).To(BeNumerically(">", 0))
+				It("returns an error", func() {
+					Expect(getConfigErr).To(MatchError(ContainSubstring("backend tls ca certificates must be specified")))
 				})
 			})
 

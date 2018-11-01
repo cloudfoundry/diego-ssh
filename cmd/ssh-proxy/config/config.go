@@ -2,6 +2,7 @@ package config
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -12,7 +13,6 @@ import (
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
-	"code.cloudfoundry.org/systemcerts"
 )
 
 type SSHProxyConfig struct {
@@ -77,17 +77,19 @@ func (c SSHProxyConfig) BackendsTLSConfig() (*tls.Config, error) {
 		return nil, nil
 	}
 
-	rootCAs := systemcerts.SystemRootsPool().AsX509CertPool()
-	if c.BackendsTLSCACerts != "" {
-		ca, err := ioutil.ReadFile(c.BackendsTLSCACerts)
-		if err != nil {
-			return nil, err
-		}
+	if c.BackendsTLSCACerts == "" {
+		return nil, errors.New("backend tls ca certificates must be specified if backend TLS is enabled")
+	}
 
-		ok := rootCAs.AppendCertsFromPEM(ca)
-		if !ok {
-			return nil, errors.New("Failed to parse backends_tls_ca_certificates")
-		}
+	rootCAs := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(c.BackendsTLSCACerts)
+	if err != nil {
+		return nil, err
+	}
+
+	ok := rootCAs.AppendCertsFromPEM(ca)
+	if !ok {
+		return nil, errors.New("Failed to parse backends_tls_ca_certificates")
 	}
 
 	config := &tls.Config{

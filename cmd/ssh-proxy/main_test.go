@@ -624,6 +624,7 @@ var _ = Describe("SSH proxy", func() {
 			Context("when ssh-proxy is configured to connect to a tls intermediary", func() {
 				BeforeEach(func() {
 					sshProxyConfig.BackendsTLSEnabled = true
+					sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
 				})
 
 				It("connects to the daemon without using tls and logs appropriately", func() {
