@@ -292,11 +292,11 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions, tlsConfig 
 	}
 
 	targetConfigJson := permissions.CriticalOptions["proxy-target-config"]
-	logger = logger.Session("new-client-conn", lager.Data{
+	logger = logger.Session("new-client-conn")
+
+	logger.Debug("creating-client-connection", lager.Data{
 		"proxy-target-config": targetConfigJson,
 	})
-
-	logger.Debug("creating-client-connection")
 
 	var targetConfig TargetConfig
 	err := json.Unmarshal([]byte(permissions.CriticalOptions["proxy-target-config"]), &targetConfig)
@@ -313,12 +313,17 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions, tlsConfig 
 				return nConn, nil
 			}
 
-			logger.Error("tls-dial-failed", err)
+			logger.Error("tls-dial-failed", err, lager.Data{
+				"tcp_address":            targetConfig.TLSAddress,
+				"server_cert_domain_san": targetConfig.ServerCertDomainSAN,
+			})
 		}
 
 		nConn, err := net.Dial("tcp", targetConfig.Address)
 		if err != nil {
-			logger.Error("dial-failed", err)
+			logger.Error("dial-failed", err, lager.Data{
+				"address": targetConfig.Address,
+			})
 			return nil, err
 		}
 
