@@ -1,13 +1,18 @@
 package proxy_test
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"os"
+	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
@@ -23,16 +28,15 @@ import (
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"golang.org/x/crypto/ssh"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"golang.org/x/crypto/ssh"
 )
 
 var _ = Describe("Proxy", func() {
 	var (
-		logger           lager.Logger
+		logger           *lagertest.TestLogger
 		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
@@ -1151,6 +1155,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer      *server.Server
 
 			newClientConnErr error
+			tlsConfig        *tls.Config
 		)
 
 		BeforeEach(func() {
@@ -1173,7 +1178,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 
-			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, nil)
+			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, tlsConfig)
 		})
 
 		AfterEach(func() {
@@ -1247,6 +1252,68 @@ var _ = Describe("Proxy", func() {
 
 			It("logs the failure", func() {
 				Eventually(logger).Should(gbytes.Say("dial-failed"))
+			})
+		})
+
+		Context("when tls config is passed in", func() {
+			BeforeEach(func() {
+				var err error
+				fixturesPath := path.Join(
+					os.Getenv("GOPATH"),
+					"src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures",
+				)
+				serverCAFile := filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+				serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
+				serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
+
+				tlsConfig, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, serverCAFile)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("and the tls address is not available", func() {
+				BeforeEach(func() {
+					targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+						Address:    sshdListener.Addr().String(),
+						TLSAddress: "",
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					permissions = &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							"proxy-target-config": string(targetConfigJson),
+						},
+					}
+				})
+
+				It("does not log any errors", func() {
+					Consistently(logger).ShouldNot(gbytes.Say("tls-dial-failed"))
+				})
+			})
+
+			Context("and the tls address is available", func() {
+				BeforeEach(func() {
+					// TODO: create a TLS listener using the code from
+					// main_test.go (preferably extracting it in a common
+					// layer) and assert that we connect through the tls proxy,
+					// instead of using the logs
+					intermediaryListener, err = tls.Listen("tcp", "127.0.0.1:0", intermediaryTLSConfig)
+
+					targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+						Address:    "",
+						TLSAddress: sshdListener.Addr().String(),
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					permissions = &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							"proxy-target-config": string(targetConfigJson),
+						},
+					}
+				})
+
+				It("connects successfully", func() {
+					Consistently(logger).Should(gbytes.Say("connected-to-backend"))
+				})
 			})
 		})
 

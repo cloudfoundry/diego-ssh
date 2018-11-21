@@ -106,7 +106,30 @@ var _ = Describe("PermissionsBuilder", func() {
 			It("saves container information in the critical options of the permissions", func() {
 				expectedConfig := `{
 				"address": "2.2.2.2:1111",
-				"tls_address": "1.2.3.4:2222",
+				"tls_address": "1.2.3.4:4444",
+				"server_cert_domain_san": "some-instance-guid",
+				"host_fingerprint": "host-fingerprint",
+				"private_key": "fake-pem-encoded-key",
+				"user": "user",
+				"password": "password"
+			}`
+
+				Expect(permissions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions).NotTo(BeNil())
+				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
+			})
+		})
+
+		Context("when the tls port isn't set", func() {
+			BeforeEach(func() {
+				actualLRPGroup.Instance.ActualLRPNetInfo =
+					models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(3333, 1111))
+			})
+
+			It("does not include a tls address in the permissions", func() {
+				expectedConfig := `{
+				"address": "1.2.3.4:3333",
+				"tls_address": "",
 				"server_cert_domain_san": "some-instance-guid",
 				"host_fingerprint": "host-fingerprint",
 				"private_key": "fake-pem-encoded-key",

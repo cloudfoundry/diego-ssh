@@ -66,9 +66,19 @@ func (pb *permissionsBuilder) createPermissions(
 				address = actual.InstanceAddress
 				port = mapping.ContainerPort
 			}
+
+			tlsAddress := ""
+			if mapping.HostTlsProxyPort > 0 {
+				tlsAddress = fmt.Sprintf("%s:%d", actual.Address, mapping.HostTlsProxyPort)
+			}
+
+			if pb.useDirectInstanceAddr && mapping.ContainerTlsProxyPort > 0 {
+				tlsAddress = fmt.Sprintf("%s:%d", actual.Address, mapping.ContainerTlsProxyPort)
+			}
+
 			targetConfig = &proxy.TargetConfig{
 				Address:             fmt.Sprintf("%s:%d", address, port),
-				TLSAddress:          fmt.Sprintf("%s:%d", actual.Address, mapping.HostTlsProxyPort),
+				TLSAddress:          tlsAddress,
 				ServerCertDomainSAN: actual.ActualLRPInstanceKey.InstanceGuid,
 				HostFingerprint:     sshRoute.HostFingerprint,
 				User:                sshRoute.User,
