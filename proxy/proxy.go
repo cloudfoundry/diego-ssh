@@ -307,7 +307,7 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions, tlsConfig 
 
 	dialer := func() (net.Conn, error) {
 		tlsConfig := tlsConfigWithServerName(tlsConfig, targetConfig.ServerCertDomainSAN)
-		if tlsConfig != nil {
+		if tlsConfig != nil && targetConfig.TLSAddress != "" {
 			nConn, err := tls.Dial("tcp", targetConfig.TLSAddress, tlsConfig)
 			if err == nil {
 				return nConn, nil

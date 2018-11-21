@@ -1,13 +1,18 @@
 package proxy_test
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"os"
+	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
@@ -23,16 +28,15 @@ import (
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
-	"golang.org/x/crypto/ssh"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"golang.org/x/crypto/ssh"
 )
 
 var _ = Describe("Proxy", func() {
 	var (
-		logger           lager.Logger
+		logger           *lagertest.TestLogger
 		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
@@ -1151,6 +1155,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer      *server.Server
 
 			newClientConnErr error
+			tlsConfig        *tls.Config
 		)
 
 		BeforeEach(func() {
@@ -1173,7 +1178,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 
-			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, nil)
+			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, tlsConfig)
 		})
 
 		AfterEach(func() {
@@ -1247,6 +1252,72 @@ var _ = Describe("Proxy", func() {
 
 			It("logs the failure", func() {
 				Eventually(logger).Should(gbytes.Say("dial-failed"))
+			})
+		})
+
+		Context("when tls config is passed in", func() {
+			BeforeEach(func() {
+				var err error
+				fixturesPath := path.Join(
+					os.Getenv("GOPATH"),
+					"src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures",
+				)
+				serverCAFile := filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+				serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
+				serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
+
+				tlsConfig, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, serverCAFile)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("and the tls address is not available", func() {
+				BeforeEach(func() {
+					targetConfigJson, err := json.Marshal(proxy.TargetConfig{
+						Address:    sshdListener.Addr().String(),
+						TLSAddress: "",
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					permissions = &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							"proxy-target-config": string(targetConfigJson),
+						},
+					}
+				})
+
+				It("does not log any errors", func() {
+					Consistently(logger).ShouldNot(gbytes.Say("tls-dial-failed"))
+				})
+			})
+
+			Context("and the tls address is available", func() {
+				var (
+					onConnectionReceived chan struct{}
+				)
+
+				BeforeEach(func() {
+					onConnectionReceived = make(chan struct{}, 10)
+					intermediaryListener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
+					go forwardTLSConn(sshdListener.Addr().String(), intermediaryListener, onConnectionReceived)
+
+					targetConfigJSON, err := json.Marshal(proxy.TargetConfig{
+						Address:             "",
+						TLSAddress:          intermediaryListener.Addr().String(),
+						ServerCertDomainSAN: "some-instance-guid",
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					permissions = &ssh.Permissions{
+						CriticalOptions: map[string]string{
+							"proxy-target-config": string(targetConfigJSON),
+						},
+					}
+				})
+
+				It("connects successfully", func() {
+					Eventually(onConnectionReceived).Should(Receive())
+					Eventually(logger).Should(gbytes.Say("connected-to-backend"))
+				})
 			})
 		})
 
@@ -1437,3 +1508,45 @@ var _ = Describe("Proxy", func() {
 		})
 	})
 })
+
+func forwardTLSConn(serverAddress string, proxy net.Listener, onConnectionReceived chan struct{}) {
+	for {
+		conn, err := proxy.Accept()
+		if err != nil {
+			return
+		}
+
+		tlsConn := conn.(*tls.Conn)
+		err = tlsConn.Handshake()
+		if err != nil {
+			return
+		}
+
+		defer tlsConn.Close()
+
+		if onConnectionReceived != nil {
+			onConnectionReceived <- struct{}{}
+		}
+
+		proxyConn, err := net.Dial("tcp", serverAddress)
+		if err != nil {
+			return
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		go func() {
+			_, _ = io.Copy(conn, proxyConn)
+			tlsConn.CloseWrite()
+			wg.Done()
+		}()
+
+		go func() {
+			_, _ = io.Copy(proxyConn, conn)
+			wg.Done()
+		}()
+
+		wg.Wait()
+	}
+}
