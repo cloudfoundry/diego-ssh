@@ -47,6 +47,14 @@ var (
 	bbsClientCertFile string
 	bbsClientKeyFile  string
 
+	ccCAFile         string
+	ccServerCertFile string
+	ccServerKeyFile  string
+
+	uaaCAFile         string
+	uaaServerCertFile string
+	uaaServerKeyFile  string
+
 	portAllocator portauthority.PortAllocator
 )
 
@@ -92,6 +100,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbsServerKeyFile = filepath.Join(fixturesPath, "bbs", "server.key")
 	bbsClientCertFile = filepath.Join(fixturesPath, "bbs", "client.crt")
 	bbsClientKeyFile = filepath.Join(fixturesPath, "bbs", "client.key")
+
+	ccCAFile = filepath.Join(fixturesPath, "cc", "server-ca.crt")
+	ccServerCertFile = filepath.Join(fixturesPath, "cc", "server.crt")
+	ccServerKeyFile = filepath.Join(fixturesPath, "cc", "server.key")
+
+	uaaCAFile = filepath.Join(fixturesPath, "uaa", "server-ca.crt")
+	uaaServerCertFile = filepath.Join(fixturesPath, "uaa", "server.crt")
+	uaaServerKeyFile = filepath.Join(fixturesPath, "uaa", "server.key")
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]

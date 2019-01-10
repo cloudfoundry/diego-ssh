@@ -73,8 +73,17 @@ var _ = Describe("SSH proxy", func() {
 		Expect(err).NotTo(HaveOccurred())
 		fakeBBS.HTTPTestServer.StartTLS()
 
-		fakeUAA = ghttp.NewTLSServer()
-		fakeCC = ghttp.NewTLSServer()
+		fakeUAA = ghttp.NewUnstartedServer()
+		fakeUAA.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(uaaServerCertFile, uaaServerKeyFile, uaaCAFile)
+		Expect(err).NotTo(HaveOccurred())
+		fakeUAA.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
+		fakeUAA.HTTPTestServer.StartTLS()
+
+		fakeCC = ghttp.NewUnstartedServer()
+		fakeCC.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(ccServerCertFile, ccServerKeyFile, ccCAFile)
+		Expect(err).NotTo(HaveOccurred())
+		fakeCC.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
+		fakeCC.HTTPTestServer.StartTLS()
 
 		privateKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
 		Expect(err).NotTo(HaveOccurred())
@@ -98,16 +107,17 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.BBSClientCert = bbsClientCertFile
 		sshProxyConfig.BBSClientKey = bbsClientKeyFile
 		sshProxyConfig.CCAPIURL = fakeCC.URL()
+		sshProxyConfig.CCAPICACert = ccCAFile
 		sshProxyConfig.DiegoCredentials = diegoCredentials
 		sshProxyConfig.EnableCFAuth = true
 		sshProxyConfig.EnableConsulServiceRegistration = false
 		sshProxyConfig.EnableDiegoAuth = true
 		sshProxyConfig.HostKey = hostKeyPem
-		sshProxyConfig.SkipCertVerify = true
+		sshProxyConfig.SkipCertVerify = false
 		sshProxyConfig.UAATokenURL = u.String()
 		sshProxyConfig.UAAPassword = "password1"
 		sshProxyConfig.UAAUsername = "amandaplease"
-		sshProxyConfig.UAACACert = ""
+		sshProxyConfig.UAACACert = uaaCAFile
 		sshProxyConfig.ConsulCluster = consulRunner.URL()
 		sshProxyConfig.IdleConnectionTimeout = durationjson.Duration(500 * time.Millisecond)
 		sshProxyConfig.CommunicationTimeout = durationjson.Duration(10 * time.Second)
@@ -264,6 +274,17 @@ var _ = Describe("SSH proxy", func() {
 
 				It("reports the problem and terminates", func() {
 					Expect(runner).To(gbytes.Say("configure-failed"))
+					Expect(runner).To(gexec.Exit(1))
+				})
+			})
+
+			Context("when cc ca cert does not exist", func() {
+				BeforeEach(func() {
+					sshProxyConfig.CCAPICACert = "doesnotexist"
+				})
+
+				It("exits with an error", func() {
+					Expect(runner).To(gbytes.Say("failed to read ca cert"))
 					Expect(runner).To(gexec.Exit(1))
 				})
 			})

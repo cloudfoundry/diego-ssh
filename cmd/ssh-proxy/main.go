@@ -173,7 +173,7 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 			return nil, err
 		}
 
-		client, err := helpers.NewHTTPSClient(sshProxyConfig.SkipCertVerify, sshProxyConfig.UAACACert, time.Duration(sshProxyConfig.CommunicationTimeout))
+		client, err := helpers.NewHTTPSClient(sshProxyConfig.SkipCertVerify, []string{sshProxyConfig.UAACACert, sshProxyConfig.CCAPICACert}, time.Duration(sshProxyConfig.CommunicationTimeout))
 		if err != nil {
 			return nil, err
 		}

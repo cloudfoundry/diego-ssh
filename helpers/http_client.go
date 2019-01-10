@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func NewHTTPSClient(insecureSkipVerify bool, caCertFile string, communicationTimeout time.Duration) (*http.Client, error) {
+func NewHTTPSClient(insecureSkipVerify bool, caCertFiles []string, communicationTimeout time.Duration) (*http.Client, error) {
 	dialer := &net.Dialer{
 		Timeout:   5 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -19,18 +19,20 @@ func NewHTTPSClient(insecureSkipVerify bool, caCertFile string, communicationTim
 
 	tlsConfig := &tls.Config{InsecureSkipVerify: insecureSkipVerify}
 
-	if caCertFile != "" {
-		certBytes, err := ioutil.ReadFile(caCertFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read ca cert file: %s", err.Error())
-		}
+	caCertPool := x509.NewCertPool()
+	for _, caCertFile := range caCertFiles {
+		if caCertFile != "" {
+			certBytes, err := ioutil.ReadFile(caCertFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read ca cert file: %s", err.Error())
+			}
 
-		caCertPool := x509.NewCertPool()
-		if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
-			return nil, errors.New("Unable to load caCert")
+			if ok := caCertPool.AppendCertsFromPEM(certBytes); !ok {
+				return nil, errors.New("Unable to load caCert")
+			}
 		}
-		tlsConfig.RootCAs = caCertPool
 	}
+	tlsConfig.RootCAs = caCertPool
 
 	return &http.Client{
 		Transport: &http.Transport{
