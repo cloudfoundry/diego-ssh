@@ -7,8 +7,7 @@ import (
 )
 
 type lagerWriter struct {
-	logger   lager.Logger
-	logLevel lager.LogLevel
+	logger lager.Logger
 }
 
 // NewLagerWriter wraps a Writer around a lager.Logger

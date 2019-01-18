@@ -6,12 +6,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"code.cloudfoundry.org/lager"
 )
-
-var whitespace = regexp.MustCompile(`\s+`)
 
 type SecureCopier interface {
 	Copy() error

@@ -40,20 +40,6 @@ func (sess *Session) sendConfirmation() error {
 	return err
 }
 
-func (sess *Session) sendWarning(message string) error {
-	_, err := sess.stdout.Write([]byte{1})
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(sess.stdout, "%s\n", message)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (sess *Session) sendError(message string) error {
 	_, err := sess.stdout.Write([]byte{1})
 	if err != nil {
