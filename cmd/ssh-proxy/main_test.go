@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
@@ -31,6 +30,7 @@ import (
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/tlsconfig"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/consul/api"
 	. "github.com/onsi/ginkgo"
@@ -69,18 +69,27 @@ var _ = Describe("SSH proxy", func() {
 	BeforeEach(func() {
 		var err error
 		fakeBBS = ghttp.NewUnstartedServer()
-		fakeBBS.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(bbsServerCertFile, bbsServerKeyFile, bbsCAFile)
+		fakeBBS.HTTPTestServer.TLS, err = tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(bbsServerCertFile, bbsServerKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(bbsCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeBBS.HTTPTestServer.StartTLS()
 
 		fakeUAA = ghttp.NewUnstartedServer()
-		fakeUAA.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(uaaServerCertFile, uaaServerKeyFile, uaaCAFile)
+		fakeUAA.HTTPTestServer.TLS, err = tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(uaaServerCertFile, uaaServerKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(uaaCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeUAA.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
 		fakeUAA.HTTPTestServer.StartTLS()
 
 		fakeCC = ghttp.NewUnstartedServer()
-		fakeCC.HTTPTestServer.TLS, err = cfhttp.NewTLSConfig(ccServerCertFile, ccServerKeyFile, ccCAFile)
+		fakeCC.HTTPTestServer.TLS, err = tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(ccServerCertFile, ccServerKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(ccCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeCC.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
 		fakeCC.HTTPTestServer.StartTLS()
@@ -512,7 +521,10 @@ var _ = Describe("SSH proxy", func() {
 			serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
 			serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
 			var err error
-			intermediaryTLSConfig, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, serverCAFile)
+			intermediaryTLSConfig, err = tlsconfig.Build(
+				tlsconfig.WithInternalServiceDefaults(),
+				tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+			).Server(tlsconfig.WithClientAuthenticationFromFile(serverCAFile))
 			Expect(err).NotTo(HaveOccurred())
 
 			intermediaryListener, err = tls.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", sshdTLSPort), intermediaryTLSConfig)

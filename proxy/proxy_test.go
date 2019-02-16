@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"code.cloudfoundry.org/cfhttp"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
@@ -28,6 +27,7 @@ import (
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/tlsconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -1155,7 +1155,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer      *server.Server
 
 			newClientConnErr error
-			tlsConfig        *tls.Config
+			tlsCfg           *tls.Config
 		)
 
 		BeforeEach(func() {
@@ -1178,7 +1178,7 @@ var _ = Describe("Proxy", func() {
 			sshdServer.SetListener(sshdListener)
 			go sshdServer.Serve()
 
-			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, tlsConfig)
+			_, _, _, newClientConnErr = proxy.NewClientConn(logger, permissions, tlsCfg)
 		})
 
 		AfterEach(func() {
@@ -1266,7 +1266,10 @@ var _ = Describe("Proxy", func() {
 				serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
 				serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
 
-				tlsConfig, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, serverCAFile)
+				tlsCfg, err = tlsconfig.Build(
+					tlsconfig.WithInternalServiceDefaults(),
+					tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+				).Client(tlsconfig.WithAuthorityFromFile(serverCAFile)) // used for a client connection to the tls proxy address
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1297,7 +1300,7 @@ var _ = Describe("Proxy", func() {
 
 				BeforeEach(func() {
 					onConnectionReceived = make(chan struct{}, 10)
-					intermediaryListener, err := tls.Listen("tcp", "127.0.0.1:0", tlsConfig)
+					intermediaryListener, err := tls.Listen("tcp", "127.0.0.1:0", tlsCfg)
 					go forwardTLSConn(sshdListener.Addr().String(), intermediaryListener, onConnectionReceived)
 
 					targetConfigJSON, err := json.Marshal(proxy.TargetConfig{

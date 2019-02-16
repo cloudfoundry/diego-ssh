@@ -8,11 +8,11 @@ import (
 	"io/ioutil"
 	"os"
 
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/tlsconfig"
 )
 
 type SSHProxyConfig struct {
@@ -101,5 +101,8 @@ func (c SSHProxyConfig) BackendsTLSConfig() (*tls.Config, error) {
 		return config, nil
 	}
 
-	return cfhttp.NewTLSConfigWithCertPool(c.BackendsTLSClientCert, c.BackendsTLSClientKey, rootCAs)
+	return tlsconfig.Build(
+		tlsconfig.WithInternalServiceDefaults(),
+		tlsconfig.WithIdentityFromFile(c.BackendsTLSClientCert, c.BackendsTLSClientKey),
+	).Client(tlsconfig.WithAuthority(rootCAs))
 }
