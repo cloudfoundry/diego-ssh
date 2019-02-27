@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
@@ -49,6 +50,8 @@ func main() {
 	}
 
 	logger, reconfigurableSink := lagerflags.NewFromConfig("ssh-proxy", sshProxyConfig.LagerConfig)
+
+	cfhttp.Initialize(time.Duration(sshProxyConfig.CommunicationTimeout))
 
 	metronClient, err := initializeMetron(logger, sshProxyConfig)
 	if err != nil {
@@ -120,7 +123,15 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 		logger.Fatal("failed-to-parse-bbs-address", err)
 	}
 
-	bbsClient := initializeBBSClient(logger, sshProxyConfig)
+	bbsClient := initializeBBSClient(
+		logger,
+		sshProxyConfig.BBSAddress,
+		sshProxyConfig.BBSCACert,
+		sshProxyConfig.BBSClientCert,
+		sshProxyConfig.BBSClientKey,
+		sshProxyConfig.BBSClientSessionCacheSize,
+		sshProxyConfig.BBSMaxIdleConnsPerHost,
+	)
 	permissionsBuilder := authenticators.NewPermissionsBuilder(bbsClient, sshProxyConfig.ConnectToInstanceAddress)
 
 	authens := []authenticators.PasswordAuthenticator{}
@@ -232,17 +243,16 @@ func parsePrivateKey(logger lager.Logger, encodedKey string) (ssh.Signer, error)
 	return key, nil
 }
 
-func initializeBBSClient(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) bbs.InternalClient {
-	bbsClient, err := bbs.NewClientWithConfig(bbs.ClientConfig{
-		URL:                    sshProxyConfig.BBSAddress,
-		IsTLS:                  true,
-		CAFile:                 sshProxyConfig.BBSCACert,
-		CertFile:               sshProxyConfig.BBSClientCert,
-		KeyFile:                sshProxyConfig.BBSClientKey,
-		ClientSessionCacheSize: sshProxyConfig.BBSClientSessionCacheSize,
-		MaxIdleConnsPerHost:    sshProxyConfig.BBSMaxIdleConnsPerHost,
-		RequestTimeout:         time.Duration(sshProxyConfig.CommunicationTimeout),
-	})
+func initializeBBSClient(
+	logger lager.Logger,
+	bbsAddress,
+	bbsCACert,
+	bbsClientCert,
+	bbsClientKey string,
+	bbsClientSessionCacheSize,
+	bbsMaxIdleConnsPerHost int,
+) bbs.InternalClient {
+	bbsClient, err := bbs.NewClient(bbsAddress, bbsCACert, bbsClientCert, bbsClientKey, bbsClientSessionCacheSize, bbsMaxIdleConnsPerHost)
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
