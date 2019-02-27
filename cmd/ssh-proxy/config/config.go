@@ -20,6 +20,7 @@ type SSHProxyConfig struct {
 	debugserver.DebugServerConfig
 	Address                         string                `json:"address,omitempty"`
 	HealthCheckAddress              string                `json:"health_check_address,omitempty"`
+	DisableHealthCheckServer        bool                  `json:"disable_health_check_server,omitempty"`
 	HostKey                         string                `json:"host_key"`
 	BBSAddress                      string                `json:"bbs_address"`
 	CCAPIURL                        string                `json:"cc_api_url"`

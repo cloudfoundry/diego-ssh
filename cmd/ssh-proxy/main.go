@@ -74,11 +74,14 @@ func main() {
 	server := server.NewServer(logger, sshProxyConfig.Address, sshProxy, time.Duration(sshProxyConfig.IdleConnectionTimeout))
 
 	healthCheckHandler := healthcheck.NewHandler(logger)
-	httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
 
 	members := grouper.Members{
 		{"ssh-proxy", server},
-		{"healthcheck", httpServer},
+	}
+
+	if !sshProxyConfig.DisableHealthCheckServer {
+		httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
+		members = append(members, grouper.Member{"healthcheck", httpServer})
 	}
 
 	if sshProxyConfig.EnableConsulServiceRegistration {

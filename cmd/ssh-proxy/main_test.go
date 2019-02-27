@@ -422,6 +422,22 @@ var _ = Describe("SSH proxy", func() {
 		Expect(proxyHostKey.PublicKey().Marshal()).To(Equal(handshakeHostKey.Marshal()))
 	})
 
+	Describe("Disabled http healthcheck server", func() {
+		BeforeEach(func() {
+			sshProxyConfig.DisableHealthCheckServer = true
+		})
+
+		It("is not running the healthcheck process", func() {
+			req, err := http.NewRequest("GET", "http://"+healthCheckAddress, nil)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = http.DefaultClient.Do(req)
+			e, ok := err.(net.Error)
+			Expect(ok).To(BeTrue())
+			Expect(e.Temporary()).To(BeFalse())
+			Expect(e.Error()).To(MatchRegexp(".*connection refused"))
+		})
+	})
+
 	Describe("http healthcheck server", func() {
 		var (
 			method, path string

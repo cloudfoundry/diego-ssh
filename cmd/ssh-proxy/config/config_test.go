@@ -22,6 +22,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			configData = `{
 			"address": "1.1.1.1",
 			"health_check_address": "2.2.2.2",
+			"disable_health_check_server": true,
 			"host_key": "I am a host key.",
 			"bbs_address": "3.3.3.3",
 			"cc_api_url": "4.4.4.4",
@@ -82,6 +83,7 @@ var _ = Describe("SSHProxyConfig", func() {
 			Expect(proxyConfig).To(Equal(config.SSHProxyConfig{
 				Address:                         "1.1.1.1",
 				HealthCheckAddress:              "2.2.2.2",
+				DisableHealthCheckServer:        true,
 				HostKey:                         "I am a host key.",
 				BBSAddress:                      "3.3.3.3",
 				CCAPIURL:                        "4.4.4.4",
