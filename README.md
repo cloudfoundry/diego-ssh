@@ -143,7 +143,7 @@ public key.
 {
   "process_guid": "ssh-process-guid",
   "domain": "ssh-experiments",
-  "rootfs": "preloaded:cflinuxfs2",
+  "rootfs": "preloaded:cflinuxfs3",
   "instances": 1,
   "start_timeout": 30,
   "setup": {
@@ -193,6 +193,6 @@ action to start it. Cloud Foundry applications will download the daemon as
 part of the lifecycle bundle.
 
 [bridge]: https://github.com/cloudfoundry/diego-design-notes#cc-bridge-components
-[cflinuxfs2]: https://github.com/cloudfoundry/stacks/tree/master/cflinuxfs2
+[cflinuxfs3]: https://github.com/cloudfoundry/cflinuxfs3
 [cli]: https://github.com/cloudfoundry/cli
 [non-standard-oauth-auth-code]: https://github.com/cloudfoundry/uaa/blob/master/docs/UAA-APIs.rst#api-authorization-requests-code-get-oauth-authorize-non-standard-oauth-authorize
