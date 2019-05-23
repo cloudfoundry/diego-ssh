@@ -62,7 +62,8 @@ func (pb *permissionsBuilder) createPermissions(
 		if mapping.ContainerPort == sshRoute.ContainerPort {
 			address := actual.Address
 			port := mapping.HostPort
-			if pb.useDirectInstanceAddr {
+			useInstanceAddr := pb.useDirectInstanceAddr || actual.AdvertisePreferenceForInstanceAddress
+			if useInstanceAddr {
 				address = actual.InstanceAddress
 				port = mapping.ContainerPort
 			}
@@ -72,7 +73,7 @@ func (pb *permissionsBuilder) createPermissions(
 				tlsAddress = fmt.Sprintf("%s:%d", actual.Address, mapping.HostTlsProxyPort)
 			}
 
-			if pb.useDirectInstanceAddr && mapping.ContainerTlsProxyPort > 0 {
+			if useInstanceAddr && mapping.ContainerTlsProxyPort > 0 {
 				tlsAddress = fmt.Sprintf("%s:%d", actual.InstanceAddress, mapping.ContainerTlsProxyPort)
 			}
 
