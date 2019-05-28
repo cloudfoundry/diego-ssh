@@ -144,7 +144,7 @@ var _ = Describe("SSH proxy", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.NewPortMappingWithTLSProxy(uint32(sshdPort), uint32(sshdContainerPort), uint32(sshdTLSPort), uint32(sshdContainerTLSPort))),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", false, models.NewPortMappingWithTLSProxy(uint32(sshdPort), uint32(sshdContainerPort), uint32(sshdTLSPort), uint32(sshdContainerTLSPort))),
 				},
 			},
 		}

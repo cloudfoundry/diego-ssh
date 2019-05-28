@@ -61,7 +61,7 @@ var _ = Describe("PermissionsBuilder", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", false, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
 				},
 			}
 
@@ -98,32 +98,87 @@ var _ = Describe("PermissionsBuilder", func() {
 			Expect(index).To(Equal(1))
 		})
 
-		Context("when configured to use instance adress", func() {
-			BeforeEach(func() {
-				permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, true)
+		Context("ssh-proxy's connect-to-instance-address and rep's advertise-preference-for-instance-address interaction", func() {
+			var advertisePreferenceForInstanceAddress bool
+			var connectToInstanceAddress bool
+
+			JustBeforeEach(func() {
+				actualLRPGroup.Instance.ActualLRPNetInfo =
+					models.NewActualLRPNetInfo("external-ip", "instance-address", advertisePreferenceForInstanceAddress, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444))
+
+				permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, connectToInstanceAddress)
+				permissions, buildErr = permissionsBuilder.Build(logger, processGuid, index, metadata)
 			})
 
-			It("saves container information in the critical options of the permissions", func() {
-				expectedConfig := `{
-				"address": "2.2.2.2:1111",
-				"tls_address": "2.2.2.2:4444",
-				"server_cert_domain_san": "some-instance-guid",
-				"host_fingerprint": "host-fingerprint",
-				"private_key": "fake-pem-encoded-key",
-				"user": "user",
-				"password": "password"
-			}`
+			Context("when ssh-proxy is configured to connect to instance address, not Diego cell (external) address", func() {
+				BeforeEach(func() {
+					connectToInstanceAddress = true
+				})
 
-				Expect(permissions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions).NotTo(BeNil())
-				Expect(permissions.CriticalOptions["proxy-target-config"]).To(MatchJSON(expectedConfig))
+				Context("when the rep advertises preference for instance address", func() {
+					BeforeEach(func() {
+						advertisePreferenceForInstanceAddress = true
+					})
+
+					It("saves the instance address in the critical options of the permissions", func() {
+						Expect(permissions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"address":"instance-address:1111"`))
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"tls_address":"instance-address:4444"`))
+					})
+				})
+
+				Context("when the rep does NOT advertise preference for instance address", func() {
+					BeforeEach(func() {
+						advertisePreferenceForInstanceAddress = false
+					})
+
+					It("saves the instance address in the critical options of the permissions", func() {
+						Expect(permissions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"address":"instance-address:1111"`))
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"tls_address":"instance-address:4444"`))
+					})
+				})
+			})
+
+			Context("when ssh-proxy is NOT configured to connect to instance address", func() {
+				BeforeEach(func() {
+					connectToInstanceAddress = false
+				})
+
+				Context("when the rep advertises preference for instance address", func() {
+					BeforeEach(func() {
+						advertisePreferenceForInstanceAddress = true
+					})
+
+					It("saves the instance address in the critical options of the permissions", func() {
+						Expect(permissions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"address":"instance-address:1111"`))
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"tls_address":"instance-address:4444"`))
+					})
+				})
+
+				Context("when the rep does NOT advertise preference for instance address", func() {
+					BeforeEach(func() {
+						advertisePreferenceForInstanceAddress = false
+					})
+
+					It("saves the Diego cell (external) address in the critical options of the permissions", func() {
+						Expect(permissions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions).NotTo(BeNil())
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"address":"external-ip:3333"`))
+						Expect(permissions.CriticalOptions["proxy-target-config"]).To(ContainSubstring(`"tls_address":"external-ip:2222"`))
+					})
+				})
 			})
 		})
 
 		Context("when the tls port isn't set", func() {
 			BeforeEach(func() {
 				actualLRPGroup.Instance.ActualLRPNetInfo =
-					models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(3333, 1111))
+					models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", false, models.NewPortMapping(3333, 1111))
 			})
 
 			It("does not include a tls address in the permissions", func() {
