@@ -62,7 +62,15 @@ func (pb *permissionsBuilder) createPermissions(
 		if mapping.ContainerPort == sshRoute.ContainerPort {
 			address := actual.Address
 			port := mapping.HostPort
-			useInstanceAddr := pb.useDirectInstanceAddr || actual.AdvertisePreferenceForInstanceAddress
+			var useInstanceAddr bool
+			switch actual.PreferredAddress {
+			case models.ActualLRPNetInfo_PreferredAddressInstance:
+				useInstanceAddr = true
+			case models.ActualLRPNetInfo_PreferredAddressHost:
+				useInstanceAddr = false
+			case models.ActualLRPNetInfo_PreferredAddressUnknown:
+				useInstanceAddr = pb.useDirectInstanceAddr
+			}
 			if useInstanceAddr {
 				address = actual.InstanceAddress
 				port = mapping.ContainerPort
