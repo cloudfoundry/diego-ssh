@@ -111,9 +111,11 @@ var _ = Describe("Proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			logMessageJson, err := json.Marshal(proxy.LogMessage{
-				Guid:    "a-guid",
 				Message: "a-message",
-				Index:   1,
+				Tags: map[string]string{
+					"instance_id": "1",
+					"source_id":   "a-guid",
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -209,31 +211,13 @@ var _ = Describe("Proxy", func() {
 				})
 
 				Context("metron", func() {
-					type log struct {
-						appId          string
-						message        string
-						sourceType     string
-						sourceInstance string
-						messageType    string
-					}
-					var (
-						logChan = make(chan log, 1)
-					)
-
-					BeforeEach(func() {
-						fakeMetronClient.SendAppLogStub = func(appID, message, sourceType, sourceInstance string) error {
-							logChan <- log{appId: appID, message: message, sourceType: sourceType, sourceInstance: sourceInstance}
-							return nil
-						}
-					})
-
 					It("emits a successful log message on behalf of the lrp", func() {
-						Eventually(logChan).Should(Receive(Equal(log{
-							appId:          "a-guid",
-							sourceType:     "SSH",
-							sourceInstance: "1",
-							message:        "a-message",
-						})))
+						Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(1))
+						message, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(0)
+						Expect(message).To(Equal("a-message"))
+						Expect(sourceType).To(Equal("SSH"))
+						Expect(tags["source_id"]).To(Equal("a-guid"))
+						Expect(tags["instance_id"]).To(Equal("1"))
 					})
 				})
 
@@ -645,17 +629,6 @@ var _ = Describe("Proxy", func() {
 			})
 
 			Describe("app logs", func() {
-				var (
-					logChan = make(chan string)
-				)
-
-				BeforeEach(func() {
-					fakeMetronClient.SendAppLogStub = func(appID, message, sourceType, sourceInstance string) error {
-						logChan <- message
-						return nil
-					}
-				})
-
 				Context("when a connection is closed", func() {
 					It("logs that the connection has been closed", func() {
 						conn, err := ssh.Dial("tcp", proxyAddress, clientConfig)
@@ -663,7 +636,12 @@ var _ = Describe("Proxy", func() {
 
 						conn.Close()
 
-						Eventually(logChan).Should(Receive(ContainSubstring("Remote access ended for")))
+						Eventually(fakeMetronClient.SendAppLogCallCount).Should(Equal(2))
+						message, sourceType, tags := fakeMetronClient.SendAppLogArgsForCall(1)
+						Expect(message).To(ContainSubstring("Remote access ended for"))
+						Expect(sourceType).To(Equal("SSH"))
+						Expect(tags["source_id"]).To(Equal("a-guid"))
+						Expect(tags["instance_id"]).To(Equal("1"))
 					})
 				})
 			})

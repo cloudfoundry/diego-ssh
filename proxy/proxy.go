@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"unicode/utf8"
 
@@ -35,9 +34,8 @@ type TargetConfig struct {
 }
 
 type LogMessage struct {
-	Guid    string `json:"guid"`
-	Message string `json:"message"`
-	Index   int    `json:"index"`
+	Message string            `json:"message"`
+	Tags    map[string]string `json:"tags"`
 }
 
 type Proxy struct {
@@ -86,13 +84,13 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	defer func() {
 		if logMessage != nil {
 			endMessage := fmt.Sprintf("Remote access ended for %s", serverConn.RemoteAddr().String())
-			p.metronClient.SendAppLog(logMessage.Guid, endMessage, "SSH", strconv.Itoa(logMessage.Index))
+			p.metronClient.SendAppLog(endMessage, "SSH", logMessage.Tags)
 		}
 		clientConn.Close()
 	}()
 
 	if logMessage != nil {
-		p.metronClient.SendAppLog(logMessage.Guid, logMessage.Message, "SSH", strconv.Itoa(logMessage.Index))
+		p.metronClient.SendAppLog(logMessage.Message, "SSH", logMessage.Tags)
 	}
 
 	fromClientLogger := logger.Session("from-client")

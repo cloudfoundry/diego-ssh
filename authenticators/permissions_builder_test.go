@@ -55,6 +55,11 @@ var _ = Describe("PermissionsBuilder", func() {
 					routes.DIEGO_SSH: &diegoSSHRouteMessage,
 				},
 				LogGuid: "log-guid",
+				MetricTags: map[string]*models.MetricTagValue{
+					"some_static_key":        &models.MetricTagValue{Static: "some_value"},
+					"some_dynamic_key":       &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+					"some_other_dynamic_key": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueInstanceGuid},
+				},
 			}
 
 			actualLRPGroup = &models.ActualLRPGroup{
@@ -242,9 +247,14 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		It("saves log message information in the critical options of the permissions", func() {
 			expectedConfig := `{
-				"guid": "log-guid",
-				"message": "Successful remote access by 1.1.1.1",
-				"index": 1
+				"tags": {
+				  "some_static_key": "some_value",
+					"some_dynamic_key": "1",
+					"some_other_dynamic_key": "some-instance-guid",
+					"source_id": "log-guid",
+					"instance_id": "1"
+				},
+				"message": "Successful remote access by 1.1.1.1"
 			}`
 
 			Expect(permissions).NotTo(BeNil())

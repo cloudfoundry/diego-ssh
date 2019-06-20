@@ -46,15 +46,14 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 	if resolveErr != nil {
 		return nil, resolveErr
 	}
-	return pb.createPermissions(sshRoute, actualLRP, desired.LogGuid, logMessage, index)
+	return pb.createPermissions(sshRoute, actualLRP, desired, logMessage)
 }
 
 func (pb *permissionsBuilder) createPermissions(
 	sshRoute *routes.SSHRoute,
 	actual *models.ActualLRP,
-	logGuid string,
+	desired *models.DesiredLRP,
 	logMessage string,
-	index int,
 ) (*ssh.Permissions, error) {
 	var targetConfig *proxy.TargetConfig
 
@@ -107,10 +106,27 @@ func (pb *permissionsBuilder) createPermissions(
 		return nil, err
 	}
 
+	if len(desired.MetricTags) == 0 {
+		desired.MetricTags = map[string]*models.MetricTagValue{}
+	}
+	if _, ok := desired.MetricTags["source_id"]; !ok {
+		desired.MetricTags["source_id"] = &models.MetricTagValue{Static: desired.LogGuid}
+	}
+	if _, ok := desired.MetricTags["instance_id"]; !ok {
+		desired.MetricTags["instance_id"] = &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}
+	}
+
+	tags, err := models.ConvertMetricTags(desired.MetricTags, map[models.MetricTagValue_DynamicValue]interface{}{
+		models.MetricTagDynamicValueIndex:        int32(actual.Index),
+		models.MetricTagDynamicValueInstanceGuid: actual.ActualLRPInstanceKey.InstanceGuid,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	logMessageJson, err := json.Marshal(proxy.LogMessage{
-		Guid:    logGuid,
 		Message: logMessage,
-		Index:   index,
+		Tags:    tags,
 	})
 	if err != nil {
 		return nil, err
