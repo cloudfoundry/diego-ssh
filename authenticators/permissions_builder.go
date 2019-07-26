@@ -25,9 +25,18 @@ func NewPermissionsBuilder(bbsClient bbs.InternalClient, useDirectInstanceAddr b
 }
 
 func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
-	actual, err := pb.bbsClient.ActualLRPGroupByProcessGuidAndIndex(logger, processGuid, index)
+	ind := int32(index)
+	filter := models.ActualLRPFilter{
+		ProcessGuid: processGuid,
+		Index:       &ind,
+	}
+	actualLRPs, err := pb.bbsClient.ActualLRPs(logger, filter)
 	if err != nil {
 		return nil, err
+	} else if len(actualLRPs) > 1 {
+		return nil, fmt.Errorf("multiple matching ActualLRP for ProcessGuid: %s, Index: %d", processGuid, ind)
+	} else if len(actualLRPs) == 0 {
+		return nil, fmt.Errorf("no matching ActualLRP for ProcessGuid: %s, Index: %d", processGuid, ind)
 	}
 
 	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(logger, processGuid)
@@ -42,11 +51,7 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 
 	logMessage := fmt.Sprintf("Successful remote access by %s", metadata.RemoteAddr().String())
 
-	actualLRP, _, resolveErr := actual.Resolve()
-	if resolveErr != nil {
-		return nil, resolveErr
-	}
-	return pb.createPermissions(sshRoute, actualLRP, desired, logMessage)
+	return pb.createPermissions(sshRoute, actualLRPs[0], desired, logMessage)
 }
 
 func (pb *permissionsBuilder) createPermissions(

@@ -57,8 +57,8 @@ var _ = Describe("SSH proxy", func() {
 		healthCheckAddress          string
 		diegoCredentials            string
 		hostKeyFingerprint          string
-		expectedGetActualLRPRequest *models.ActualLRPGroupByProcessGuidAndIndexRequest
-		actualLRPGroupResponse      *models.ActualLRPGroupResponse
+		expectedGetActualLRPRequest *models.ActualLRPsRequest
+		actualLRPsResponse          *models.ActualLRPsResponse
 		getDesiredLRPRequest        *models.DesiredLRPByProcessGuidRequest
 		desiredLRPResponse          *models.DesiredLRPResponse
 
@@ -133,15 +133,15 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.ConnectToInstanceAddress = false
 		sshProxyConfig.LagerConfig = lagerflags.DefaultLagerConfig()
 
-		expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
-			ProcessGuid: processGuid,
-			Index:       99,
+		expectedGetActualLRPRequest = &models.ActualLRPsRequest{
+			ProcessGuid:   processGuid,
+			OptionalIndex: &models.ActualLRPsRequest_Index{Index: 99},
 		}
 
-		actualLRPGroupResponse = &models.ActualLRPGroupResponse{
+		actualLRPsResponse = &models.ActualLRPsResponse{
 			Error: nil,
-			ActualLrpGroup: &models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
+			ActualLrps: []*models.ActualLRP{
+				&models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 99, "some-domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo("127.0.0.1", "127.0.0.1", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(uint32(sshdPort), uint32(sshdContainerPort), uint32(sshdTLSPort), uint32(sshdContainerTLSPort))),
@@ -174,10 +174,10 @@ var _ = Describe("SSH proxy", func() {
 	})
 
 	JustBeforeEach(func() {
-		fakeBBS.RouteToHandler("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index", ghttp.CombineHandlers(
-			ghttp.VerifyRequest("POST", "/v1/actual_lrp_groups/get_by_process_guid_and_index"),
+		fakeBBS.RouteToHandler("POST", "/v1/actual_lrps/list", ghttp.CombineHandlers(
+			ghttp.VerifyRequest("POST", "/v1/actual_lrps/list"),
 			VerifyProto(expectedGetActualLRPRequest),
-			RespondWithProto(actualLRPGroupResponse),
+			RespondWithProto(actualLRPsResponse),
 		))
 		fakeBBS.RouteToHandler("POST", "/v1/desired_lrps/get_by_process_guid.r3", ghttp.CombineHandlers(
 			ghttp.VerifyRequest("POST", "/v1/desired_lrps/get_by_process_guid.r3"),
@@ -922,11 +922,11 @@ var _ = Describe("SSH proxy", func() {
 		Context("when a non-existent process guid is used", func() {
 			BeforeEach(func() {
 				clientConfig.User = "diego:bad-process-guid/999"
-				expectedGetActualLRPRequest = &models.ActualLRPGroupByProcessGuidAndIndexRequest{
-					ProcessGuid: "bad-process-guid",
-					Index:       999,
+				expectedGetActualLRPRequest = &models.ActualLRPsRequest{
+					ProcessGuid:   "bad-process-guid",
+					OptionalIndex: &models.ActualLRPsRequest_Index{Index: 999},
 				}
-				actualLRPGroupResponse = &models.ActualLRPGroupResponse{
+				actualLRPsResponse = &models.ActualLRPsResponse{
 					Error: models.ErrResourceNotFound,
 				}
 			})

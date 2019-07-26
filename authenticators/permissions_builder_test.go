@@ -18,12 +18,12 @@ import (
 var _ = Describe("PermissionsBuilder", func() {
 	Describe("Build", func() {
 		var (
-			logger         *lagertest.TestLogger
-			expectedRoute  routes.SSHRoute
-			desiredLRP     *models.DesiredLRP
-			actualLRPGroup *models.ActualLRPGroup
-			bbsClient      *fake_bbs.FakeInternalClient
-			metadata       *fake_ssh.FakeConnMetadata
+			logger        *lagertest.TestLogger
+			expectedRoute routes.SSHRoute
+			desiredLRP    *models.DesiredLRP
+			actualLRP     *models.ActualLRP
+			bbsClient     *fake_bbs.FakeInternalClient
+			metadata      *fake_ssh.FakeConnMetadata
 
 			permissionsBuilder authenticators.PermissionsBuilder
 			permissions        *ssh.Permissions
@@ -62,16 +62,14 @@ var _ = Describe("PermissionsBuilder", func() {
 				},
 			}
 
-			actualLRPGroup = &models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
-				},
+			actualLRP = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
 			}
 
 			bbsClient = new(fake_bbs.FakeInternalClient)
-			bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
+			bbsClient.ActualLRPsReturns([]*models.ActualLRP{actualLRP}, nil)
 			bbsClient.DesiredLRPByProcessGuidReturns(desiredLRP, nil)
 
 			permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, false)
@@ -96,11 +94,11 @@ var _ = Describe("PermissionsBuilder", func() {
 		})
 
 		It("gets information about the the actual lrp from the username", func() {
-			Expect(bbsClient.ActualLRPGroupByProcessGuidAndIndexCallCount()).To(Equal(1))
+			Expect(bbsClient.ActualLRPsCallCount()).To(Equal(1))
 
-			_, guid, index := bbsClient.ActualLRPGroupByProcessGuidAndIndexArgsForCall(0)
-			Expect(guid).To(Equal("some-guid"))
-			Expect(index).To(Equal(1))
+			_, filter := bbsClient.ActualLRPsArgsForCall(0)
+			Expect(filter.ProcessGuid).To(Equal("some-guid"))
+			Expect(*filter.Index).To(BeEquivalentTo(1))
 		})
 
 		Context("ssh-proxy's connect-to-instance-address and rep's advertise-preference-for-instance-address interaction", func() {
@@ -108,7 +106,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			var connectToInstanceAddress bool
 
 			JustBeforeEach(func() {
-				actualLRPGroup.Instance.ActualLRPNetInfo =
+				actualLRP.ActualLRPNetInfo =
 					models.NewActualLRPNetInfo("external-ip", "instance-address", preferredAddress, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444))
 
 				permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, connectToInstanceAddress)
@@ -208,7 +206,7 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		Context("when the tls port isn't set", func() {
 			BeforeEach(func() {
-				actualLRPGroup.Instance.ActualLRPNetInfo =
+				actualLRP.ActualLRPNetInfo =
 					models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMapping(3333, 1111))
 			})
 
@@ -274,7 +272,7 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		Context("when getting the actual LRP information fails", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(nil, &models.Error{})
+				bbsClient.ActualLRPsReturns(nil, &models.Error{})
 			})
 
 			It("returns the error", func() {
@@ -284,8 +282,8 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		Context("when the container port cannot be found", func() {
 			BeforeEach(func() {
-				actualLRPGroup.Instance.Ports = []*models.PortMapping{}
-				bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
+				actualLRP.Ports = []*models.PortMapping{}
+				bbsClient.ActualLRPsReturns([]*models.ActualLRP{actualLRP}, nil)
 			})
 
 			It("returns an empty permission reference", func() {
