@@ -10,20 +10,11 @@ import (
 )
 
 type FakePasswordAuthenticator struct {
-	UserRegexpStub        func() *regexp.Regexp
-	userRegexpMutex       sync.RWMutex
-	userRegexpArgsForCall []struct{}
-	userRegexpReturns     struct {
-		result1 *regexp.Regexp
-	}
-	userRegexpReturnsOnCall map[int]struct {
-		result1 *regexp.Regexp
-	}
-	AuthenticateStub        func(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error)
+	AuthenticateStub        func(ssh.ConnMetadata, []byte) (*ssh.Permissions, error)
 	authenticateMutex       sync.RWMutex
 	authenticateArgsForCall []struct {
-		metadata ssh.ConnMetadata
-		password []byte
+		arg1 ssh.ConnMetadata
+		arg2 []byte
 	}
 	authenticateReturns struct {
 		result1 *ssh.Permissions
@@ -33,71 +24,43 @@ type FakePasswordAuthenticator struct {
 		result1 *ssh.Permissions
 		result2 error
 	}
+	UserRegexpStub        func() *regexp.Regexp
+	userRegexpMutex       sync.RWMutex
+	userRegexpArgsForCall []struct {
+	}
+	userRegexpReturns struct {
+		result1 *regexp.Regexp
+	}
+	userRegexpReturnsOnCall map[int]struct {
+		result1 *regexp.Regexp
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakePasswordAuthenticator) UserRegexp() *regexp.Regexp {
-	fake.userRegexpMutex.Lock()
-	ret, specificReturn := fake.userRegexpReturnsOnCall[len(fake.userRegexpArgsForCall)]
-	fake.userRegexpArgsForCall = append(fake.userRegexpArgsForCall, struct{}{})
-	fake.recordInvocation("UserRegexp", []interface{}{})
-	fake.userRegexpMutex.Unlock()
-	if fake.UserRegexpStub != nil {
-		return fake.UserRegexpStub()
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.userRegexpReturns.result1
-}
-
-func (fake *FakePasswordAuthenticator) UserRegexpCallCount() int {
-	fake.userRegexpMutex.RLock()
-	defer fake.userRegexpMutex.RUnlock()
-	return len(fake.userRegexpArgsForCall)
-}
-
-func (fake *FakePasswordAuthenticator) UserRegexpReturns(result1 *regexp.Regexp) {
-	fake.UserRegexpStub = nil
-	fake.userRegexpReturns = struct {
-		result1 *regexp.Regexp
-	}{result1}
-}
-
-func (fake *FakePasswordAuthenticator) UserRegexpReturnsOnCall(i int, result1 *regexp.Regexp) {
-	fake.UserRegexpStub = nil
-	if fake.userRegexpReturnsOnCall == nil {
-		fake.userRegexpReturnsOnCall = make(map[int]struct {
-			result1 *regexp.Regexp
-		})
-	}
-	fake.userRegexpReturnsOnCall[i] = struct {
-		result1 *regexp.Regexp
-	}{result1}
-}
-
-func (fake *FakePasswordAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	var passwordCopy []byte
-	if password != nil {
-		passwordCopy = make([]byte, len(password))
-		copy(passwordCopy, password)
+func (fake *FakePasswordAuthenticator) Authenticate(arg1 ssh.ConnMetadata, arg2 []byte) (*ssh.Permissions, error) {
+	var arg2Copy []byte
+	if arg2 != nil {
+		arg2Copy = make([]byte, len(arg2))
+		copy(arg2Copy, arg2)
 	}
 	fake.authenticateMutex.Lock()
 	ret, specificReturn := fake.authenticateReturnsOnCall[len(fake.authenticateArgsForCall)]
 	fake.authenticateArgsForCall = append(fake.authenticateArgsForCall, struct {
-		metadata ssh.ConnMetadata
-		password []byte
-	}{metadata, passwordCopy})
-	fake.recordInvocation("Authenticate", []interface{}{metadata, passwordCopy})
+		arg1 ssh.ConnMetadata
+		arg2 []byte
+	}{arg1, arg2Copy})
+	fake.recordInvocation("Authenticate", []interface{}{arg1, arg2Copy})
+	authenticateStubCopy := fake.AuthenticateStub
 	fake.authenticateMutex.Unlock()
-	if fake.AuthenticateStub != nil {
-		return fake.AuthenticateStub(metadata, password)
+	if authenticateStubCopy != nil {
+		return authenticateStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.authenticateReturns.result1, fake.authenticateReturns.result2
+	fakeReturns := fake.authenticateReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakePasswordAuthenticator) AuthenticateCallCount() int {
@@ -106,13 +69,22 @@ func (fake *FakePasswordAuthenticator) AuthenticateCallCount() int {
 	return len(fake.authenticateArgsForCall)
 }
 
+func (fake *FakePasswordAuthenticator) AuthenticateCalls(stub func(ssh.ConnMetadata, []byte) (*ssh.Permissions, error)) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
+	fake.AuthenticateStub = stub
+}
+
 func (fake *FakePasswordAuthenticator) AuthenticateArgsForCall(i int) (ssh.ConnMetadata, []byte) {
 	fake.authenticateMutex.RLock()
 	defer fake.authenticateMutex.RUnlock()
-	return fake.authenticateArgsForCall[i].metadata, fake.authenticateArgsForCall[i].password
+	argsForCall := fake.authenticateArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissions, result2 error) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
 	fake.AuthenticateStub = nil
 	fake.authenticateReturns = struct {
 		result1 *ssh.Permissions
@@ -121,6 +93,8 @@ func (fake *FakePasswordAuthenticator) AuthenticateReturns(result1 *ssh.Permissi
 }
 
 func (fake *FakePasswordAuthenticator) AuthenticateReturnsOnCall(i int, result1 *ssh.Permissions, result2 error) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
 	fake.AuthenticateStub = nil
 	if fake.authenticateReturnsOnCall == nil {
 		fake.authenticateReturnsOnCall = make(map[int]struct {
@@ -134,13 +108,66 @@ func (fake *FakePasswordAuthenticator) AuthenticateReturnsOnCall(i int, result1 
 	}{result1, result2}
 }
 
+func (fake *FakePasswordAuthenticator) UserRegexp() *regexp.Regexp {
+	fake.userRegexpMutex.Lock()
+	ret, specificReturn := fake.userRegexpReturnsOnCall[len(fake.userRegexpArgsForCall)]
+	fake.userRegexpArgsForCall = append(fake.userRegexpArgsForCall, struct {
+	}{})
+	fake.recordInvocation("UserRegexp", []interface{}{})
+	userRegexpStubCopy := fake.UserRegexpStub
+	fake.userRegexpMutex.Unlock()
+	if userRegexpStubCopy != nil {
+		return userRegexpStubCopy()
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.userRegexpReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpCallCount() int {
+	fake.userRegexpMutex.RLock()
+	defer fake.userRegexpMutex.RUnlock()
+	return len(fake.userRegexpArgsForCall)
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpCalls(stub func() *regexp.Regexp) {
+	fake.userRegexpMutex.Lock()
+	defer fake.userRegexpMutex.Unlock()
+	fake.UserRegexpStub = stub
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpReturns(result1 *regexp.Regexp) {
+	fake.userRegexpMutex.Lock()
+	defer fake.userRegexpMutex.Unlock()
+	fake.UserRegexpStub = nil
+	fake.userRegexpReturns = struct {
+		result1 *regexp.Regexp
+	}{result1}
+}
+
+func (fake *FakePasswordAuthenticator) UserRegexpReturnsOnCall(i int, result1 *regexp.Regexp) {
+	fake.userRegexpMutex.Lock()
+	defer fake.userRegexpMutex.Unlock()
+	fake.UserRegexpStub = nil
+	if fake.userRegexpReturnsOnCall == nil {
+		fake.userRegexpReturnsOnCall = make(map[int]struct {
+			result1 *regexp.Regexp
+		})
+	}
+	fake.userRegexpReturnsOnCall[i] = struct {
+		result1 *regexp.Regexp
+	}{result1}
+}
+
 func (fake *FakePasswordAuthenticator) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.userRegexpMutex.RLock()
-	defer fake.userRegexpMutex.RUnlock()
 	fake.authenticateMutex.RLock()
 	defer fake.authenticateMutex.RUnlock()
+	fake.userRegexpMutex.RLock()
+	defer fake.userRegexpMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

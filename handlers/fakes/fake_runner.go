@@ -10,33 +10,11 @@ import (
 )
 
 type FakeRunner struct {
-	StartStub        func(cmd *exec.Cmd) error
-	startMutex       sync.RWMutex
-	startArgsForCall []struct {
-		cmd *exec.Cmd
-	}
-	startReturns struct {
-		result1 error
-	}
-	startReturnsOnCall map[int]struct {
-		result1 error
-	}
-	WaitStub        func(cmd *exec.Cmd) error
-	waitMutex       sync.RWMutex
-	waitArgsForCall []struct {
-		cmd *exec.Cmd
-	}
-	waitReturns struct {
-		result1 error
-	}
-	waitReturnsOnCall map[int]struct {
-		result1 error
-	}
-	SignalStub        func(cmd *exec.Cmd, signal syscall.Signal) error
+	SignalStub        func(*exec.Cmd, syscall.Signal) error
 	signalMutex       sync.RWMutex
 	signalArgsForCall []struct {
-		cmd    *exec.Cmd
-		signal syscall.Signal
+		arg1 *exec.Cmd
+		arg2 syscall.Signal
 	}
 	signalReturns struct {
 		result1 error
@@ -44,122 +22,50 @@ type FakeRunner struct {
 	signalReturnsOnCall map[int]struct {
 		result1 error
 	}
+	StartStub        func(*exec.Cmd) error
+	startMutex       sync.RWMutex
+	startArgsForCall []struct {
+		arg1 *exec.Cmd
+	}
+	startReturns struct {
+		result1 error
+	}
+	startReturnsOnCall map[int]struct {
+		result1 error
+	}
+	WaitStub        func(*exec.Cmd) error
+	waitMutex       sync.RWMutex
+	waitArgsForCall []struct {
+		arg1 *exec.Cmd
+	}
+	waitReturns struct {
+		result1 error
+	}
+	waitReturnsOnCall map[int]struct {
+		result1 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRunner) Start(cmd *exec.Cmd) error {
-	fake.startMutex.Lock()
-	ret, specificReturn := fake.startReturnsOnCall[len(fake.startArgsForCall)]
-	fake.startArgsForCall = append(fake.startArgsForCall, struct {
-		cmd *exec.Cmd
-	}{cmd})
-	fake.recordInvocation("Start", []interface{}{cmd})
-	fake.startMutex.Unlock()
-	if fake.StartStub != nil {
-		return fake.StartStub(cmd)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.startReturns.result1
-}
-
-func (fake *FakeRunner) StartCallCount() int {
-	fake.startMutex.RLock()
-	defer fake.startMutex.RUnlock()
-	return len(fake.startArgsForCall)
-}
-
-func (fake *FakeRunner) StartArgsForCall(i int) *exec.Cmd {
-	fake.startMutex.RLock()
-	defer fake.startMutex.RUnlock()
-	return fake.startArgsForCall[i].cmd
-}
-
-func (fake *FakeRunner) StartReturns(result1 error) {
-	fake.StartStub = nil
-	fake.startReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeRunner) StartReturnsOnCall(i int, result1 error) {
-	fake.StartStub = nil
-	if fake.startReturnsOnCall == nil {
-		fake.startReturnsOnCall = make(map[int]struct {
-			result1 error
-		})
-	}
-	fake.startReturnsOnCall[i] = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeRunner) Wait(cmd *exec.Cmd) error {
-	fake.waitMutex.Lock()
-	ret, specificReturn := fake.waitReturnsOnCall[len(fake.waitArgsForCall)]
-	fake.waitArgsForCall = append(fake.waitArgsForCall, struct {
-		cmd *exec.Cmd
-	}{cmd})
-	fake.recordInvocation("Wait", []interface{}{cmd})
-	fake.waitMutex.Unlock()
-	if fake.WaitStub != nil {
-		return fake.WaitStub(cmd)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.waitReturns.result1
-}
-
-func (fake *FakeRunner) WaitCallCount() int {
-	fake.waitMutex.RLock()
-	defer fake.waitMutex.RUnlock()
-	return len(fake.waitArgsForCall)
-}
-
-func (fake *FakeRunner) WaitArgsForCall(i int) *exec.Cmd {
-	fake.waitMutex.RLock()
-	defer fake.waitMutex.RUnlock()
-	return fake.waitArgsForCall[i].cmd
-}
-
-func (fake *FakeRunner) WaitReturns(result1 error) {
-	fake.WaitStub = nil
-	fake.waitReturns = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeRunner) WaitReturnsOnCall(i int, result1 error) {
-	fake.WaitStub = nil
-	if fake.waitReturnsOnCall == nil {
-		fake.waitReturnsOnCall = make(map[int]struct {
-			result1 error
-		})
-	}
-	fake.waitReturnsOnCall[i] = struct {
-		result1 error
-	}{result1}
-}
-
-func (fake *FakeRunner) Signal(cmd *exec.Cmd, signal syscall.Signal) error {
+func (fake *FakeRunner) Signal(arg1 *exec.Cmd, arg2 syscall.Signal) error {
 	fake.signalMutex.Lock()
 	ret, specificReturn := fake.signalReturnsOnCall[len(fake.signalArgsForCall)]
 	fake.signalArgsForCall = append(fake.signalArgsForCall, struct {
-		cmd    *exec.Cmd
-		signal syscall.Signal
-	}{cmd, signal})
-	fake.recordInvocation("Signal", []interface{}{cmd, signal})
+		arg1 *exec.Cmd
+		arg2 syscall.Signal
+	}{arg1, arg2})
+	fake.recordInvocation("Signal", []interface{}{arg1, arg2})
+	signalStubCopy := fake.SignalStub
 	fake.signalMutex.Unlock()
-	if fake.SignalStub != nil {
-		return fake.SignalStub(cmd, signal)
+	if signalStubCopy != nil {
+		return signalStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.signalReturns.result1
+	fakeReturns := fake.signalReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeRunner) SignalCallCount() int {
@@ -168,13 +74,22 @@ func (fake *FakeRunner) SignalCallCount() int {
 	return len(fake.signalArgsForCall)
 }
 
+func (fake *FakeRunner) SignalCalls(stub func(*exec.Cmd, syscall.Signal) error) {
+	fake.signalMutex.Lock()
+	defer fake.signalMutex.Unlock()
+	fake.SignalStub = stub
+}
+
 func (fake *FakeRunner) SignalArgsForCall(i int) (*exec.Cmd, syscall.Signal) {
 	fake.signalMutex.RLock()
 	defer fake.signalMutex.RUnlock()
-	return fake.signalArgsForCall[i].cmd, fake.signalArgsForCall[i].signal
+	argsForCall := fake.signalArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakeRunner) SignalReturns(result1 error) {
+	fake.signalMutex.Lock()
+	defer fake.signalMutex.Unlock()
 	fake.SignalStub = nil
 	fake.signalReturns = struct {
 		result1 error
@@ -182,6 +97,8 @@ func (fake *FakeRunner) SignalReturns(result1 error) {
 }
 
 func (fake *FakeRunner) SignalReturnsOnCall(i int, result1 error) {
+	fake.signalMutex.Lock()
+	defer fake.signalMutex.Unlock()
 	fake.SignalStub = nil
 	if fake.signalReturnsOnCall == nil {
 		fake.signalReturnsOnCall = make(map[int]struct {
@@ -193,15 +110,137 @@ func (fake *FakeRunner) SignalReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
+func (fake *FakeRunner) Start(arg1 *exec.Cmd) error {
+	fake.startMutex.Lock()
+	ret, specificReturn := fake.startReturnsOnCall[len(fake.startArgsForCall)]
+	fake.startArgsForCall = append(fake.startArgsForCall, struct {
+		arg1 *exec.Cmd
+	}{arg1})
+	fake.recordInvocation("Start", []interface{}{arg1})
+	startStubCopy := fake.StartStub
+	fake.startMutex.Unlock()
+	if startStubCopy != nil {
+		return startStubCopy(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.startReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeRunner) StartCallCount() int {
+	fake.startMutex.RLock()
+	defer fake.startMutex.RUnlock()
+	return len(fake.startArgsForCall)
+}
+
+func (fake *FakeRunner) StartCalls(stub func(*exec.Cmd) error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = stub
+}
+
+func (fake *FakeRunner) StartArgsForCall(i int) *exec.Cmd {
+	fake.startMutex.RLock()
+	defer fake.startMutex.RUnlock()
+	argsForCall := fake.startArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRunner) StartReturns(result1 error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = nil
+	fake.startReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeRunner) StartReturnsOnCall(i int, result1 error) {
+	fake.startMutex.Lock()
+	defer fake.startMutex.Unlock()
+	fake.StartStub = nil
+	if fake.startReturnsOnCall == nil {
+		fake.startReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.startReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeRunner) Wait(arg1 *exec.Cmd) error {
+	fake.waitMutex.Lock()
+	ret, specificReturn := fake.waitReturnsOnCall[len(fake.waitArgsForCall)]
+	fake.waitArgsForCall = append(fake.waitArgsForCall, struct {
+		arg1 *exec.Cmd
+	}{arg1})
+	fake.recordInvocation("Wait", []interface{}{arg1})
+	waitStubCopy := fake.WaitStub
+	fake.waitMutex.Unlock()
+	if waitStubCopy != nil {
+		return waitStubCopy(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.waitReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeRunner) WaitCallCount() int {
+	fake.waitMutex.RLock()
+	defer fake.waitMutex.RUnlock()
+	return len(fake.waitArgsForCall)
+}
+
+func (fake *FakeRunner) WaitCalls(stub func(*exec.Cmd) error) {
+	fake.waitMutex.Lock()
+	defer fake.waitMutex.Unlock()
+	fake.WaitStub = stub
+}
+
+func (fake *FakeRunner) WaitArgsForCall(i int) *exec.Cmd {
+	fake.waitMutex.RLock()
+	defer fake.waitMutex.RUnlock()
+	argsForCall := fake.waitArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRunner) WaitReturns(result1 error) {
+	fake.waitMutex.Lock()
+	defer fake.waitMutex.Unlock()
+	fake.WaitStub = nil
+	fake.waitReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeRunner) WaitReturnsOnCall(i int, result1 error) {
+	fake.waitMutex.Lock()
+	defer fake.waitMutex.Unlock()
+	fake.WaitStub = nil
+	if fake.waitReturnsOnCall == nil {
+		fake.waitReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.waitReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeRunner) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.signalMutex.RLock()
+	defer fake.signalMutex.RUnlock()
 	fake.startMutex.RLock()
 	defer fake.startMutex.RUnlock()
 	fake.waitMutex.RLock()
 	defer fake.waitMutex.RUnlock()
-	fake.signalMutex.RLock()
-	defer fake.signalMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

@@ -8,10 +8,10 @@ import (
 )
 
 type FakeSSHKeyFactory struct {
-	NewKeyPairStub        func(bits int) (keys.KeyPair, error)
+	NewKeyPairStub        func(int) (keys.KeyPair, error)
 	newKeyPairMutex       sync.RWMutex
 	newKeyPairArgsForCall []struct {
-		bits int
+		arg1 int
 	}
 	newKeyPairReturns struct {
 		result1 keys.KeyPair
@@ -25,21 +25,23 @@ type FakeSSHKeyFactory struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeSSHKeyFactory) NewKeyPair(bits int) (keys.KeyPair, error) {
+func (fake *FakeSSHKeyFactory) NewKeyPair(arg1 int) (keys.KeyPair, error) {
 	fake.newKeyPairMutex.Lock()
 	ret, specificReturn := fake.newKeyPairReturnsOnCall[len(fake.newKeyPairArgsForCall)]
 	fake.newKeyPairArgsForCall = append(fake.newKeyPairArgsForCall, struct {
-		bits int
-	}{bits})
-	fake.recordInvocation("NewKeyPair", []interface{}{bits})
+		arg1 int
+	}{arg1})
+	fake.recordInvocation("NewKeyPair", []interface{}{arg1})
+	newKeyPairStubCopy := fake.NewKeyPairStub
 	fake.newKeyPairMutex.Unlock()
-	if fake.NewKeyPairStub != nil {
-		return fake.NewKeyPairStub(bits)
+	if newKeyPairStubCopy != nil {
+		return newKeyPairStubCopy(arg1)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.newKeyPairReturns.result1, fake.newKeyPairReturns.result2
+	fakeReturns := fake.newKeyPairReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakeSSHKeyFactory) NewKeyPairCallCount() int {
@@ -48,13 +50,22 @@ func (fake *FakeSSHKeyFactory) NewKeyPairCallCount() int {
 	return len(fake.newKeyPairArgsForCall)
 }
 
+func (fake *FakeSSHKeyFactory) NewKeyPairCalls(stub func(int) (keys.KeyPair, error)) {
+	fake.newKeyPairMutex.Lock()
+	defer fake.newKeyPairMutex.Unlock()
+	fake.NewKeyPairStub = stub
+}
+
 func (fake *FakeSSHKeyFactory) NewKeyPairArgsForCall(i int) int {
 	fake.newKeyPairMutex.RLock()
 	defer fake.newKeyPairMutex.RUnlock()
-	return fake.newKeyPairArgsForCall[i].bits
+	argsForCall := fake.newKeyPairArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeSSHKeyFactory) NewKeyPairReturns(result1 keys.KeyPair, result2 error) {
+	fake.newKeyPairMutex.Lock()
+	defer fake.newKeyPairMutex.Unlock()
 	fake.NewKeyPairStub = nil
 	fake.newKeyPairReturns = struct {
 		result1 keys.KeyPair
@@ -63,6 +74,8 @@ func (fake *FakeSSHKeyFactory) NewKeyPairReturns(result1 keys.KeyPair, result2 e
 }
 
 func (fake *FakeSSHKeyFactory) NewKeyPairReturnsOnCall(i int, result1 keys.KeyPair, result2 error) {
+	fake.newKeyPairMutex.Lock()
+	defer fake.newKeyPairMutex.Unlock()
 	fake.NewKeyPairStub = nil
 	if fake.newKeyPairReturnsOnCall == nil {
 		fake.newKeyPairReturnsOnCall = make(map[int]struct {

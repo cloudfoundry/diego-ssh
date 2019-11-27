@@ -10,8 +10,9 @@ import (
 type FakeShellLocator struct {
 	ShellPathStub        func() string
 	shellPathMutex       sync.RWMutex
-	shellPathArgsForCall []struct{}
-	shellPathReturns     struct {
+	shellPathArgsForCall []struct {
+	}
+	shellPathReturns struct {
 		result1 string
 	}
 	shellPathReturnsOnCall map[int]struct {
@@ -24,16 +25,19 @@ type FakeShellLocator struct {
 func (fake *FakeShellLocator) ShellPath() string {
 	fake.shellPathMutex.Lock()
 	ret, specificReturn := fake.shellPathReturnsOnCall[len(fake.shellPathArgsForCall)]
-	fake.shellPathArgsForCall = append(fake.shellPathArgsForCall, struct{}{})
+	fake.shellPathArgsForCall = append(fake.shellPathArgsForCall, struct {
+	}{})
 	fake.recordInvocation("ShellPath", []interface{}{})
+	shellPathStubCopy := fake.ShellPathStub
 	fake.shellPathMutex.Unlock()
-	if fake.ShellPathStub != nil {
-		return fake.ShellPathStub()
+	if shellPathStubCopy != nil {
+		return shellPathStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.shellPathReturns.result1
+	fakeReturns := fake.shellPathReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeShellLocator) ShellPathCallCount() int {
@@ -42,7 +46,15 @@ func (fake *FakeShellLocator) ShellPathCallCount() int {
 	return len(fake.shellPathArgsForCall)
 }
 
+func (fake *FakeShellLocator) ShellPathCalls(stub func() string) {
+	fake.shellPathMutex.Lock()
+	defer fake.shellPathMutex.Unlock()
+	fake.ShellPathStub = stub
+}
+
 func (fake *FakeShellLocator) ShellPathReturns(result1 string) {
+	fake.shellPathMutex.Lock()
+	defer fake.shellPathMutex.Unlock()
 	fake.ShellPathStub = nil
 	fake.shellPathReturns = struct {
 		result1 string
@@ -50,6 +62,8 @@ func (fake *FakeShellLocator) ShellPathReturns(result1 string) {
 }
 
 func (fake *FakeShellLocator) ShellPathReturnsOnCall(i int, result1 string) {
+	fake.shellPathMutex.Lock()
+	defer fake.shellPathMutex.Unlock()
 	fake.ShellPathStub = nil
 	if fake.shellPathReturnsOnCall == nil {
 		fake.shellPathReturnsOnCall = make(map[int]struct {

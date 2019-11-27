@@ -10,13 +10,13 @@ import (
 )
 
 type FakePermissionsBuilder struct {
-	BuildStub        func(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error)
+	BuildStub        func(lager.Logger, string, int, ssh.ConnMetadata) (*ssh.Permissions, error)
 	buildMutex       sync.RWMutex
 	buildArgsForCall []struct {
-		logger      lager.Logger
-		processGuid string
-		index       int
-		metadata    ssh.ConnMetadata
+		arg1 lager.Logger
+		arg2 string
+		arg3 int
+		arg4 ssh.ConnMetadata
 	}
 	buildReturns struct {
 		result1 *ssh.Permissions
@@ -30,24 +30,26 @@ type FakePermissionsBuilder struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakePermissionsBuilder) Build(logger lager.Logger, processGuid string, index int, metadata ssh.ConnMetadata) (*ssh.Permissions, error) {
+func (fake *FakePermissionsBuilder) Build(arg1 lager.Logger, arg2 string, arg3 int, arg4 ssh.ConnMetadata) (*ssh.Permissions, error) {
 	fake.buildMutex.Lock()
 	ret, specificReturn := fake.buildReturnsOnCall[len(fake.buildArgsForCall)]
 	fake.buildArgsForCall = append(fake.buildArgsForCall, struct {
-		logger      lager.Logger
-		processGuid string
-		index       int
-		metadata    ssh.ConnMetadata
-	}{logger, processGuid, index, metadata})
-	fake.recordInvocation("Build", []interface{}{logger, processGuid, index, metadata})
+		arg1 lager.Logger
+		arg2 string
+		arg3 int
+		arg4 ssh.ConnMetadata
+	}{arg1, arg2, arg3, arg4})
+	fake.recordInvocation("Build", []interface{}{arg1, arg2, arg3, arg4})
+	buildStubCopy := fake.BuildStub
 	fake.buildMutex.Unlock()
-	if fake.BuildStub != nil {
-		return fake.BuildStub(logger, processGuid, index, metadata)
+	if buildStubCopy != nil {
+		return buildStubCopy(arg1, arg2, arg3, arg4)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.buildReturns.result1, fake.buildReturns.result2
+	fakeReturns := fake.buildReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakePermissionsBuilder) BuildCallCount() int {
@@ -56,13 +58,22 @@ func (fake *FakePermissionsBuilder) BuildCallCount() int {
 	return len(fake.buildArgsForCall)
 }
 
+func (fake *FakePermissionsBuilder) BuildCalls(stub func(lager.Logger, string, int, ssh.ConnMetadata) (*ssh.Permissions, error)) {
+	fake.buildMutex.Lock()
+	defer fake.buildMutex.Unlock()
+	fake.BuildStub = stub
+}
+
 func (fake *FakePermissionsBuilder) BuildArgsForCall(i int) (lager.Logger, string, int, ssh.ConnMetadata) {
 	fake.buildMutex.RLock()
 	defer fake.buildMutex.RUnlock()
-	return fake.buildArgsForCall[i].logger, fake.buildArgsForCall[i].processGuid, fake.buildArgsForCall[i].index, fake.buildArgsForCall[i].metadata
+	argsForCall := fake.buildArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
 }
 
 func (fake *FakePermissionsBuilder) BuildReturns(result1 *ssh.Permissions, result2 error) {
+	fake.buildMutex.Lock()
+	defer fake.buildMutex.Unlock()
 	fake.BuildStub = nil
 	fake.buildReturns = struct {
 		result1 *ssh.Permissions
@@ -71,6 +82,8 @@ func (fake *FakePermissionsBuilder) BuildReturns(result1 *ssh.Permissions, resul
 }
 
 func (fake *FakePermissionsBuilder) BuildReturnsOnCall(i int, result1 *ssh.Permissions, result2 error) {
+	fake.buildMutex.Lock()
+	defer fake.buildMutex.Unlock()
 	fake.BuildStub = nil
 	if fake.buildReturnsOnCall == nil {
 		fake.buildReturnsOnCall = make(map[int]struct {

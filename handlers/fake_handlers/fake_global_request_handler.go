@@ -11,30 +11,31 @@ import (
 )
 
 type FakeGlobalRequestHandler struct {
-	HandleRequestStub        func(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore)
+	HandleRequestStub        func(lager.Logger, *ssh.Request, ssh.Conn, *helpers.ListenerStore)
 	handleRequestMutex       sync.RWMutex
 	handleRequestArgsForCall []struct {
-		logger  lager.Logger
-		request *ssh.Request
-		conn    ssh.Conn
-		lnStore *helpers.ListenerStore
+		arg1 lager.Logger
+		arg2 *ssh.Request
+		arg3 ssh.Conn
+		arg4 *helpers.ListenerStore
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeGlobalRequestHandler) HandleRequest(logger lager.Logger, request *ssh.Request, conn ssh.Conn, lnStore *helpers.ListenerStore) {
+func (fake *FakeGlobalRequestHandler) HandleRequest(arg1 lager.Logger, arg2 *ssh.Request, arg3 ssh.Conn, arg4 *helpers.ListenerStore) {
 	fake.handleRequestMutex.Lock()
 	fake.handleRequestArgsForCall = append(fake.handleRequestArgsForCall, struct {
-		logger  lager.Logger
-		request *ssh.Request
-		conn    ssh.Conn
-		lnStore *helpers.ListenerStore
-	}{logger, request, conn, lnStore})
-	fake.recordInvocation("HandleRequest", []interface{}{logger, request, conn, lnStore})
+		arg1 lager.Logger
+		arg2 *ssh.Request
+		arg3 ssh.Conn
+		arg4 *helpers.ListenerStore
+	}{arg1, arg2, arg3, arg4})
+	fake.recordInvocation("HandleRequest", []interface{}{arg1, arg2, arg3, arg4})
+	handleRequestStubCopy := fake.HandleRequestStub
 	fake.handleRequestMutex.Unlock()
-	if fake.HandleRequestStub != nil {
-		fake.HandleRequestStub(logger, request, conn, lnStore)
+	if handleRequestStubCopy != nil {
+		handleRequestStubCopy(arg1, arg2, arg3, arg4)
 	}
 }
 
@@ -44,10 +45,17 @@ func (fake *FakeGlobalRequestHandler) HandleRequestCallCount() int {
 	return len(fake.handleRequestArgsForCall)
 }
 
+func (fake *FakeGlobalRequestHandler) HandleRequestCalls(stub func(lager.Logger, *ssh.Request, ssh.Conn, *helpers.ListenerStore)) {
+	fake.handleRequestMutex.Lock()
+	defer fake.handleRequestMutex.Unlock()
+	fake.HandleRequestStub = stub
+}
+
 func (fake *FakeGlobalRequestHandler) HandleRequestArgsForCall(i int) (lager.Logger, *ssh.Request, ssh.Conn, *helpers.ListenerStore) {
 	fake.handleRequestMutex.RLock()
 	defer fake.handleRequestMutex.RUnlock()
-	return fake.handleRequestArgsForCall[i].logger, fake.handleRequestArgsForCall[i].request, fake.handleRequestArgsForCall[i].conn, fake.handleRequestArgsForCall[i].lnStore
+	argsForCall := fake.handleRequestArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
 }
 
 func (fake *FakeGlobalRequestHandler) Invocations() map[string][][]interface{} {

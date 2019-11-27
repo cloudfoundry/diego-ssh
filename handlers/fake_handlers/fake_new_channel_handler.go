@@ -10,26 +10,27 @@ import (
 )
 
 type FakeNewChannelHandler struct {
-	HandleNewChannelStub        func(logger lager.Logger, newChannel ssh.NewChannel)
+	HandleNewChannelStub        func(lager.Logger, ssh.NewChannel)
 	handleNewChannelMutex       sync.RWMutex
 	handleNewChannelArgsForCall []struct {
-		logger     lager.Logger
-		newChannel ssh.NewChannel
+		arg1 lager.Logger
+		arg2 ssh.NewChannel
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeNewChannelHandler) HandleNewChannel(logger lager.Logger, newChannel ssh.NewChannel) {
+func (fake *FakeNewChannelHandler) HandleNewChannel(arg1 lager.Logger, arg2 ssh.NewChannel) {
 	fake.handleNewChannelMutex.Lock()
 	fake.handleNewChannelArgsForCall = append(fake.handleNewChannelArgsForCall, struct {
-		logger     lager.Logger
-		newChannel ssh.NewChannel
-	}{logger, newChannel})
-	fake.recordInvocation("HandleNewChannel", []interface{}{logger, newChannel})
+		arg1 lager.Logger
+		arg2 ssh.NewChannel
+	}{arg1, arg2})
+	fake.recordInvocation("HandleNewChannel", []interface{}{arg1, arg2})
+	handleNewChannelStubCopy := fake.HandleNewChannelStub
 	fake.handleNewChannelMutex.Unlock()
-	if fake.HandleNewChannelStub != nil {
-		fake.HandleNewChannelStub(logger, newChannel)
+	if handleNewChannelStubCopy != nil {
+		handleNewChannelStubCopy(arg1, arg2)
 	}
 }
 
@@ -39,10 +40,17 @@ func (fake *FakeNewChannelHandler) HandleNewChannelCallCount() int {
 	return len(fake.handleNewChannelArgsForCall)
 }
 
+func (fake *FakeNewChannelHandler) HandleNewChannelCalls(stub func(lager.Logger, ssh.NewChannel)) {
+	fake.handleNewChannelMutex.Lock()
+	defer fake.handleNewChannelMutex.Unlock()
+	fake.HandleNewChannelStub = stub
+}
+
 func (fake *FakeNewChannelHandler) HandleNewChannelArgsForCall(i int) (lager.Logger, ssh.NewChannel) {
 	fake.handleNewChannelMutex.RLock()
 	defer fake.handleNewChannelMutex.RUnlock()
-	return fake.handleNewChannelArgsForCall[i].logger, fake.handleNewChannelArgsForCall[i].newChannel
+	argsForCall := fake.handleNewChannelArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakeNewChannelHandler) Invocations() map[string][][]interface{} {

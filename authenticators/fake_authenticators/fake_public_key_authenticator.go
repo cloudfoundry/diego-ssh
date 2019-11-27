@@ -9,11 +9,11 @@ import (
 )
 
 type FakePublicKeyAuthenticator struct {
-	AuthenticateStub        func(metadata ssh.ConnMetadata, publicKey ssh.PublicKey) (*ssh.Permissions, error)
+	AuthenticateStub        func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error)
 	authenticateMutex       sync.RWMutex
 	authenticateArgsForCall []struct {
-		metadata  ssh.ConnMetadata
-		publicKey ssh.PublicKey
+		arg1 ssh.ConnMetadata
+		arg2 ssh.PublicKey
 	}
 	authenticateReturns struct {
 		result1 *ssh.Permissions
@@ -25,8 +25,9 @@ type FakePublicKeyAuthenticator struct {
 	}
 	PublicKeyStub        func() ssh.PublicKey
 	publicKeyMutex       sync.RWMutex
-	publicKeyArgsForCall []struct{}
-	publicKeyReturns     struct {
+	publicKeyArgsForCall []struct {
+	}
+	publicKeyReturns struct {
 		result1 ssh.PublicKey
 	}
 	publicKeyReturnsOnCall map[int]struct {
@@ -36,22 +37,24 @@ type FakePublicKeyAuthenticator struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakePublicKeyAuthenticator) Authenticate(metadata ssh.ConnMetadata, publicKey ssh.PublicKey) (*ssh.Permissions, error) {
+func (fake *FakePublicKeyAuthenticator) Authenticate(arg1 ssh.ConnMetadata, arg2 ssh.PublicKey) (*ssh.Permissions, error) {
 	fake.authenticateMutex.Lock()
 	ret, specificReturn := fake.authenticateReturnsOnCall[len(fake.authenticateArgsForCall)]
 	fake.authenticateArgsForCall = append(fake.authenticateArgsForCall, struct {
-		metadata  ssh.ConnMetadata
-		publicKey ssh.PublicKey
-	}{metadata, publicKey})
-	fake.recordInvocation("Authenticate", []interface{}{metadata, publicKey})
+		arg1 ssh.ConnMetadata
+		arg2 ssh.PublicKey
+	}{arg1, arg2})
+	fake.recordInvocation("Authenticate", []interface{}{arg1, arg2})
+	authenticateStubCopy := fake.AuthenticateStub
 	fake.authenticateMutex.Unlock()
-	if fake.AuthenticateStub != nil {
-		return fake.AuthenticateStub(metadata, publicKey)
+	if authenticateStubCopy != nil {
+		return authenticateStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.authenticateReturns.result1, fake.authenticateReturns.result2
+	fakeReturns := fake.authenticateReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakePublicKeyAuthenticator) AuthenticateCallCount() int {
@@ -60,13 +63,22 @@ func (fake *FakePublicKeyAuthenticator) AuthenticateCallCount() int {
 	return len(fake.authenticateArgsForCall)
 }
 
+func (fake *FakePublicKeyAuthenticator) AuthenticateCalls(stub func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error)) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
+	fake.AuthenticateStub = stub
+}
+
 func (fake *FakePublicKeyAuthenticator) AuthenticateArgsForCall(i int) (ssh.ConnMetadata, ssh.PublicKey) {
 	fake.authenticateMutex.RLock()
 	defer fake.authenticateMutex.RUnlock()
-	return fake.authenticateArgsForCall[i].metadata, fake.authenticateArgsForCall[i].publicKey
+	argsForCall := fake.authenticateArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakePublicKeyAuthenticator) AuthenticateReturns(result1 *ssh.Permissions, result2 error) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
 	fake.AuthenticateStub = nil
 	fake.authenticateReturns = struct {
 		result1 *ssh.Permissions
@@ -75,6 +87,8 @@ func (fake *FakePublicKeyAuthenticator) AuthenticateReturns(result1 *ssh.Permiss
 }
 
 func (fake *FakePublicKeyAuthenticator) AuthenticateReturnsOnCall(i int, result1 *ssh.Permissions, result2 error) {
+	fake.authenticateMutex.Lock()
+	defer fake.authenticateMutex.Unlock()
 	fake.AuthenticateStub = nil
 	if fake.authenticateReturnsOnCall == nil {
 		fake.authenticateReturnsOnCall = make(map[int]struct {
@@ -91,16 +105,19 @@ func (fake *FakePublicKeyAuthenticator) AuthenticateReturnsOnCall(i int, result1
 func (fake *FakePublicKeyAuthenticator) PublicKey() ssh.PublicKey {
 	fake.publicKeyMutex.Lock()
 	ret, specificReturn := fake.publicKeyReturnsOnCall[len(fake.publicKeyArgsForCall)]
-	fake.publicKeyArgsForCall = append(fake.publicKeyArgsForCall, struct{}{})
+	fake.publicKeyArgsForCall = append(fake.publicKeyArgsForCall, struct {
+	}{})
 	fake.recordInvocation("PublicKey", []interface{}{})
+	publicKeyStubCopy := fake.PublicKeyStub
 	fake.publicKeyMutex.Unlock()
-	if fake.PublicKeyStub != nil {
-		return fake.PublicKeyStub()
+	if publicKeyStubCopy != nil {
+		return publicKeyStubCopy()
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.publicKeyReturns.result1
+	fakeReturns := fake.publicKeyReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakePublicKeyAuthenticator) PublicKeyCallCount() int {
@@ -109,7 +126,15 @@ func (fake *FakePublicKeyAuthenticator) PublicKeyCallCount() int {
 	return len(fake.publicKeyArgsForCall)
 }
 
+func (fake *FakePublicKeyAuthenticator) PublicKeyCalls(stub func() ssh.PublicKey) {
+	fake.publicKeyMutex.Lock()
+	defer fake.publicKeyMutex.Unlock()
+	fake.PublicKeyStub = stub
+}
+
 func (fake *FakePublicKeyAuthenticator) PublicKeyReturns(result1 ssh.PublicKey) {
+	fake.publicKeyMutex.Lock()
+	defer fake.publicKeyMutex.Unlock()
 	fake.PublicKeyStub = nil
 	fake.publicKeyReturns = struct {
 		result1 ssh.PublicKey
@@ -117,6 +142,8 @@ func (fake *FakePublicKeyAuthenticator) PublicKeyReturns(result1 ssh.PublicKey) 
 }
 
 func (fake *FakePublicKeyAuthenticator) PublicKeyReturnsOnCall(i int, result1 ssh.PublicKey) {
+	fake.publicKeyMutex.Lock()
+	defer fake.publicKeyMutex.Unlock()
 	fake.PublicKeyStub = nil
 	if fake.publicKeyReturnsOnCall == nil {
 		fake.publicKeyReturnsOnCall = make(map[int]struct {

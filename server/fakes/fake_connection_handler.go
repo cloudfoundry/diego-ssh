@@ -24,9 +24,10 @@ func (fake *FakeConnectionHandler) HandleConnection(arg1 net.Conn) {
 		arg1 net.Conn
 	}{arg1})
 	fake.recordInvocation("HandleConnection", []interface{}{arg1})
+	handleConnectionStubCopy := fake.HandleConnectionStub
 	fake.handleConnectionMutex.Unlock()
-	if fake.HandleConnectionStub != nil {
-		fake.HandleConnectionStub(arg1)
+	if handleConnectionStubCopy != nil {
+		handleConnectionStubCopy(arg1)
 	}
 }
 
@@ -36,10 +37,17 @@ func (fake *FakeConnectionHandler) HandleConnectionCallCount() int {
 	return len(fake.handleConnectionArgsForCall)
 }
 
+func (fake *FakeConnectionHandler) HandleConnectionCalls(stub func(net.Conn)) {
+	fake.handleConnectionMutex.Lock()
+	defer fake.handleConnectionMutex.Unlock()
+	fake.HandleConnectionStub = stub
+}
+
 func (fake *FakeConnectionHandler) HandleConnectionArgsForCall(i int) net.Conn {
 	fake.handleConnectionMutex.RLock()
 	defer fake.handleConnectionMutex.RUnlock()
-	return fake.handleConnectionArgsForCall[i].arg1
+	argsForCall := fake.handleConnectionArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeConnectionHandler) Invocations() map[string][][]interface{} {

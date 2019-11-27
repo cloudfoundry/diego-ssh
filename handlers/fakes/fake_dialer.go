@@ -9,11 +9,11 @@ import (
 )
 
 type FakeDialer struct {
-	DialStub        func(net, addr string) (net.Conn, error)
+	DialStub        func(string, string) (net.Conn, error)
 	dialMutex       sync.RWMutex
 	dialArgsForCall []struct {
-		net  string
-		addr string
+		arg1 string
+		arg2 string
 	}
 	dialReturns struct {
 		result1 net.Conn
@@ -27,22 +27,24 @@ type FakeDialer struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeDialer) Dial(net string, addr string) (net.Conn, error) {
+func (fake *FakeDialer) Dial(arg1 string, arg2 string) (net.Conn, error) {
 	fake.dialMutex.Lock()
 	ret, specificReturn := fake.dialReturnsOnCall[len(fake.dialArgsForCall)]
 	fake.dialArgsForCall = append(fake.dialArgsForCall, struct {
-		net  string
-		addr string
-	}{net, addr})
-	fake.recordInvocation("Dial", []interface{}{net, addr})
+		arg1 string
+		arg2 string
+	}{arg1, arg2})
+	fake.recordInvocation("Dial", []interface{}{arg1, arg2})
+	dialStubCopy := fake.DialStub
 	fake.dialMutex.Unlock()
-	if fake.DialStub != nil {
-		return fake.DialStub(net, addr)
+	if dialStubCopy != nil {
+		return dialStubCopy(arg1, arg2)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
 	}
-	return fake.dialReturns.result1, fake.dialReturns.result2
+	fakeReturns := fake.dialReturns
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakeDialer) DialCallCount() int {
@@ -51,13 +53,22 @@ func (fake *FakeDialer) DialCallCount() int {
 	return len(fake.dialArgsForCall)
 }
 
+func (fake *FakeDialer) DialCalls(stub func(string, string) (net.Conn, error)) {
+	fake.dialMutex.Lock()
+	defer fake.dialMutex.Unlock()
+	fake.DialStub = stub
+}
+
 func (fake *FakeDialer) DialArgsForCall(i int) (string, string) {
 	fake.dialMutex.RLock()
 	defer fake.dialMutex.RUnlock()
-	return fake.dialArgsForCall[i].net, fake.dialArgsForCall[i].addr
+	argsForCall := fake.dialArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakeDialer) DialReturns(result1 net.Conn, result2 error) {
+	fake.dialMutex.Lock()
+	defer fake.dialMutex.Unlock()
 	fake.DialStub = nil
 	fake.dialReturns = struct {
 		result1 net.Conn
@@ -66,6 +77,8 @@ func (fake *FakeDialer) DialReturns(result1 net.Conn, result2 error) {
 }
 
 func (fake *FakeDialer) DialReturnsOnCall(i int, result1 net.Conn, result2 error) {
+	fake.dialMutex.Lock()
+	defer fake.dialMutex.Unlock()
 	fake.DialStub = nil
 	if fake.dialReturnsOnCall == nil {
 		fake.dialReturnsOnCall = make(map[int]struct {
