@@ -8,6 +8,10 @@ secure file transfer via `sftp`. When deployed and configured correctly, these
 provide a simple and scalable way to access containers associated with Diego
 long running processes.
 
+## Reporting issues and requesting features
+
+Please report all issues and feature requests in [cloudfoundry/diego-release](https://github.com/cloudfoundry/diego-release/issues).
+
 ## Proxy
 
 The ssh proxy hosts the user-accessible ssh endpoint and is responsible for
