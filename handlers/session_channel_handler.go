@@ -314,7 +314,7 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 	}
 
 	lagerWriter := helpers.NewLagerWriter(logger.Session("sftp-server"))
-	sftpServer, err := sftp.NewServer(sess.channel, sess.channel, sftp.WithDebug(lagerWriter))
+	sftpServer, err := sftp.NewServer(sess.channel, sftp.WithDebug(lagerWriter))
 	if err != nil {
 		logger.Error("sftp-new-server-failed", err)
 		if request.WantReply {
