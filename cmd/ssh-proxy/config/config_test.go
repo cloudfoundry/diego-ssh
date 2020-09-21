@@ -9,6 +9,7 @@ import (
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/lagerflags"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -157,10 +158,26 @@ var _ = Describe("SSHProxyConfig", func() {
 			sshProxyConfig config.SSHProxyConfig
 			tlsConfig      *tls.Config
 			getConfigErr   error
+			ca             certauthority.CertAuthority
+			certDepoDir    string
 		)
 
 		JustBeforeEach(func() {
 			tlsConfig, getConfigErr = sshProxyConfig.BackendsTLSConfig()
+		})
+
+		BeforeEach(func() {
+			var err error
+
+			certDepoDir, err = ioutil.TempDir("", "")
+			Expect(err).NotTo(HaveOccurred())
+
+			ca, err = certauthority.NewCertAuthority(certDepoDir, "ssh-proxy-ca")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(certDepoDir)).To(Succeed())
 		})
 
 		Context("when backends tls is disabled", func() {
@@ -176,10 +193,15 @@ var _ = Describe("SSHProxyConfig", func() {
 
 		Context("when backends tls is enabled", func() {
 			BeforeEach(func() {
+				_, serverCAFile := ca.CAAndKey()
+
+				clientKeyFile, clientCertFile, err := ca.GenerateSelfSignedCertAndKey("client", []string{}, false)
+				Expect(err).NotTo(HaveOccurred())
+
 				sshProxyConfig.BackendsTLSEnabled = true
-				sshProxyConfig.BackendsTLSCACerts = "../fixtures/green-certs/server-ca.crt"
-				sshProxyConfig.BackendsTLSClientCert = "../fixtures/green-certs/client.crt"
-				sshProxyConfig.BackendsTLSClientKey = "../fixtures/green-certs/client.key"
+				sshProxyConfig.BackendsTLSCACerts = serverCAFile
+				sshProxyConfig.BackendsTLSClientCert = clientCertFile
+				sshProxyConfig.BackendsTLSClientKey = clientKeyFile
 			})
 
 			It("returns a tls config", func() {

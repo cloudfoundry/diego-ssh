@@ -4,9 +4,11 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"code.cloudfoundry.org/diego-ssh/helpers"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -37,8 +39,25 @@ var _ = Describe("NewHTTPSClient", func() {
 	})
 
 	Context("when a list of ca Cert files is provided", func() {
+		var (
+			certDepotDir string
+			ca           certauthority.CertAuthority
+		)
+
 		BeforeEach(func() {
-			caCertFiles = []string{"fixtures/ca_cert_0.crt", "fixtures/ca_cert_1.crt"}
+			var err error
+			certDepotDir, err = ioutil.TempDir("", "")
+			Expect(err).NotTo(HaveOccurred())
+
+			ca, err = certauthority.NewCertAuthority(certDepotDir, "one")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, cert := ca.CAAndKey()
+			caCertFiles = []string{cert}
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(certDepotDir)).To(Succeed())
 		})
 
 		It("sets the RootCAs with a pool consisting of those CAs", func() {
@@ -61,8 +80,21 @@ var _ = Describe("NewHTTPSClient", func() {
 		})
 
 		Context("when an invalid tls cert is provided", func() {
+			var invalidCertPath string
+
 			BeforeEach(func() {
-				caCertFiles = []string{"fixtures/ca_cert_0.crt", "fixtures/invalid.crt"}
+				invalidCert, err := ioutil.TempFile("", "")
+				Expect(err).NotTo(HaveOccurred())
+
+				invalidCertPath = invalidCert.Name()
+
+				Expect(ioutil.WriteFile(invalidCertPath, []byte("not valid pem"), 0644)).To(Succeed())
+
+				caCertFiles = append(caCertFiles, invalidCertPath)
+			})
+
+			AfterEach(func() {
+				Expect(os.Remove(invalidCertPath)).To(Succeed())
 			})
 
 			It("returns an error", func() {
@@ -74,7 +106,7 @@ var _ = Describe("NewHTTPSClient", func() {
 
 		Context("when the UAA tls cert does not exist", func() {
 			BeforeEach(func() {
-				caCertFiles = []string{"fixtures/ca_cert_0.crt", "doesntexist"}
+				caCertFiles = append(caCertFiles, "doesntexist")
 			})
 
 			It("returns an error", func() {

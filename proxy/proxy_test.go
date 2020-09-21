@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
-	"path"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
 	loggregator "code.cloudfoundry.org/go-loggregator"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/tlsconfig"
@@ -1234,21 +1234,29 @@ var _ = Describe("Proxy", func() {
 		})
 
 		Context("when tls config is passed in", func() {
+			var certDepoDir string
+
 			BeforeEach(func() {
 				var err error
-				fixturesPath := path.Join(
-					os.Getenv("GOPATH"),
-					"src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures",
-				)
-				serverCAFile := filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
-				serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
-				serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
+				certDepoDir, err = ioutil.TempDir("", "")
+				Expect(err).NotTo(HaveOccurred())
+
+				ca, err := certauthority.NewCertAuthority(certDepoDir, "server_ca")
+				Expect(err).NotTo(HaveOccurred())
+
+				serverKeyFile, serverCertFile, err := ca.GenerateSelfSignedCertAndKey("server", []string{"some-instance-guid"}, false)
+				Expect(err).NotTo(HaveOccurred())
+				_, serverCAFile := ca.CAAndKey()
 
 				tlsCfg, err = tlsconfig.Build(
 					tlsconfig.WithInternalServiceDefaults(),
 					tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
 				).Client(tlsconfig.WithAuthorityFromFile(serverCAFile)) // used for a client connection to the tls proxy address
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				Expect(os.RemoveAll(certDepoDir)).To(Succeed())
 			})
 
 			Context("and the tls address is not available", func() {

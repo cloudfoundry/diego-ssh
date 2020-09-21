@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -29,6 +28,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/routes"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/tlsconfig"
 	"github.com/gogo/protobuf/proto"
@@ -52,6 +52,8 @@ var _ = Describe("SSH proxy", func() {
 		process            ifrit.Process
 		sshProxyConfig     *config.SSHProxyConfig
 		sshProxyConfigPath string
+		certDepoDir        string
+		ca                 certauthority.CertAuthority
 
 		address                     string
 		healthCheckAddress          string
@@ -68,19 +70,29 @@ var _ = Describe("SSH proxy", func() {
 
 	BeforeEach(func() {
 		var err error
+		certDepoDir, err = ioutil.TempDir("", "")
+		Expect(err).NotTo(HaveOccurred())
+
+		ca, err = certauthority.NewCertAuthority(certDepoDir, "ssh-proxy-ca")
+		Expect(err).NotTo(HaveOccurred())
+
+		serverKeyFile, serverCertFile, err := ca.GenerateSelfSignedCertAndKey("server", []string{}, false)
+		Expect(err).NotTo(HaveOccurred())
+		_, serverCAFile := ca.CAAndKey()
+
 		fakeBBS = ghttp.NewUnstartedServer()
 		fakeBBS.HTTPTestServer.TLS, err = tlsconfig.Build(
 			tlsconfig.WithInternalServiceDefaults(),
-			tlsconfig.WithIdentityFromFile(bbsServerCertFile, bbsServerKeyFile),
-		).Server(tlsconfig.WithClientAuthenticationFromFile(bbsCAFile))
+			tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(serverCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeBBS.HTTPTestServer.StartTLS()
 
 		fakeUAA = ghttp.NewUnstartedServer()
 		fakeUAA.HTTPTestServer.TLS, err = tlsconfig.Build(
 			tlsconfig.WithInternalServiceDefaults(),
-			tlsconfig.WithIdentityFromFile(uaaServerCertFile, uaaServerKeyFile),
-		).Server(tlsconfig.WithClientAuthenticationFromFile(uaaCAFile))
+			tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(serverCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeUAA.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
 		fakeUAA.HTTPTestServer.StartTLS()
@@ -88,8 +100,8 @@ var _ = Describe("SSH proxy", func() {
 		fakeCC = ghttp.NewUnstartedServer()
 		fakeCC.HTTPTestServer.TLS, err = tlsconfig.Build(
 			tlsconfig.WithInternalServiceDefaults(),
-			tlsconfig.WithIdentityFromFile(ccServerCertFile, ccServerKeyFile),
-		).Server(tlsconfig.WithClientAuthenticationFromFile(ccCAFile))
+			tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(serverCAFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeCC.HTTPTestServer.TLS.ClientAuth = tls.NoClientCert
 		fakeCC.HTTPTestServer.StartTLS()
@@ -112,11 +124,11 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.Address = address
 		sshProxyConfig.HealthCheckAddress = healthCheckAddress
 		sshProxyConfig.BBSAddress = fakeBBS.URL()
-		sshProxyConfig.BBSCACert = bbsCAFile
-		sshProxyConfig.BBSClientCert = bbsClientCertFile
-		sshProxyConfig.BBSClientKey = bbsClientKeyFile
+		sshProxyConfig.BBSCACert = serverCAFile
+		sshProxyConfig.BBSClientCert = serverCertFile
+		sshProxyConfig.BBSClientKey = serverKeyFile
 		sshProxyConfig.CCAPIURL = fakeCC.URL()
-		sshProxyConfig.CCAPICACert = ccCAFile
+		sshProxyConfig.CCAPICACert = serverCAFile
 		sshProxyConfig.DiegoCredentials = diegoCredentials
 		sshProxyConfig.EnableCFAuth = true
 		sshProxyConfig.EnableConsulServiceRegistration = false
@@ -126,7 +138,7 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.UAATokenURL = u.String()
 		sshProxyConfig.UAAPassword = "password1"
 		sshProxyConfig.UAAUsername = "amandaplease"
-		sshProxyConfig.UAACACert = uaaCAFile
+		sshProxyConfig.UAACACert = serverCAFile
 		sshProxyConfig.ConsulCluster = consulRunner.URL()
 		sshProxyConfig.IdleConnectionTimeout = durationjson.Duration(500 * time.Millisecond)
 		sshProxyConfig.CommunicationTimeout = durationjson.Duration(10 * time.Second)
@@ -209,6 +221,8 @@ var _ = Describe("SSH proxy", func() {
 
 		err := os.RemoveAll(sshProxyConfigPath)
 		Expect(err).NotTo(HaveOccurred())
+
+		Expect(os.RemoveAll(certDepoDir)).To(Succeed())
 
 		fakeBBS.Close()
 		fakeUAA.Close()
@@ -533,10 +547,10 @@ var _ = Describe("SSH proxy", func() {
 				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			}
 
-			serverCAFile := filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
-			serverCertFile := filepath.Join(fixturesPath, "green-certs", "server.crt")
-			serverKeyFile := filepath.Join(fixturesPath, "green-certs", "server.key")
-			var err error
+			serverKeyFile, serverCertFile, err := ca.GenerateSelfSignedCertAndKey("server", []string{"some-instance-guid"}, false)
+			Expect(err).NotTo(HaveOccurred())
+			_, serverCAFile := ca.CAAndKey()
+
 			intermediaryTLSConfig, err = tlsconfig.Build(
 				tlsconfig.WithInternalServiceDefaults(),
 				tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
@@ -587,7 +601,8 @@ var _ = Describe("SSH proxy", func() {
 
 				Context("when the tls handshake is via non-MTLS", func() {
 					BeforeEach(func() {
-						sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+						_, serverCAFile := ca.CAAndKey()
+						sshProxyConfig.BackendsTLSCACerts = serverCAFile
 
 						intermediaryTLSConfig.ClientAuth = tls.NoClientCert
 					})
@@ -604,9 +619,13 @@ var _ = Describe("SSH proxy", func() {
 
 				Context("when the tls handshake is via MTLS", func() {
 					BeforeEach(func() {
-						sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
-						sshProxyConfig.BackendsTLSClientCert = filepath.Join(fixturesPath, "green-certs", "client.crt")
-						sshProxyConfig.BackendsTLSClientKey = filepath.Join(fixturesPath, "green-certs", "client.key")
+						serverKeyFile, serverCertFile, err := ca.GenerateSelfSignedCertAndKey("server", []string{}, false)
+						Expect(err).NotTo(HaveOccurred())
+						_, serverCAFile := ca.CAAndKey()
+
+						sshProxyConfig.BackendsTLSCACerts = serverCAFile
+						sshProxyConfig.BackendsTLSClientCert = serverCertFile
+						sshProxyConfig.BackendsTLSClientKey = serverKeyFile
 
 						intermediaryTLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
 					})
@@ -624,8 +643,12 @@ var _ = Describe("SSH proxy", func() {
 				Context("when connecting using TLS fails", func() {
 					BeforeEach(func() {
 						// force TLS handshake to fail
-						badCertPath := filepath.Join(fixturesPath, "blue-certs", "server-ca.crt")
-						sshProxyConfig.BackendsTLSCACerts = badCertPath
+						otherCA, err := certauthority.NewCertAuthority(certDepoDir, "other_server_ca")
+						Expect(err).NotTo(HaveOccurred())
+
+						_, otherCAFile := otherCA.CAAndKey()
+
+						sshProxyConfig.BackendsTLSCACerts = otherCAFile
 
 						intermediaryTLSConfig.ClientAuth = tls.NoClientCert
 					})
@@ -673,7 +696,8 @@ var _ = Describe("SSH proxy", func() {
 			Context("when ssh-proxy is configured to connect to a tls intermediary", func() {
 				BeforeEach(func() {
 					sshProxyConfig.BackendsTLSEnabled = true
-					sshProxyConfig.BackendsTLSCACerts = filepath.Join(fixturesPath, "green-certs", "server-ca.crt")
+					_, serverCAFile := ca.CAAndKey()
+					sshProxyConfig.BackendsTLSCACerts = serverCAFile
 				})
 
 				It("connects to the daemon without using tls and logs appropriately", func() {
@@ -723,13 +747,13 @@ var _ = Describe("SSH proxy", func() {
 			)
 
 			BeforeEach(func() {
-				var err error
-				testIngressServer, err = testhelpers.NewTestIngressServer(
-					"fixtures/metron/metron.crt",
-					"fixtures/metron/metron.key",
-					"fixtures/metron/CA.crt",
-				)
+				serverKeyFile, serverCertFile, err := ca.GenerateSelfSignedCertAndKey("metron", []string{"metron"}, false)
 				Expect(err).NotTo(HaveOccurred())
+				_, serverCAFile := ca.CAAndKey()
+
+				testIngressServer, err = testhelpers.NewTestIngressServer(serverCertFile, serverKeyFile, serverCAFile)
+				Expect(err).NotTo(HaveOccurred())
+
 				receiversChan := testIngressServer.Receivers()
 				Expect(testIngressServer.Start()).To(Succeed())
 				port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
@@ -738,9 +762,9 @@ var _ = Describe("SSH proxy", func() {
 				sshProxyConfig.LoggregatorConfig.BatchMaxSize = 1
 				sshProxyConfig.LoggregatorConfig.APIPort = port
 				sshProxyConfig.LoggregatorConfig.UseV2API = true
-				sshProxyConfig.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
-				sshProxyConfig.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
-				sshProxyConfig.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+				sshProxyConfig.LoggregatorConfig.CACertPath = serverCAFile
+				sshProxyConfig.LoggregatorConfig.KeyPath = serverKeyFile
+				sshProxyConfig.LoggregatorConfig.CertPath = serverCertFile
 
 				testMetricsChan, signalMetricsChan = testhelpers.TestMetricChan(receiversChan)
 			})
