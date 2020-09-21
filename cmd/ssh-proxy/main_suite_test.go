@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -40,20 +39,7 @@ var (
 	publicAuthorizedKey string
 	consulRunner        *consulrunner.ClusterRunner
 
-	fixturesPath      string
-	bbsCAFile         string
-	bbsServerCertFile string
-	bbsServerKeyFile  string
-	bbsClientCertFile string
-	bbsClientKeyFile  string
-
-	ccCAFile         string
-	ccServerCertFile string
-	ccServerKeyFile  string
-
-	uaaCAFile         string
-	uaaServerCertFile string
-	uaaServerKeyFile  string
+	fixturesPath string
 
 	portAllocator portauthority.PortAllocator
 )
@@ -94,20 +80,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(err).NotTo(HaveOccurred())
 
 	fixturesPath = path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
-
-	bbsCAFile = filepath.Join(fixturesPath, "bbs", "server-ca.crt")
-	bbsServerCertFile = filepath.Join(fixturesPath, "bbs", "server.crt")
-	bbsServerKeyFile = filepath.Join(fixturesPath, "bbs", "server.key")
-	bbsClientCertFile = filepath.Join(fixturesPath, "bbs", "client.crt")
-	bbsClientKeyFile = filepath.Join(fixturesPath, "bbs", "client.key")
-
-	ccCAFile = filepath.Join(fixturesPath, "cc", "server-ca.crt")
-	ccServerCertFile = filepath.Join(fixturesPath, "cc", "server.crt")
-	ccServerKeyFile = filepath.Join(fixturesPath, "cc", "server.key")
-
-	uaaCAFile = filepath.Join(fixturesPath, "uaa", "server-ca.crt")
-	uaaServerCertFile = filepath.Join(fixturesPath, "uaa", "server.crt")
-	uaaServerKeyFile = filepath.Join(fixturesPath, "uaa", "server.key")
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
