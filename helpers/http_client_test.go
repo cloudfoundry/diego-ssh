@@ -88,6 +88,8 @@ var _ = Describe("NewHTTPSClient", func() {
 
 				invalidCertPath = invalidCert.Name()
 
+				Expect(invalidCert.Close()).To(Succeed())
+
 				Expect(ioutil.WriteFile(invalidCertPath, []byte("not valid pem"), 0644)).To(Succeed())
 
 				caCertFiles = append(caCertFiles, invalidCertPath)
