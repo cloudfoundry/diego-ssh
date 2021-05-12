@@ -76,7 +76,7 @@ var _ = Describe("NewHTTPSClient", func() {
 
 			caPool := httpTrans.TLSClientConfig.RootCAs
 
-			Expect(expectedPool).To(Equal(caPool))
+			Expect(expectedPool.Subjects()).To(Equal(caPool.Subjects()))
 		})
 
 		Context("when an invalid tls cert is provided", func() {
