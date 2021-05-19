@@ -79,7 +79,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
 
-	fixturesPath = path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+	fixturesPath = path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
