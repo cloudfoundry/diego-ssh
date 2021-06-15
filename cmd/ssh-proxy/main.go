@@ -20,7 +20,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
-	"code.cloudfoundry.org/go-loggregator/runtimeemitter"
+	"code.cloudfoundry.org/go-loggregator/v8/runtimeemitter"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
