@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"code.cloudfoundry.org/lager"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/ssh"
 )
 
