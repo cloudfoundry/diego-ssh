@@ -64,7 +64,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	privateKeyPem = context["private-key"]
 	publicAuthorizedKey = context["authorized-key"]
 
-	node := GinkgoParallelNode()
+	node := GinkgoParallelProcess()
 	startPort := 1050 * node
 	portRange := 1000
 	endPort := startPort + portRange
