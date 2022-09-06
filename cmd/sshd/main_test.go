@@ -425,7 +425,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("rejects the MAC algorithm", func() {
-				Expect(dialErr).To(MatchError(ContainSubstring("ssh: no common algorithm for client to server MAC")))
+				Expect(dialErr).To(MatchError(ContainSubstring("no supported methods remain")))
 				Expect(client).To(BeNil())
 			})
 		})
@@ -462,9 +462,26 @@ var _ = Describe("SSH daemon", func() {
 				Expect(process).NotTo(BeNil())
 			})
 
-			It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
-				Expect(client).To(BeNil())
+			Context("and the cipher is an AEAD cipher", func() {
+				BeforeEach(func() {
+					allowedCiphers = "aes128-gcm@openssh.com"
+				})
+
+				It("does not return an error", func() {
+					Expect(dialErr).NotTo(HaveOccurred())
+					Expect(client).NotTo(BeNil())
+				})
+			})
+
+			Context("and the cipher is not an AEAD cipher", func() {
+				BeforeEach(func() {
+					allowedCiphers = "aes128-ctr"
+				})
+
+				It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
+					Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
+					Expect(client).To(BeNil())
+				})
 			})
 		})
 
@@ -519,7 +536,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("errors when the client doesn't provide the algorithm: 'curve25519-sha256@libssh.org'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [arcfour128], server offered: [curve25519-sha256@libssh.org]"))
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [arcfour128 ext-info-c], server offered: [curve25519-sha256@libssh.org]"))
 				Expect(client).To(BeNil())
 			})
 		})
