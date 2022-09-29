@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"code.cloudfoundry.org/consuladapter/consulrunner"
 	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 	"code.cloudfoundry.org/diego-ssh/keys"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
@@ -37,7 +36,6 @@ var (
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
-	consulRunner        *consulrunner.ClusterRunner
 
 	fixturesPath string
 
@@ -113,19 +111,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	healthCheckProxyPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
-
-	consulPort, err := portAllocator.ClaimPorts(consulrunner.PortOffsetLength)
-	Expect(err).NotTo(HaveOccurred())
-	consulRunner = consulrunner.NewClusterRunner(
-		consulrunner.ClusterRunnerConfig{
-			StartingPort: int(consulPort),
-			NumNodes:     1,
-			Scheme:       "http",
-		},
-	)
-
-	consulRunner.Start()
-	consulRunner.WaitUntilReady()
 })
 
 var _ = BeforeEach(func() {
@@ -133,9 +118,6 @@ var _ = BeforeEach(func() {
 	if runtime.GOOS == "windows" {
 		Skip("SSH not supported on Windows, and SSH proxy never runs on Windows anyway")
 	}
-
-	err := consulRunner.Reset()
-	Expect(err).NotTo(HaveOccurred())
 
 	sshdAddress = fmt.Sprintf("127.0.0.1:%d", sshdPort)
 	sshdArgs := testrunner.Args{
@@ -153,7 +135,6 @@ var _ = AfterEach(func() {
 })
 
 var _ = SynchronizedAfterSuite(func() {
-	consulRunner.Stop()
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })

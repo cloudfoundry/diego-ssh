@@ -3,15 +3,12 @@ package main
 import (
 	"errors"
 	"flag"
-	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"code.cloudfoundry.org/bbs"
-	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/diego-ssh/authenticators"
@@ -23,8 +20,6 @@ import (
 	"code.cloudfoundry.org/go-loggregator/v8/runtimeemitter"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
-	"code.cloudfoundry.org/locket"
-	"github.com/hashicorp/consul/api"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/http_server"
@@ -79,16 +74,6 @@ func main() {
 	if !sshProxyConfig.DisableHealthCheckServer {
 		httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
 		members = append(members, grouper.Member{"healthcheck", httpServer})
-	}
-
-	if sshProxyConfig.EnableConsulServiceRegistration {
-		consulClient, err := consuladapter.NewClientFromUrl(sshProxyConfig.ConsulCluster)
-		if err != nil {
-			logger.Fatal("new-client-failed", err)
-		}
-
-		registrationRunner := initializeRegistrationRunner(logger, consulClient, sshProxyConfig.Address, clock.NewClock())
-		members = append(members, grouper.Member{"registration-runner", registrationRunner})
 	}
 
 	if sshProxyConfig.DebugAddress != "" {
@@ -250,27 +235,6 @@ func initializeBBSClient(logger lager.Logger, sshProxyConfig config.SSHProxyConf
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
 	return bbsClient
-}
-
-func initializeRegistrationRunner(logger lager.Logger, consulClient consuladapter.Client, listenAddress string, clock clock.Clock) ifrit.Runner {
-	_, portString, err := net.SplitHostPort(listenAddress)
-	if err != nil {
-		logger.Fatal("failed-invalid-listen-address", err)
-	}
-	portNum, err := net.LookupPort("tcp", portString)
-	if err != nil {
-		logger.Fatal("failed-invalid-listen-port", err)
-	}
-
-	registration := &api.AgentServiceRegistration{
-		Name: "ssh-proxy",
-		Port: portNum,
-		Check: &api.AgentServiceCheck{
-			TTL: "20s",
-		},
-	}
-
-	return locket.NewRegistrationRunner(logger, registration, consulClient, locket.RetryInterval, clock)
 }
 
 func initializeMetron(logger lager.Logger, locketConfig config.SSHProxyConfig) (loggingclient.IngressClient, error) {

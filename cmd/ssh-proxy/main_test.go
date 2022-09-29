@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,7 +31,6 @@ import (
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/tlsconfig"
 	"github.com/gogo/protobuf/proto"
-	"github.com/hashicorp/consul/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -131,7 +129,6 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.CCAPICACert = serverCAFile
 		sshProxyConfig.DiegoCredentials = diegoCredentials
 		sshProxyConfig.EnableCFAuth = true
-		sshProxyConfig.EnableConsulServiceRegistration = false
 		sshProxyConfig.EnableDiegoAuth = true
 		sshProxyConfig.HostKey = hostKeyPem
 		sshProxyConfig.SkipCertVerify = false
@@ -139,7 +136,6 @@ var _ = Describe("SSH proxy", func() {
 		sshProxyConfig.UAAPassword = "password1"
 		sshProxyConfig.UAAUsername = "amandaplease"
 		sshProxyConfig.UAACACert = serverCAFile
-		sshProxyConfig.ConsulCluster = consulRunner.URL()
 		sshProxyConfig.IdleConnectionTimeout = durationjson.Duration(500 * time.Millisecond)
 		sshProxyConfig.CommunicationTimeout = durationjson.Duration(10 * time.Second)
 		sshProxyConfig.ConnectToInstanceAddress = false
@@ -366,56 +362,6 @@ var _ = Describe("SSH proxy", func() {
 					Expect(runner).To(gexec.Exit(1))
 				})
 			})
-		})
-	})
-
-	Describe("Initialization", func() {
-		Context("when consul registration is enabled", func() {
-			BeforeEach(func() {
-				sshProxyConfig.EnableConsulServiceRegistration = true
-			})
-
-			It("registers itself with consul", func() {
-				service := &api.AgentService{
-					Service: "ssh-proxy",
-					ID:      "ssh-proxy",
-					Port:    int(sshProxyPort),
-				}
-
-				if runtime.GOOS == "windows" {
-					service.Tags = []string{}
-				}
-
-				services, err := consulRunner.NewClient().Agent().Services()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(services).To(HaveKeyWithValue("ssh-proxy", service))
-			})
-
-			It("registers a TTL healthcheck", func() {
-				checks, err := consulRunner.NewClient().Agent().Checks()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(checks).To(HaveKeyWithValue("service:ssh-proxy",
-					&api.AgentCheck{
-						Node:        "0",
-						CheckID:     "service:ssh-proxy",
-						Name:        "Service 'ssh-proxy' check",
-						Status:      "passing",
-						ServiceID:   "ssh-proxy",
-						ServiceName: "ssh-proxy",
-					}))
-			})
-		})
-
-		It("does not registers itself with consul", func() {
-			services, err := consulRunner.NewClient().Agent().Services()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(services).NotTo(HaveKey("ssh-proxy"))
-		})
-
-		It("does not register a TTL healthcheck", func() {
-			checks, err := consulRunner.NewClient().Agent().Checks()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(checks).NotTo(HaveKey("service:ssh-proxy"))
 		})
 	})
 
