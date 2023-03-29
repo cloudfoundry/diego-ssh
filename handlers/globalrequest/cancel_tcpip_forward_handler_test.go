@@ -9,7 +9,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest"
 	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest/internal"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"golang.org/x/crypto/ssh"
 
 	. "github.com/onsi/ginkgo/v2"

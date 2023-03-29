@@ -18,7 +18,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/scp"
 	"code.cloudfoundry.org/diego-ssh/signals"
 	"code.cloudfoundry.org/diego-ssh/termcodes"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"github.com/docker/docker/pkg/term"
 	"github.com/kr/pty"
 	"github.com/pkg/sftp"

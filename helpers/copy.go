@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 func Copy(logger lager.Logger, wg *sync.WaitGroup, dest io.Writer, src io.Reader) {

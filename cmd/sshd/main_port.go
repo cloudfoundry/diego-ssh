@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/diego-ssh/server"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 func createServer(

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type SecureCopier interface {
