@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"code.cloudfoundry.org/diego-ssh/keys"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
 )

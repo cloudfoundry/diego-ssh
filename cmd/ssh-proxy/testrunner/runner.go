@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 )
 
 func New(binPath string, configPath string) *ginkgomon.Runner {

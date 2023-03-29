@@ -12,7 +12,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"golang.org/x/crypto/ssh"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

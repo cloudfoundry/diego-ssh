@@ -12,7 +12,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/scp/atime"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_io"
 	"code.cloudfoundry.org/lager/lagertest"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

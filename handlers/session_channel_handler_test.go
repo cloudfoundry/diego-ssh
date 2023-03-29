@@ -21,7 +21,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/handlers/fakes"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/lager/lagertest"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
