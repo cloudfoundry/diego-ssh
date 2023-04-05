@@ -163,12 +163,12 @@ func runServer() error {
 	}
 
 	members := grouper.Members{
-		{"sshd", server},
+		{Name: "sshd", Runner: server},
 	}
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
 		members = append(grouper.Members{
-			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
+			{Name: "debug-server", Runner: debugserver.Runner(dbgAddr, reconfigurableSink)},
 		}, members...)
 	}
 

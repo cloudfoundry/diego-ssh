@@ -68,17 +68,17 @@ func main() {
 	healthCheckHandler := healthcheck.NewHandler(logger)
 
 	members := grouper.Members{
-		{"ssh-proxy", server},
+		{Name: "ssh-proxy", Runner: server},
 	}
 
 	if !sshProxyConfig.DisableHealthCheckServer {
 		httpServer := http_server.New(sshProxyConfig.HealthCheckAddress, healthCheckHandler)
-		members = append(members, grouper.Member{"healthcheck", httpServer})
+		members = append(members, grouper.Member{Name: "healthcheck", Runner: httpServer})
 	}
 
 	if sshProxyConfig.DebugAddress != "" {
 		members = append(grouper.Members{{
-			"debug-server", debugserver.Runner(sshProxyConfig.DebugAddress, reconfigurableSink),
+			Name: "debug-server", Runner: debugserver.Runner(sshProxyConfig.DebugAddress, reconfigurableSink),
 		}}, members...)
 	}
 
