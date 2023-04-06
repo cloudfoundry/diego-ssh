@@ -1,3 +1,4 @@
+//go:build windows && !windows2012R2
 // +build windows,!windows2012R2
 
 package handlers
@@ -16,7 +17,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/scp"
 	"code.cloudfoundry.org/diego-ssh/signals"
 	"code.cloudfoundry.org/diego-ssh/winpty"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )

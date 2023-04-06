@@ -1,3 +1,4 @@
+//go:build windows2012R2
 // +build windows2012R2
 
 package main_test
@@ -9,10 +10,10 @@ import (
 	"code.cloudfoundry.org/diego-ssh/cmd/sshd/testrunner"
 
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 	"golang.org/x/crypto/ssh"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 )

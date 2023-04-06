@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"golang.org/x/crypto/ssh"
 )
 

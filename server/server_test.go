@@ -11,12 +11,11 @@ import (
 	"code.cloudfoundry.org/diego-ssh/server/fakes"
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
-	"code.cloudfoundry.org/inigo/helpers/portauthority"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"github.com/tedsuo/ifrit"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 )
@@ -28,20 +27,8 @@ var _ = Describe("Server", func() {
 
 		handler *fakes.FakeConnectionHandler
 
-		address       string
-		portAllocator portauthority.PortAllocator
+		address string
 	)
-
-	BeforeSuite(func() {
-		node := GinkgoParallelProcess()
-		startPort := 1050 * node
-		portRange := 1000
-		endPort := startPort + portRange
-
-		var err error
-		portAllocator, err = portauthority.New(startPort, endPort)
-		Expect(err).NotTo(HaveOccurred())
-	})
 
 	BeforeEach(func() {
 		port, err := portAllocator.ClaimPorts(1)

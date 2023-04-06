@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/diego-ssh/authenticators"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"golang.org/x/crypto/ssh"
 )
 

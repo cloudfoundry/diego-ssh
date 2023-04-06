@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/diego-ssh/handlers"
 	"code.cloudfoundry.org/diego-ssh/helpers"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"golang.org/x/crypto/ssh"
 )
 

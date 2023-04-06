@@ -5,7 +5,7 @@ import (
 
 	"github.com/tedsuo/rata"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type HealthCheckHandler struct {

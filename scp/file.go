@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 func (s *secureCopy) SendFile(file *os.File, fileInfo os.FileInfo) error {

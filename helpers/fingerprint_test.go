@@ -4,7 +4,7 @@ import (
 	"unicode/utf8"
 
 	"code.cloudfoundry.org/diego-ssh/helpers"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"golang.org/x/crypto/ssh"

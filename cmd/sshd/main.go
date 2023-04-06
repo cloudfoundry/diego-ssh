@@ -17,8 +17,8 @@ import (
 	"code.cloudfoundry.org/diego-ssh/handlers"
 	"code.cloudfoundry.org/diego-ssh/handlers/globalrequest"
 	"code.cloudfoundry.org/diego-ssh/keys"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/lager/v3/lagerflags"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
@@ -163,12 +163,12 @@ func runServer() error {
 	}
 
 	members := grouper.Members{
-		{"sshd", server},
+		{Name: "sshd", Runner: server},
 	}
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
 		members = append(grouper.Members{
-			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
+			{Name: "debug-server", Runner: debugserver.Runner(dbgAddr, reconfigurableSink)},
 		}, members...)
 	}
 

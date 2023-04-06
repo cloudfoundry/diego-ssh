@@ -1,3 +1,4 @@
+//go:build !windows2012R2
 // +build !windows2012R2
 
 package main
@@ -6,7 +7,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/diego-ssh/server"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 func createServer(
