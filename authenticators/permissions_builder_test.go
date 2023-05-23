@@ -89,14 +89,16 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		It("gets information about the desired lrp referenced in the username", func() {
 			Expect(bbsClient.DesiredLRPByProcessGuidCallCount()).To(Equal(1))
-			_, guid := bbsClient.DesiredLRPByProcessGuidArgsForCall(0)
+			_, traceId, guid := bbsClient.DesiredLRPByProcessGuidArgsForCall(0)
+			Expect(traceId).To(BeEmpty())
 			Expect(guid).To(Equal("some-guid"))
 		})
 
 		It("gets information about the the actual lrp from the username", func() {
 			Expect(bbsClient.ActualLRPsCallCount()).To(Equal(1))
 
-			_, filter := bbsClient.ActualLRPsArgsForCall(0)
+			_, traceId, filter := bbsClient.ActualLRPsArgsForCall(0)
+			Expect(traceId).To(BeEmpty())
 			Expect(filter.ProcessGuid).To(Equal("some-guid"))
 			Expect(*filter.Index).To(BeEquivalentTo(1))
 		})

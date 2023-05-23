@@ -30,7 +30,7 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 		ProcessGuid: processGuid,
 		Index:       &ind,
 	}
-	actualLRPs, err := pb.bbsClient.ActualLRPs(logger, filter)
+	actualLRPs, err := pb.bbsClient.ActualLRPs(logger, "", filter)
 	if err != nil {
 		return nil, err
 	} else if len(actualLRPs) > 1 {
@@ -39,7 +39,7 @@ func (pb *permissionsBuilder) Build(logger lager.Logger, processGuid string, ind
 		return nil, fmt.Errorf("no matching ActualLRP for ProcessGuid: %s, Index: %d", processGuid, ind)
 	}
 
-	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(logger, processGuid)
+	desired, err := pb.bbsClient.DesiredLRPByProcessGuid(logger, "", processGuid)
 	if err != nil {
 		return nil, err
 	}
