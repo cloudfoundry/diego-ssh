@@ -857,7 +857,7 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides the default MAC algorithm", func() {
 			BeforeEach(func() {
-				clientConfig.MACs = []string{"arcfour128"}
+				clientConfig.MACs = []string{"hmac-sha1"}
 			})
 
 			Context("and the cipher is an AEAD cipher", func() {
@@ -882,7 +882,7 @@ var _ = Describe("SSH proxy", func() {
 
 				It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [arcfour128], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
+					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [hmac-sha1], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
@@ -921,12 +921,12 @@ var _ = Describe("SSH proxy", func() {
 
 		Context("when the proxy provides the default KeyExchange algorithm", func() {
 			BeforeEach(func() {
-				clientConfig.KeyExchanges = []string{"arcfour128"}
+				clientConfig.KeyExchanges = []string{"diffie-hellman-group14-sha1"}
 			})
 
 			It("errors when the client doesn't provide the algorithm: 'curve25519-sha256@libssh.org'", func() {
 				_, err := ssh.Dial("tcp", address, clientConfig)
-				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [arcfour128 ext-info-c], server offered: [curve25519-sha256@libssh.org]"))
+				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [diffie-hellman-group14-sha1 ext-info-c], server offered: [curve25519-sha256@libssh.org]"))
 				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
