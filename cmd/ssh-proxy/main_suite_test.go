@@ -3,8 +3,6 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 	"runtime"
 	"testing"
 	"time"
@@ -77,7 +75,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
 
-	fixturesPath = path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
+	fixturesPath = "fixtures"
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
