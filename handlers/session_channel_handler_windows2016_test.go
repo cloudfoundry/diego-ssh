@@ -1,5 +1,4 @@
 //go:build windows && !windows2012R2
-// +build windows,!windows2012R2
 
 package handlers_test
 

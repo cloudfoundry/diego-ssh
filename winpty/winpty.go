@@ -1,5 +1,4 @@
 //go:build windows
-// +build windows
 
 package winpty
 
@@ -125,6 +124,23 @@ func New(winPTYDLLDir string) (*WinPTY, error) {
 	}, nil
 }
 
+// unsafeExternPointer converts a uintptr address known to be a valid pointer
+// external to the Go heap — such as one returned by the mmap system call — to
+// an unsafe.Pointer, without triggering the unsafeptr vet warning.
+// Taken from https://go-review.googlesource.com/c/sys/+/465235
+func unsafeExternPointer(addr uintptr) unsafe.Pointer {
+	// Converting a uintptr directly to an unsafe.Pointer triggers a vet warning,
+	// because a uintptr cannot safely hold a pointer to the Go heap. (Because a
+	// uintptr may hold an integer, uintptr values are not traced during garbage
+	// collection and are not updated during stack resizing.)
+	//
+	// However, if we know that the address is not owned by the Go heap, it does
+	// not need to be traced by the GC and cannot be implicitly relocated.
+	// We silence the unsafeptr warning by converting a pointer-to-uintptr to
+	// a pointer-to-pointer.
+	return *(*unsafe.Pointer)(unsafe.Pointer(&addr))
+}
+
 func (w *WinPTY) Open() error {
 	if w.winPTYHandle == 0 {
 		return errors.New("winpty dll not initialized")
@@ -140,12 +156,12 @@ func (w *WinPTY) Open() error {
 		return fmt.Errorf("unable to get stdout pipe name: %s", err.Error())
 	}
 
-	stdinHandle, err := syscall.CreateFile((*uint16)(unsafe.Pointer(stdinName)), syscall.GENERIC_WRITE, 0, nil, syscall.OPEN_EXISTING, 0, 0)
+	stdinHandle, err := syscall.CreateFile((*uint16)(unsafeExternPointer(stdinName)), syscall.GENERIC_WRITE, 0, nil, syscall.OPEN_EXISTING, 0, 0)
 	if err != nil {
 		return fmt.Errorf("unable to open stdin pipe: %s", err.Error())
 	}
 
-	stdoutHandle, err := syscall.CreateFile((*uint16)(unsafe.Pointer(stdoutName)), syscall.GENERIC_READ, 0, nil, syscall.OPEN_EXISTING, 0, 0)
+	stdoutHandle, err := syscall.CreateFile((*uint16)(unsafeExternPointer(stdoutName)), syscall.GENERIC_READ, 0, nil, syscall.OPEN_EXISTING, 0, 0)
 	if err != nil {
 		return fmt.Errorf("unable to open stdout pipe: %s", err.Error())
 	}
@@ -304,7 +320,7 @@ func winPTYErrorMessage(ptr uintptr) string {
 	}
 
 	out := make([]uint16, 0)
-	p := unsafe.Pointer(msgPtr)
+	p := unsafeExternPointer(msgPtr)
 
 	for {
 		val := *(*uint16)(p)
