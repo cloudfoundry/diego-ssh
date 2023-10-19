@@ -68,7 +68,7 @@ var _ = Describe("SSH proxy", func() {
 
 	BeforeEach(func() {
 		var err error
-		certDepoDir, err = ioutil.TempDir("", "")
+		certDepoDir, err = os.MkdirTemp("", "ssh-proxy-certs-")
 		Expect(err).NotTo(HaveOccurred())
 
 		ca, err = certauthority.NewCertAuthority(certDepoDir, "ssh-proxy-ca")

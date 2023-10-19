@@ -35,8 +35,6 @@ var (
 	privateKeyPem       string
 	publicAuthorizedKey string
 
-	fixturesPath string
-
 	portAllocator portauthority.PortAllocator
 )
 
@@ -74,8 +72,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
-
-	fixturesPath = "fixtures"
 
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
