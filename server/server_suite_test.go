@@ -11,7 +11,7 @@ import (
 var portAllocator portauthority.PortAllocator
 var _ = BeforeSuite(func() {
 	node := GinkgoParallelProcess()
-	startPort := 1050 * node
+	startPort := 1070 * node
 	portRange := 1000
 	endPort := startPort + portRange
 
