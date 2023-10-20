@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop";
 trap { $host.SetShouldExit(1) }
 
 Write-Host "Downloading winpty DLL"
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $WINPTY_DIR = "C:\winpty"
 if(!(Test-Path -Path $WINPTY_DIR )) {
     New-Item -ItemType directory -Path $WINPTY_DIR
