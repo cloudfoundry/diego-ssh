@@ -2,7 +2,6 @@ package helpers_test
 
 import (
 	"crypto/x509"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -46,7 +45,7 @@ var _ = Describe("NewHTTPSClient", func() {
 
 		BeforeEach(func() {
 			var err error
-			certDepotDir, err = ioutil.TempDir("", "")
+			certDepotDir, err = os.MkdirTemp("", "cert-depot-dir")
 			Expect(err).NotTo(HaveOccurred())
 
 			ca, err = certauthority.NewCertAuthority(certDepotDir, "one")
@@ -63,7 +62,7 @@ var _ = Describe("NewHTTPSClient", func() {
 		It("sets the RootCAs with a pool consisting of those CAs", func() {
 			expectedPool := x509.NewCertPool()
 			for _, caCert := range caCertFiles {
-				certBytes, err := ioutil.ReadFile(caCert)
+				certBytes, err := os.ReadFile(caCert)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(expectedPool.AppendCertsFromPEM(certBytes)).To(BeTrue())
@@ -83,14 +82,14 @@ var _ = Describe("NewHTTPSClient", func() {
 			var invalidCertPath string
 
 			BeforeEach(func() {
-				invalidCert, err := ioutil.TempFile("", "")
+				invalidCert, err := os.CreateTemp("", "invalid-cert-")
 				Expect(err).NotTo(HaveOccurred())
 
 				invalidCertPath = invalidCert.Name()
 
 				Expect(invalidCert.Close()).To(Succeed())
 
-				Expect(ioutil.WriteFile(invalidCertPath, []byte("not valid pem"), 0644)).To(Succeed())
+				Expect(os.WriteFile(invalidCertPath, []byte("not valid pem"), 0644)).To(Succeed())
 
 				caCertFiles = append(caCertFiles, invalidCertPath)
 			})
