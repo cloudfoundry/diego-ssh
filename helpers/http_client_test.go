@@ -62,8 +62,8 @@ var _ = Describe("NewHTTPSClient", func() {
 		It("sets the RootCAs with a pool consisting of those CAs", func() {
 			expectedPool := x509.NewCertPool()
 			for _, caCert := range caCertFiles {
-				certBytes, err := os.ReadFile(caCert)
-				Expect(err).NotTo(HaveOccurred())
+				certBytes, err2 := os.ReadFile(caCert)
+				Expect(err2).NotTo(HaveOccurred())
 
 				Expect(expectedPool.AppendCertsFromPEM(certBytes)).To(BeTrue())
 			}
