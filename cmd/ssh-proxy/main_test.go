@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -68,7 +67,7 @@ var _ = Describe("SSH proxy", func() {
 
 	BeforeEach(func() {
 		var err error
-		certDepoDir, err = ioutil.TempDir("", "")
+		certDepoDir, err = os.MkdirTemp("", "ssh-proxy-certs-")
 		Expect(err).NotTo(HaveOccurred())
 
 		ca, err = certauthority.NewCertAuthority(certDepoDir, "ssh-proxy-ca")
@@ -196,7 +195,7 @@ var _ = Describe("SSH proxy", func() {
 		configData, err := json.Marshal(&sshProxyConfig)
 		Expect(err).NotTo(HaveOccurred())
 
-		configFile, err := ioutil.TempFile("", "ssh-proxy-config")
+		configFile, err := os.CreateTemp("", "ssh-proxy-config")
 		Expect(err).NotTo(HaveOccurred())
 
 		n, err := configFile.Write(configData)
@@ -675,6 +674,7 @@ var _ = Describe("SSH proxy", func() {
 
 				errs := make(chan error)
 				go func() {
+					defer GinkgoRecover()
 					for {
 						bs := make([]byte, 10)
 						_, err := client.Read(bs)
@@ -1089,7 +1089,7 @@ func VerifyProto(expected proto.Message) http.HandlerFunc {
 
 		func(w http.ResponseWriter, req *http.Request) {
 			defer GinkgoRecover()
-			body, err := ioutil.ReadAll(req.Body)
+			body, err := io.ReadAll(req.Body)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = req.Body.Close()

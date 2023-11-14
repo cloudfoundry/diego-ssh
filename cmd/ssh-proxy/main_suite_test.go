@@ -3,8 +3,6 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 	"runtime"
 	"testing"
 	"time"
@@ -36,8 +34,6 @@ var (
 	hostKeyPem          string
 	privateKeyPem       string
 	publicAuthorizedKey string
-
-	fixturesPath string
 
 	portAllocator portauthority.PortAllocator
 )
@@ -77,14 +73,12 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &context)
 	Expect(err).NotTo(HaveOccurred())
 
-	fixturesPath = path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/fixtures")
-
 	hostKeyPem = context["host-key"]
 	privateKeyPem = context["private-key"]
 	publicAuthorizedKey = context["authorized-key"]
 
 	node := GinkgoParallelProcess()
-	startPort := 1050 * node
+	startPort := 1070 * node
 	portRange := 1000
 	endPort := startPort + portRange
 
