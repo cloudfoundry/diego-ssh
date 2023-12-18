@@ -536,7 +536,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("errors when the client doesn't provide the algorithm: 'curve25519-sha256@libssh.org'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [diffie-hellman-group14-sha1 ext-info-c], server offered: [curve25519-sha256@libssh.org]"))
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [diffie-hellman-group14-sha1 ext-info-c kex-strict-c-v00@openssh.com], server offered: [curve25519-sha256@libssh.org kex-strict-s-v00@openssh.com]"))
 				Expect(client).To(BeNil())
 			})
 		})
