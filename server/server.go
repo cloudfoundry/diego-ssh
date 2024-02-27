@@ -52,10 +52,8 @@ func (s *Server) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 	close(ready)
 
-	select {
-	case <-signals:
-		s.Shutdown()
-	}
+	<-signals
+	s.Shutdown()
 
 	return nil
 }
