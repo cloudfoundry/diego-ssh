@@ -243,7 +243,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			})
 
 			It("properly fails when incorrect arguments are supplied", func() {
-				err := session.Run(fmt.Sprintf("scp -v -t /tmp/foo /tmp/bar"))
+				err := session.Run("scp -v -t /tmp/foo /tmp/bar")
 				Expect(err).To(HaveOccurred())
 
 				exitErr, ok := err.(*ssh.ExitError)
@@ -376,9 +376,9 @@ var _ = Describe("SessionChannelHandler", func() {
 				result, err := session.Output("/usr/bin/env")
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(result).To(ContainSubstring(fmt.Sprintf("PATH=/bin:/usr/bin")))
-				Expect(result).To(ContainSubstring(fmt.Sprintf("LANG=en_US.UTF8")))
-				Expect(result).To(ContainSubstring(fmt.Sprintf("TEST=FOO")))
+				Expect(result).To(ContainSubstring("PATH=/bin:/usr/bin"))
+				Expect(result).To(ContainSubstring("LANG=en_US.UTF8"))
+				Expect(result).To(ContainSubstring("TEST=FOO"))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("HOME=%s", os.Getenv("HOME"))))
 				Expect(result).To(ContainSubstring(fmt.Sprintf("USER=%s", os.Getenv("USER"))))
 			})
