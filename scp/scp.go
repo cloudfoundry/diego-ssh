@@ -78,7 +78,7 @@ func (s *secureCopy) Copy() error {
 				}
 
 				if sourceInfo.IsDir() && !s.options.Recursive {
-					err = errors.New(fmt.Sprintf("%s: not a regular file", sourceInfo.Name()))
+					err = fmt.Errorf("%s: not a regular file", sourceInfo.Name())
 					logger.Error("sending-non-recursive-directory-failed", err)
 					s.session.sendError(err.Error())
 					lastErr = err
