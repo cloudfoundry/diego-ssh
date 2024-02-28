@@ -67,7 +67,7 @@ func (sess *Session) awaitConfirmation() error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(sess.stderr, message)
+		fmt.Fprint(sess.stderr, message)
 	case 2:
 		message, err := sess.readString(NEWLINE)
 		if err != nil {
