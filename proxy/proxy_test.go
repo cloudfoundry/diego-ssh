@@ -469,6 +469,7 @@ var _ = Describe("Proxy", func() {
 
 					clientConfig := &ssh.ClientConfig{HostKeyCallback: ssh.InsecureIgnoreHostKey()}
 					clientNetConn, err := net.Dial("tcp", targetAddress)
+					Expect(err).ToNot(HaveOccurred())
 					_, clientChannels, clientRequests, err = ssh.NewClientConn(clientNetConn, "0.0.0.0", clientConfig)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -1287,6 +1288,7 @@ var _ = Describe("Proxy", func() {
 				BeforeEach(func() {
 					onConnectionReceived = make(chan struct{}, 10)
 					intermediaryListener, err := tls.Listen("tcp", "127.0.0.1:0", tlsCfg)
+					Expect(err).ToNot(HaveOccurred())
 					go forwardTLSConn(sshdListener.Addr().String(), intermediaryListener, onConnectionReceived)
 
 					targetConfigJSON, err := json.Marshal(proxy.TargetConfig{

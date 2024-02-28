@@ -77,9 +77,11 @@ var _ = Describe("Directory Message", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			dirMessage, err := stdout.ReadString('\n')
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dirMessage).To(Equal("D0775 0 empty-dir\n"))
 
 			endMessage, err := stdout.ReadString('\n')
+			Expect(err).ToNot(HaveOccurred())
 			Expect(endMessage).To(Equal("E\n"))
 		})
 
@@ -160,6 +162,7 @@ var _ = Describe("Directory Message", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				tMessage, err := stdout.ReadString('\n')
+				Expect(err).ToNot(HaveOccurred())
 				Expect(tMessage).To(Equal("T123456789 0 987654321 0\n"))
 
 				dMessage, err := stdout.ReadString('\n')
@@ -326,9 +329,11 @@ var _ = Describe("Directory Message", func() {
 			Expect(info.Mode() & 0777).To(Equal(os.FileMode(0600)))
 
 			contents, err := ioutil.ReadFile(filepath.Join(tempDir, "received-dir", "subdir", "subdir-file.txt"))
+			Expect(err).ToNot(HaveOccurred())
 			Expect(contents).To(BeEquivalentTo("subdir-file-contents\n"))
 
 			contents, err = ioutil.ReadFile(filepath.Join(tempDir, "received-dir", "tempfile.txt"))
+			Expect(err).ToNot(HaveOccurred())
 			Expect(contents).To(BeEquivalentTo("temporary-file-contents\n"))
 		})
 
@@ -482,6 +487,7 @@ var _ = Describe("Directory Message", func() {
 					Expect(info.Mode() & 0777).To(Equal(os.FileMode(0644)))
 
 					contents, err := ioutil.ReadFile(filepath.Join(tempDir, "target", "newdir", "subdir-file.txt"))
+					Expect(err).ToNot(HaveOccurred())
 					Expect(contents).To(BeEquivalentTo("subdir-file-contents\n"))
 				})
 			})

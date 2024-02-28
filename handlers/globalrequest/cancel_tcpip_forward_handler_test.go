@@ -95,6 +95,7 @@ var _ = Describe("CancelTcpipForwardHandler", func() {
 				Port:    uint32(port),
 			})
 			ok, _, err = sshClient.SendRequest("cancel-tcpip-forward", true, payload)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("successfully process the request", func() {

@@ -94,6 +94,9 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte("Doesntmatter"), nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	username, ok := token.Claims.(jwt.MapClaims)["user_name"].(string)
 	if !ok {
