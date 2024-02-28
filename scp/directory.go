@@ -165,10 +165,8 @@ func (s *secureCopy) sendDirectory(dirname string, directoryInfo os.FileInfo) er
 
 	for _, fileInfo := range fileInfos {
 		source := filepath.Join(dirname, fileInfo.Name())
-		err := s.send(source)
-		if err != nil {
-			// Ignore error, probably log
-		}
+		// we intentionally ignore this error
+		s.send(source)
 	}
 
 	_, err = fmt.Fprintf(s.session.stdout, "E\n")
