@@ -215,6 +215,9 @@ func (w *WinPTY) Run(cmd *exec.Cmd) error {
 		w.StdOut.Close()
 		return fmt.Errorf("unable to spawn process: %s: %s", winPTYErrorMessage(errorPtr), windowsErrorMessage(createProcessErr))
 	}
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
