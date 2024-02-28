@@ -91,6 +91,7 @@ var _ = Describe("File Message", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			cMessage, err := stdout.ReadString('\n')
+			Expect(err).ToNot(HaveOccurred())
 			Expect(cMessage).To(Equal("C0640 1024 binary.dat\n"))
 
 			contents := make([]byte, 1024)
@@ -173,9 +174,11 @@ var _ = Describe("File Message", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				tMessage, err := stdout.ReadString('\n')
+				Expect(err).ToNot(HaveOccurred())
 				Expect(tMessage).To(Equal("T123456789 0 987654321 0\n"))
 
 				cMessage, err := stdout.ReadString('\n')
+				Expect(err).ToNot(HaveOccurred())
 				Expect(cMessage).To(Equal("C0640 1024 binary.dat\n"))
 
 				contents := make([]byte, 1024)

@@ -74,6 +74,9 @@ func (s *secureCopy) ReceiveDirectory(dir string, timeMessage *TimeMessage) erro
 	}
 
 	message, err := s.session.readString(NEWLINE)
+	if err != nil {
+		return err
+	}
 	if message != "E" {
 		return fmt.Errorf("unexpected message type: %c", messageType)
 	}
