@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -69,16 +68,16 @@ var _ = Describe("scp", func() {
 
 		stdin, stdinSource = io.Pipe()
 		stdoutSource, stdout = io.Pipe()
-		stderr = ioutil.Discard
+		stderr = io.Discard
 
 		var err error
-		sourceDir, err = ioutil.TempDir("", "scp-source")
+		sourceDir, err = os.MkdirTemp("", "scp-source")
 		Expect(err).NotTo(HaveOccurred())
 
 		fileContents := []byte("---\nthis is a simple file\n\n")
 		generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
 
-		err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
+		err = os.WriteFile(generatedTextFile, fileContents, 0664)
 		Expect(err).NotTo(HaveOccurred())
 
 		fileContents = make([]byte, 1024)
@@ -87,16 +86,16 @@ var _ = Describe("scp", func() {
 		_, err = rand.Read(fileContents)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = ioutil.WriteFile(generatedBinaryFile, fileContents, 0400)
+		err = os.WriteFile(generatedBinaryFile, fileContents, 0400)
 		Expect(err).NotTo(HaveOccurred())
 
-		nestedTempDir, err = ioutil.TempDir(sourceDir, "nested")
+		nestedTempDir, err = os.MkdirTemp(sourceDir, "nested")
 		Expect(err).NotTo(HaveOccurred())
 
 		nestedFileContents := []byte("---\nthis is a simple nested file\n\n")
 		generatedNestedTextFile = filepath.Join(nestedTempDir, "nested-textfile.txt")
 
-		err = ioutil.WriteFile(generatedNestedTextFile, nestedFileContents, 0664)
+		err = os.WriteFile(generatedNestedTextFile, nestedFileContents, 0664)
 		Expect(err).NotTo(HaveOccurred())
 
 		// save off file infos
@@ -120,7 +119,7 @@ var _ = Describe("scp", func() {
 		Expect(err).NotTo(HaveOccurred())
 		fileInfos[generatedNestedTextFile] = generatedNestedTextFileInfo
 
-		targetDir, err = ioutil.TempDir("", "scp-target")
+		targetDir, err = os.MkdirTemp("", "scp-target")
 		Expect(err).NotTo(HaveOccurred())
 
 		secureCopier = nil
@@ -393,7 +392,7 @@ var _ = Describe("scp", func() {
 				JustBeforeEach(func() {
 					fileContents := []byte("---\nthis is a bad glob file\n\n")
 
-					err := ioutil.WriteFile(generatedBadGlobFile, fileContents, 0664)
+					err := os.WriteFile(generatedBadGlobFile, fileContents, 0664)
 					Expect(err).NotTo(HaveOccurred())
 
 					generatedBadGlobFileInfo, err := os.Stat(generatedBadGlobFile)
@@ -472,7 +471,7 @@ var _ = Describe("scp", func() {
 				})
 
 				It("fails when the target is not a directory", func() {
-					tempFile, err := ioutil.TempFile(targetDir, "target")
+					tempFile, err := os.CreateTemp(targetDir, "target")
 					Expect(err).NotTo(HaveOccurred())
 
 					secureCopier, err := scp.NewFromCommand("scp -td "+tempFile.Name(), stdin, stdout, stderr, logger)
@@ -550,7 +549,7 @@ var _ = Describe("scp", func() {
 
 				Context("when the target file exists", func() {
 					BeforeEach(func() {
-						err := ioutil.WriteFile(targetFile, []byte{'a'}, 0640)
+						err := os.WriteFile(targetFile, []byte{'a'}, 0640)
 						Expect(err).NotTo(HaveOccurred())
 
 						modificationTime := time.Unix(123456789, 12345678)
@@ -710,10 +709,10 @@ func compareDir(actualDir, expectedDir string, compareTimestamps bool) {
 		compareTimestampsFromInfo(actualDirInfo, expectedDirInfo)
 	}
 
-	actualFiles, err := ioutil.ReadDir(actualDir)
+	actualFiles, err := os.ReadDir(actualDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedFiles, err := ioutil.ReadDir(expectedDir)
+	expectedFiles, err := os.ReadDir(expectedDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(len(actualFiles)).To(Equal(len(expectedFiles)))
@@ -736,10 +735,10 @@ func compareFile(actualFile, expectedFile string, compareTimestamps bool) {
 
 	compareFileInfo(actualFileInfo, expectedFileInfo, compareTimestamps)
 
-	actualContents, err := ioutil.ReadFile(actualFile)
+	actualContents, err := os.ReadFile(actualFile)
 	Expect(err).NotTo(HaveOccurred())
 
-	expectedContents, err := ioutil.ReadFile(expectedFile)
+	expectedContents, err := os.ReadFile(expectedFile)
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(actualContents).To(Equal(expectedContents))

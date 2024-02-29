@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 
 	"code.cloudfoundry.org/debugserver"
@@ -82,7 +81,7 @@ func (c SSHProxyConfig) BackendsTLSConfig() (*tls.Config, error) {
 	}
 
 	rootCAs := x509.NewCertPool()
-	ca, err := ioutil.ReadFile(c.BackendsTLSCACerts)
+	ca, err := os.ReadFile(c.BackendsTLSCACerts)
 	if err != nil {
 		return nil, err
 	}

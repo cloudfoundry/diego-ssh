@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +29,7 @@ var _ = Describe("TimeMessage", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		var err error
-		tempDir, err = ioutil.TempDir("", "scp")
+		tempDir, err = os.MkdirTemp("", "scp")
 		Expect(err).NotTo(HaveOccurred())
 
 		fileContents := make([]byte, 1024)
@@ -39,7 +38,7 @@ var _ = Describe("TimeMessage", func() {
 		_, err = rand.Read(fileContents)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = ioutil.WriteFile(tempFile, fileContents, 0400)
+		err = os.WriteFile(tempFile, fileContents, 0400)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

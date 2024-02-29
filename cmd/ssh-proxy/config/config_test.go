@@ -2,7 +2,6 @@ package config_test
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -57,7 +56,7 @@ var _ = Describe("SSHProxyConfig", func() {
 		})
 
 		JustBeforeEach(func() {
-			configFile, err := ioutil.TempFile("", "ssh-proxy-config")
+			configFile, err := os.CreateTemp("", "ssh-proxy-config")
 			Expect(err).NotTo(HaveOccurred())
 
 			n, err := configFile.WriteString(configData)
@@ -165,7 +164,7 @@ var _ = Describe("SSHProxyConfig", func() {
 		BeforeEach(func() {
 			var err error
 
-			certDepoDir, err = ioutil.TempDir("", "")
+			certDepoDir, err = os.MkdirTemp("", "")
 			Expect(err).NotTo(HaveOccurred())
 
 			ca, err = certauthority.NewCertAuthority(certDepoDir, "ssh-proxy-ca")
@@ -231,7 +230,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				var invalidCAPath string
 
 				BeforeEach(func() {
-					invalidCA, err := ioutil.TempFile("", "invalid-ca.crt")
+					invalidCA, err := os.CreateTemp("", "invalid-ca.crt")
 					Expect(err).NotTo(HaveOccurred())
 
 					_, err = invalidCA.WriteString("invalid PEM")
@@ -306,7 +305,7 @@ var _ = Describe("SSHProxyConfig", func() {
 					var invalidCertPath string
 
 					BeforeEach(func() {
-						invalidCert, err := ioutil.TempFile("", "invalid-cert.crt")
+						invalidCert, err := os.CreateTemp("", "invalid-cert.crt")
 						Expect(err).NotTo(HaveOccurred())
 
 						_, err = invalidCert.WriteString("invalid PEM")
@@ -334,7 +333,7 @@ var _ = Describe("SSHProxyConfig", func() {
 					var invalidKeyPath string
 
 					BeforeEach(func() {
-						invalidKey, err := ioutil.TempFile("", "invalid-key.key")
+						invalidKey, err := os.CreateTemp("", "invalid-key.key")
 						Expect(err).NotTo(HaveOccurred())
 
 						_, err = invalidKey.WriteString("invalid PEM")

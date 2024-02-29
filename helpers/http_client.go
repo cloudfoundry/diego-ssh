@@ -5,9 +5,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -22,7 +22,7 @@ func NewHTTPSClient(insecureSkipVerify bool, caCertFiles []string, communication
 	caCertPool := x509.NewCertPool()
 	for _, caCertFile := range caCertFiles {
 		if caCertFile != "" {
-			certBytes, err := ioutil.ReadFile(caCertFile)
+			certBytes, err := os.ReadFile(caCertFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read ca cert file: %s", err.Error())
 			}

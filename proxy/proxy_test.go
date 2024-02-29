@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -1239,7 +1238,7 @@ var _ = Describe("Proxy", func() {
 
 			BeforeEach(func() {
 				var err error
-				certDepoDir, err = ioutil.TempDir("", "")
+				certDepoDir, err = os.MkdirTemp("", "")
 				Expect(err).NotTo(HaveOccurred())
 
 				ca, err := certauthority.NewCertAuthority(certDepoDir, "server_ca")
