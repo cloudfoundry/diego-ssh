@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,11 +108,11 @@ var _ = Describe("SessionChannelHandler", func() {
 			err = session.Run("/bin/echo -n Hello; /bin/echo -n Goodbye >&2")
 			Expect(err).NotTo(HaveOccurred())
 
-			stdoutBytes, err := ioutil.ReadAll(stdout)
+			stdoutBytes, err := io.ReadAll(stdout)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stdoutBytes).To(Equal([]byte("Hello")))
 
-			stderrBytes, err := ioutil.ReadAll(stderr)
+			stderrBytes, err := io.ReadAll(stderr)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stderrBytes).To(Equal([]byte("Goodbye")))
 		})
@@ -144,16 +143,16 @@ var _ = Describe("SessionChannelHandler", func() {
 				stdout, err = session.StdoutPipe()
 				Expect(err).NotTo(HaveOccurred())
 
-				sourceDir, err = ioutil.TempDir("", "scp-source")
+				sourceDir, err = os.MkdirTemp("", "scp-source")
 				Expect(err).NotTo(HaveOccurred())
 
 				fileContents = []byte("---\nthis is a simple file\n\n")
 				generatedTextFile = filepath.Join(sourceDir, "textfile.txt")
 
-				err = ioutil.WriteFile(generatedTextFile, fileContents, 0664)
+				err = os.WriteFile(generatedTextFile, fileContents, 0664)
 				Expect(err).NotTo(HaveOccurred())
 
-				targetDir, err = ioutil.TempDir("", "scp-target")
+				targetDir, err = os.MkdirTemp("", "scp-target")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -206,10 +205,10 @@ var _ = Describe("SessionChannelHandler", func() {
 				Expect(actualFileInfo.Mode()).To(Equal(expectedFileInfo.Mode()))
 				Expect(actualFileInfo.Size()).To(Equal(expectedFileInfo.Size()))
 
-				actualContents, err := ioutil.ReadFile(actualFilePath)
+				actualContents, err := os.ReadFile(actualFilePath)
 				Expect(err).NotTo(HaveOccurred())
 
-				expectedContents, err := ioutil.ReadFile(generatedTextFile)
+				expectedContents, err := os.ReadFile(generatedTextFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(actualContents).To(Equal(expectedContents))
@@ -336,7 +335,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Wait()
 					Expect(err).NotTo(HaveOccurred())
 
-					stdoutBytes, err := ioutil.ReadAll(stdout)
+					stdoutBytes, err := io.ReadAll(stdout)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(stdoutBytes).To(ContainSubstring("Caught SIGUSR1"))
 				})
@@ -477,7 +476,7 @@ var _ = Describe("SessionChannelHandler", func() {
 					err = session.Wait()
 					Expect(err).NotTo(HaveOccurred())
 
-					stdoutBytes, err := ioutil.ReadAll(stdout)
+					stdoutBytes, err := io.ReadAll(stdout)
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(stdoutBytes).NotTo(ContainSubstring("ENV3"))
@@ -910,7 +909,7 @@ var _ = Describe("SessionChannelHandler", func() {
 		})
 
 		It("starts an sftp server in write mode", func() {
-			tempDir, err := ioutil.TempDir("", "sftp")
+			tempDir, err := os.MkdirTemp("", "sftp")
 			Expect(err).NotTo(HaveOccurred())
 			defer os.RemoveAll(tempDir)
 
@@ -930,7 +929,7 @@ var _ = Describe("SessionChannelHandler", func() {
 			err = file.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(ioutil.ReadFile(target)).To(Equal(fileContents))
+			Expect(os.ReadFile(target)).To(Equal(fileContents))
 
 			By("reading the file")
 			file, err = sftp.Open(target)

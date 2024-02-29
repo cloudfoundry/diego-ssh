@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -40,7 +39,7 @@ var _ = Describe("File Message", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		var err error
-		tempDir, err = ioutil.TempDir("", "scp")
+		tempDir, err = os.MkdirTemp("", "scp")
 		Expect(err).NotTo(HaveOccurred())
 
 		fileContents := make([]byte, 1024)
@@ -49,7 +48,7 @@ var _ = Describe("File Message", func() {
 		_, err = rand.Read(fileContents)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = ioutil.WriteFile(tempFile, fileContents, 0640)
+		err = os.WriteFile(tempFile, fileContents, 0640)
 		Expect(err).NotTo(HaveOccurred())
 
 		modificationTime := time.Unix(123456789, 12345678)
@@ -99,7 +98,7 @@ var _ = Describe("File Message", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(n).To(Equal(1024))
 
-			expectedContents, err := ioutil.ReadFile(tempFile)
+			expectedContents, err := os.ReadFile(tempFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(contents).To(Equal(expectedContents))
 
@@ -129,7 +128,7 @@ var _ = Describe("File Message", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(n).To(Equal(1024))
 
-					expectedContents, err := ioutil.ReadFile(tempFile)
+					expectedContents, err := os.ReadFile(tempFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(contents).To(Equal(expectedContents))
 				}
@@ -186,7 +185,7 @@ var _ = Describe("File Message", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(n).To(Equal(1024))
 
-				expectedContents, err := ioutil.ReadFile(tempFile)
+				expectedContents, err := os.ReadFile(tempFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(contents).To(Equal(expectedContents))
 			})
@@ -333,7 +332,7 @@ var _ = Describe("File Message", func() {
 			err := testCopier.ReceiveFile(tempFile, false, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(ioutil.ReadFile(tempFile)).To(BeEquivalentTo("hello"))
+			Expect(os.ReadFile(tempFile)).To(BeEquivalentTo("hello"))
 		})
 
 		It("sends a confirmation after each message is received", func() {
@@ -378,7 +377,7 @@ var _ = Describe("File Message", func() {
 
 			Expect(stdout.WriteCallCount()).To(Equal(2))
 
-			Expect(ioutil.ReadFile(tempFile)).To(BeEquivalentTo("hello"))
+			Expect(os.ReadFile(tempFile)).To(BeEquivalentTo("hello"))
 		})
 
 		It("sets the permissions of the file", func() {
@@ -497,7 +496,7 @@ var _ = Describe("File Message", func() {
 
 			JustBeforeEach(func() {
 				target = filepath.Join(tempDir, "hello.txt")
-				err := ioutil.WriteFile(target, []byte("goodbye"), 0600)
+				err := os.WriteFile(target, []byte("goodbye"), 0600)
 				Expect(err).NotTo(HaveOccurred())
 
 				stdin := &bytes.Buffer{}
@@ -514,7 +513,7 @@ var _ = Describe("File Message", func() {
 			})
 
 			It("replaces the file with the received contents", func() {
-				Expect(ioutil.ReadFile(target)).To(BeEquivalentTo("hello"))
+				Expect(os.ReadFile(target)).To(BeEquivalentTo("hello"))
 			})
 
 			It("does not change the permissions of the file", func() {
@@ -613,7 +612,7 @@ var _ = Describe("File Message", func() {
 		Context("when the source does not send enough data for the file", func() {
 			BeforeEach(func() {
 				target := filepath.Join(tempDir, "hello.txt")
-				err := ioutil.WriteFile(target, []byte("h"), 0660)
+				err := os.WriteFile(target, []byte("h"), 0660)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -645,7 +644,7 @@ var _ = Describe("File Message", func() {
 				err := testCopier.ReceiveFile(tempDir, true, nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(ioutil.ReadFile(filepath.Join(tempDir, "hello.txt"))).To(BeEquivalentTo("hello"))
+				Expect(os.ReadFile(filepath.Join(tempDir, "hello.txt"))).To(BeEquivalentTo("hello"))
 			})
 		})
 

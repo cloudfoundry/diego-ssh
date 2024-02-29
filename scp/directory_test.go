@@ -3,7 +3,6 @@ package scp_test
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,7 +26,7 @@ var _ = Describe("Directory Message", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
-		tempDir, err = ioutil.TempDir("", "scp")
+		tempDir, err = os.MkdirTemp("", "scp")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -186,7 +185,7 @@ var _ = Describe("Directory Message", func() {
 
 		BeforeEach(func() {
 			tempFile = filepath.Join(tempDir, "tempfile.txt")
-			err := ioutil.WriteFile(tempFile, []byte("temporary-file-contents\n"), os.FileMode(0644))
+			err := os.WriteFile(tempFile, []byte("temporary-file-contents\n"), os.FileMode(0644))
 			Expect(err).NotTo(HaveOccurred())
 
 			err = os.Chmod(tempFile, 0644)
@@ -200,7 +199,7 @@ var _ = Describe("Directory Message", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			subdirFile = filepath.Join(subdir, "subdir-file.txt")
-			err = ioutil.WriteFile(subdirFile, []byte("subdir-file-contents\n"), os.FileMode(0644))
+			err = os.WriteFile(subdirFile, []byte("subdir-file-contents\n"), os.FileMode(0644))
 			Expect(err).NotTo(HaveOccurred())
 
 			err = os.Chmod(subdirFile, 0644)
@@ -328,11 +327,11 @@ var _ = Describe("Directory Message", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(info.Mode() & 0777).To(Equal(os.FileMode(0600)))
 
-			contents, err := ioutil.ReadFile(filepath.Join(tempDir, "received-dir", "subdir", "subdir-file.txt"))
+			contents, err := os.ReadFile(filepath.Join(tempDir, "received-dir", "subdir", "subdir-file.txt"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(contents).To(BeEquivalentTo("subdir-file-contents\n"))
 
-			contents, err = ioutil.ReadFile(filepath.Join(tempDir, "received-dir", "tempfile.txt"))
+			contents, err = os.ReadFile(filepath.Join(tempDir, "received-dir", "tempfile.txt"))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(contents).To(BeEquivalentTo("temporary-file-contents\n"))
 		})
@@ -486,7 +485,7 @@ var _ = Describe("Directory Message", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(info.Mode() & 0777).To(Equal(os.FileMode(0644)))
 
-					contents, err := ioutil.ReadFile(filepath.Join(tempDir, "target", "newdir", "subdir-file.txt"))
+					contents, err := os.ReadFile(filepath.Join(tempDir, "target", "newdir", "subdir-file.txt"))
 					Expect(err).ToNot(HaveOccurred())
 					Expect(contents).To(BeEquivalentTo("subdir-file-contents\n"))
 				})
@@ -560,7 +559,7 @@ var _ = Describe("Directory Message", func() {
 		Context("when the target directory is really a file", func() {
 			BeforeEach(func() {
 				target := filepath.Join(tempDir, "empty-dir")
-				err := ioutil.WriteFile(target, []byte("ego existo!"), 0660)
+				err := os.WriteFile(target, []byte("ego existo!"), 0660)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = os.Chmod(target, 0660)

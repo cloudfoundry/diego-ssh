@@ -2,7 +2,6 @@ package scp
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -158,7 +157,7 @@ func (s *secureCopy) sendDirectory(dirname string, directoryInfo os.FileInfo) er
 		return err
 	}
 
-	fileInfos, err := ioutil.ReadDir(dirname)
+	fileInfos, err := os.ReadDir(dirname)
 	if err != nil {
 		return err
 	}
