@@ -75,6 +75,7 @@ var _ = Describe("NewHTTPSClient", func() {
 
 			caPool := httpTrans.TLSClientConfig.RootCAs
 
+			//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 			Expect(expectedPool.Subjects()).To(Equal(caPool.Subjects()))
 		})
 

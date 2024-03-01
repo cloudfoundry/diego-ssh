@@ -201,6 +201,7 @@ var _ = Describe("SSHProxyConfig", func() {
 
 			It("returns a tls config", func() {
 				Expect(getConfigErr).ToNot(HaveOccurred())
+				//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 				Expect(len(tlsConfig.RootCAs.Subjects())).To(BeNumerically(">", 0))
 				Expect(len(tlsConfig.Certificates)).To(BeNumerically(">", 0))
 			})
@@ -262,6 +263,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				It("should NOT set the client certificate in the TLS config", func() {
 					Expect(getConfigErr).ToNot(HaveOccurred())
 					Expect(tlsConfig.Certificates).To(HaveLen(0))
+					//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 					Expect(len(tlsConfig.RootCAs.Subjects())).To(BeNumerically(">", 0))
 				})
 			})
@@ -274,6 +276,7 @@ var _ = Describe("SSHProxyConfig", func() {
 				It("should NOT set the client certificate in the TLS config", func() {
 					Expect(getConfigErr).ToNot(HaveOccurred())
 					Expect(tlsConfig.Certificates).To(HaveLen(0))
+					//lint:ignore SA1019 - ignoring tlsCert.RootCAs.Subjects is deprecated ERR because cert does not come from SystemCertPool.
 					Expect(len(tlsConfig.RootCAs.Subjects())).To(BeNumerically(">", 0))
 				})
 			})
