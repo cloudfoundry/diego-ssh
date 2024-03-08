@@ -91,12 +91,9 @@ func (cfa *CFAuthenticator) Authenticate(metadata ssh.ConnMetadata, password []b
 	tokenString := parts[1]
 	// When parsing the certificate validating the signature is not required and we don't readily have the
 	// certificate to validate the signature.  This is just to parse the second information part of the token anyway.
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte("Doesntmatter"), nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
 	username, ok := token.Claims.(jwt.MapClaims)["user_name"].(string)
 	if !ok {
