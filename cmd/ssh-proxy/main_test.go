@@ -392,7 +392,6 @@ var _ = Describe("SSH proxy", func() {
 			_, err = http.DefaultClient.Do(req)
 			e, ok := err.(net.Error)
 			Expect(ok).To(BeTrue())
-			Expect(e.Temporary()).To(BeFalse())
 			Expect(e.Error()).To(MatchRegexp(".*connection refused"))
 		})
 	})

@@ -119,6 +119,7 @@ func (s *Server) Serve() {
 			netConn = &idleTimeoutConn{s.idleConnTimeout, netConn}
 		}
 		if err != nil {
+			//lint:ignore SA1019 - http.Server still uses this logic, and they dont want to update it because its scary. Following their lead.
 			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
 				logger.Error("accept-temporary-error", netErr)
 				time.Sleep(100 * time.Millisecond)
