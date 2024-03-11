@@ -980,7 +980,7 @@ var _ = Describe("SSH proxy", func() {
 		})
 	})
 
-	Describe("authenticating with the cf realm with a one time code", func() {
+	Describe("authenticating with the cf realm with a one time code", Serial, func() {
 		BeforeEach(func() {
 			clientConfig = &ssh.ClientConfig{
 				User:            "cf:60f0f26e-86b3-4487-8f19-9e94f848f3d2/99",
@@ -1052,7 +1052,7 @@ var _ = Describe("SSH proxy", func() {
 			Expect(string(output)).To(Equal("hello"))
 		})
 
-		Context("when the proxy is configured to use direct instance address", func() {
+		Context("when the proxy is configured to use direct instance address", Serial, func() {
 			BeforeEach(func() {
 				sshProxyConfig.ConnectToInstanceAddress = true
 
