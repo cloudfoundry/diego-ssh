@@ -204,7 +204,8 @@ func (w *WinPTY) Run(cmd *exec.Cmd) error {
 	}
 
 	var createProcessErr uint32
-	spawnRet, _, err := winpty_spawn.Call(w.winPTYHandle,
+	// we ignore err here because Windows is Windows, and we generate everything based off of spawnRet
+	spawnRet, _, _ := winpty_spawn.Call(w.winPTYHandle,
 		spawnCfg,
 		uintptr(unsafe.Pointer(&w.childHandle)),
 		uintptr(0),
@@ -214,9 +215,6 @@ func (w *WinPTY) Run(cmd *exec.Cmd) error {
 	if spawnRet == 0 {
 		w.StdOut.Close()
 		return fmt.Errorf("unable to spawn process: %s: %s", winPTYErrorMessage(errorPtr), windowsErrorMessage(createProcessErr))
-	}
-	if err != nil {
-		return err
 	}
 
 	return nil
