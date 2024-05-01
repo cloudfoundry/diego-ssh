@@ -1,7 +1,7 @@
 package server_test
 
 import (
-	"code.cloudfoundry.org/inigo/helpers/portauthority"
+	"code.cloudfoundry.org/cf-networking-helpers/portauthority"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 

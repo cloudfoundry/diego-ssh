@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"code.cloudfoundry.org/cf-networking-helpers/certauthority"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/diego-ssh/authenticators/fake_authenticators"
 	"code.cloudfoundry.org/diego-ssh/daemon"
@@ -23,7 +24,6 @@ import (
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
-	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/tlsconfig"

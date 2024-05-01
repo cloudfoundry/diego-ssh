@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/cf-networking-helpers/certauthority"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/diego-ssh/cmd/ssh-proxy/config"
 	"code.cloudfoundry.org/durationjson"
-	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/v3/lagerflags"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

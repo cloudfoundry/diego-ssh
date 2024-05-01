@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/cf-networking-helpers/certauthority"
 	"code.cloudfoundry.org/diego-ssh/helpers"
-	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
