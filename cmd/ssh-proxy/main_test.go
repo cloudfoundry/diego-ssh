@@ -25,7 +25,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/routes"
 	"code.cloudfoundry.org/durationjson"
-	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
+	"code.cloudfoundry.org/go-loggregator/v9/rpc/loggregator_v2"
 	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/v3/lagerflags"
 	"code.cloudfoundry.org/tlsconfig"

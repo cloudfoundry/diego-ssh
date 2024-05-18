@@ -17,7 +17,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/helpers"
 	"code.cloudfoundry.org/diego-ssh/proxy"
 	"code.cloudfoundry.org/diego-ssh/server"
-	"code.cloudfoundry.org/go-loggregator/v8/runtimeemitter"
+	"code.cloudfoundry.org/go-loggregator/v9/runtimeemitter"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagerflags"
 	"github.com/tedsuo/ifrit"

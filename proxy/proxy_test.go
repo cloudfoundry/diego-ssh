@@ -22,7 +22,7 @@ import (
 	"code.cloudfoundry.org/diego-ssh/test_helpers"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_net"
 	"code.cloudfoundry.org/diego-ssh/test_helpers/fake_ssh"
-	loggregator "code.cloudfoundry.org/go-loggregator/v8"
+	loggregator "code.cloudfoundry.org/go-loggregator/v9"
 	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
