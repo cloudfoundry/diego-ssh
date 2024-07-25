@@ -57,15 +57,15 @@ var _ = Describe("PermissionsBuilder", func() {
 				LogGuid: "log-guid",
 				MetricTags: map[string]*models.MetricTagValue{
 					"some_static_key":        &models.MetricTagValue{Static: "some_value"},
-					"some_dynamic_key":       &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
-					"some_other_dynamic_key": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueInstanceGuid},
+					"some_dynamic_key":       &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex},
+					"some_other_dynamic_key": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueInstanceGuid},
 				},
 			}
 
 			actualLRP = &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
+				ActualLrpKey:         models.NewActualLRPKey("some-guid", 1, "some-domain"),
+				ActualLrpInstanceKey: models.NewActualLRPInstanceKey("some-instance-guid", "some-cell-id"),
+				ActualLrpNetInfo:     models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444)),
 			}
 
 			bbsClient = new(fake_bbs.FakeInternalClient)
@@ -108,7 +108,7 @@ var _ = Describe("PermissionsBuilder", func() {
 			var connectToInstanceAddress bool
 
 			JustBeforeEach(func() {
-				actualLRP.ActualLRPNetInfo =
+				actualLRP.ActualLrpNetInfo =
 					models.NewActualLRPNetInfo("external-ip", "instance-address", preferredAddress, models.NewPortMappingWithTLSProxy(3333, 1111, 2222, 4444))
 
 				permissionsBuilder = authenticators.NewPermissionsBuilder(bbsClient, connectToInstanceAddress)
@@ -208,7 +208,7 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		Context("when the tls port isn't set", func() {
 			BeforeEach(func() {
-				actualLRP.ActualLRPNetInfo =
+				actualLRP.ActualLrpNetInfo =
 					models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMapping(3333, 1111))
 			})
 
@@ -284,7 +284,7 @@ var _ = Describe("PermissionsBuilder", func() {
 
 		Context("when the container port cannot be found", func() {
 			BeforeEach(func() {
-				actualLRP.Ports = []*models.PortMapping{}
+				actualLRP.ActualLrpNetInfo.Ports = []*models.PortMapping{}
 				bbsClient.ActualLRPsReturns([]*models.ActualLRP{actualLRP}, nil)
 			})
 
