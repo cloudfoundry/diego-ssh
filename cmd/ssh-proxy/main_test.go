@@ -27,7 +27,9 @@ import (
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/v9/rpc/loggregator_v2"
 	"code.cloudfoundry.org/inigo/helpers/certauthority"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagerflags"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/tlsconfig"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -485,6 +487,7 @@ var _ = Describe("SSH proxy", func() {
 			intermediaryTLSConfig *tls.Config
 			intermediaryListener  net.Listener
 			connectedToTLS        chan struct{}
+			forwardServer         *forwardTLSServer
 		)
 
 		BeforeEach(func() {
@@ -508,14 +511,16 @@ var _ = Describe("SSH proxy", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			connectedToTLS = make(chan struct{}, 1)
+			logger := lagertest.NewTestLogger("ssh-proxy-test")
+			forwardServer = NewForwardTLSServer(logger, intermediaryListener, sshdAddress)
 		})
 
 		JustBeforeEach(func() {
-			go forwardTLSConn(sshdAddress, intermediaryListener, connectedToTLS)
+			go forwardServer.Start(connectedToTLS)
 		})
 
 		AfterEach(func() {
-			intermediaryListener.Close()
+			forwardServer.Stop()
 			close(connectedToTLS)
 		})
 
@@ -1121,41 +1126,85 @@ func RespondWithProto(message proto.Message) http.HandlerFunc {
 	return ghttp.RespondWith(200, string(data), headers)
 }
 
-func forwardTLSConn(serverAddress string, proxy net.Listener, onConnectionReceived chan struct{}) {
-	for {
-		conn, err := proxy.Accept()
-		if err != nil {
-			return
-		}
+type forwardTLSServer struct {
+	logger  lager.Logger
+	proxy   net.Listener
+	stopCh  chan struct{}
+	address string
+}
 
-		tlsConn := conn.(*tls.Conn)
-		err = tlsConn.Handshake()
-		if err != nil {
-			return
-		}
-
-		if onConnectionReceived != nil {
-			onConnectionReceived <- struct{}{}
-		}
-
-		proxyConn, err := net.Dial("tcp", serverAddress)
-		if err != nil {
-			return
-		}
-
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-
-		go func() {
-			_, _ = io.Copy(conn, proxyConn)
-			wg.Done()
-		}()
-
-		go func() {
-			_, _ = io.Copy(proxyConn, conn)
-			wg.Done()
-		}()
-
-		wg.Wait()
+func NewForwardTLSServer(logger lager.Logger, proxy net.Listener, address string) *forwardTLSServer {
+	return &forwardTLSServer{
+		logger:  logger.Session("forward-tls-server"),
+		proxy:   proxy,
+		address: address,
+		stopCh:  make(chan struct{}),
 	}
+}
+
+func (s *forwardTLSServer) Start(onConnectionReceived chan struct{}) error {
+	for {
+		select {
+		case <-s.stopCh:
+			return nil
+		default:
+			conn, err := s.proxy.Accept()
+			if err != nil {
+				select {
+				case <-s.stopCh:
+					return nil
+				default:
+					s.logger.Error("failed-to-receive-connection", err)
+					return err
+				}
+			}
+
+			tlsConn := conn.(*tls.Conn)
+			err = tlsConn.Handshake()
+			if err != nil {
+				select {
+				case <-s.stopCh:
+					return nil
+				default:
+					s.logger.Error("failed-to-tls-handshake", err)
+					return err
+				}
+			}
+
+			if onConnectionReceived != nil {
+				onConnectionReceived <- struct{}{}
+			}
+
+			proxyConn, err := net.Dial("tcp", s.address)
+			if err != nil {
+				select {
+				case <-s.stopCh:
+					return nil
+				default:
+					s.logger.Error("failed-to-dial", err)
+					return err
+				}
+			}
+
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+
+			go func() {
+				_, _ = io.Copy(conn, proxyConn)
+				wg.Done()
+			}()
+
+			go func() {
+				_, _ = io.Copy(proxyConn, conn)
+				wg.Done()
+			}()
+
+			wg.Wait()
+		}
+	}
+}
+
+func (s *forwardTLSServer) Stop() {
+	close(s.stopCh)
+	s.proxy.Close()
 }
