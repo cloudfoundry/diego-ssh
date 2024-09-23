@@ -37,7 +37,10 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	err := ssh.Unmarshal(newChannel.ExtraData(), &directTcpipMessage)
 	if err != nil {
 		logger.Error("failed-unmarshalling-ssh-message", err)
-		newChannel.Reject(ssh.ConnectionFailed, "Failed to parse open channel message")
+		err := newChannel.Reject(ssh.ConnectionFailed, "Failed to parse open channel message")
+		if err != nil {
+			logger.Debug("failed-to-reject", lager.Data{"error": err})
+		}
 		return
 	}
 
@@ -47,7 +50,10 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	conn, err := handler.dialer.Dial("tcp", destination)
 	if err != nil {
 		logger.Error("failed-connecting-to-target", err)
-		newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		err := newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		if err != nil {
+			logger.Debug("failed-to-reject", lager.Data{"error": err})
+		}
 		return
 	}
 	defer conn.Close()
@@ -56,7 +62,10 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	channel, requests, err := newChannel.Accept()
 	if err != nil {
 		logger.Error("failed-to-accept-channel", err)
-		newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		err := newChannel.Reject(ssh.ConnectionFailed, err.Error())
+		if err != nil {
+			logger.Debug("failed-to-reject", lager.Data{"error": err})
+		}
 		return
 	}
 	defer channel.Close()
@@ -70,12 +79,18 @@ func (handler *DirectTcpipChannelHandler) HandleNewChannel(logger lager.Logger, 
 	logger.Debug("copying-channel-data")
 	go helpers.CopyAndClose(logger.Session("to-target"), wg, conn, channel,
 		func() {
-			conn.(*net.TCPConn).CloseWrite()
+			err := conn.(*net.TCPConn).CloseWrite()
+			if err != nil {
+				logger.Debug("failed-to-close-connection", lager.Data{"error": err})
+			}
 		},
 	)
 	go helpers.CopyAndClose(logger.Session("to-channel"), wg, channel, conn,
 		func() {
-			channel.CloseWrite()
+			err := channel.CloseWrite()
+			if err != nil {
+				logger.Debug("failed-to-close-channel", lager.Data{"error": err})
+			}
 		},
 	)
 

@@ -42,7 +42,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var _ = Describe("SSH proxy", func() {
+var _ = Describe("SSH proxy", Serial, func() {
 	var (
 		fakeBBS            *ghttp.Server
 		fakeUAA            *ghttp.Server

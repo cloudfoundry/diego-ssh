@@ -61,25 +61,26 @@ func (s *Server) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 func (s *Server) Shutdown() {
 	if s.state.StopOnce() {
 		s.logger.Info("stopping-server")
-		s.listener.Close()
+		err := s.listener.Close()
+		if err != nil {
+			s.logger.Error("listener-failed-to-close", err)
+		}
 		s.store.Shutdown()
 	}
 }
 
 func (s *Server) IsStopping() bool { return s.state.Stopped() }
 
-func (s *Server) SetListener(listener net.Listener) error {
+func (s *Server) SetListener(listener net.Listener) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	if s.listener != nil {
 		err := errors.New("Listener has already been set")
 		s.logger.Error("listener-already-set", err)
-		return err
 	}
 
 	s.listener = listener
-	return nil
 }
 
 func (s *Server) ListenAddr() (net.Addr, error) {

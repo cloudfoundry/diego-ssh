@@ -72,7 +72,10 @@ func (s *secureCopy) Copy() error {
 				sourceInfo, err := os.Stat(source)
 				if err != nil {
 					logger.Error("failed-to-stat", err)
-					s.session.sendError(err.Error())
+					sendErr := s.session.sendError(err.Error())
+					if sendErr != nil {
+						logger.Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+					}
 					lastErr = err
 					continue
 				}
@@ -80,12 +83,15 @@ func (s *secureCopy) Copy() error {
 				if sourceInfo.IsDir() && !s.options.Recursive {
 					err = fmt.Errorf("%s: not a regular file", sourceInfo.Name())
 					logger.Error("sending-non-recursive-directory-failed", err)
-					s.session.sendError(err.Error())
+					sendErr := s.session.sendError(err.Error())
+					if sendErr != nil {
+						logger.Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+					}
 					lastErr = err
 					continue
 				}
 
-				err = s.send(source)
+				err = s.send(source, logger)
 				if err != nil {
 					logger.Error("failed-sending-source", err, lager.Data{"Source": source})
 					lastErr = err
@@ -138,7 +144,10 @@ func (s *secureCopy) Copy() error {
 				err := timeMessage.Receive(s.session)
 				if err != nil {
 					logger.Error("failed-receiving-time-message", err)
-					s.session.sendError(err.Error())
+					sendErr := s.session.sendError(err.Error())
+					if sendErr != nil {
+						logger.Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+					}
 					return err
 				}
 
@@ -156,13 +165,19 @@ func (s *secureCopy) Copy() error {
 			} else {
 				err = fmt.Errorf("unexpected message type: %c", messageType)
 				logger.Error("unexpected-message", err)
-				s.session.sendError(err.Error())
+				sendErr := s.session.sendError(err.Error())
+				if sendErr != nil {
+					logger.Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+				}
 				return err
 			}
 
 			if err != nil {
 				logger.Error("failed-receiving-message", err)
-				s.session.sendError(err.Error())
+				sendErr := s.session.sendError(err.Error())
+				if sendErr != nil {
+					logger.Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+				}
 				return err
 			}
 		}
@@ -171,12 +186,15 @@ func (s *secureCopy) Copy() error {
 	return nil
 }
 
-func (s *secureCopy) send(source string) error {
+func (s *secureCopy) send(source string, logger lager.Logger) error {
 	var err error
 
 	defer func() {
 		if err != nil {
-			s.session.sendError(err.Error())
+			sendErr := s.session.sendError(err.Error())
+			if sendErr != nil {
+				logger.Session("copy").Debug("failed-sending-send-error", lager.Data{"error": sendErr})
+			}
 		}
 	}()
 
