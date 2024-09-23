@@ -27,7 +27,10 @@ func (h *CancelTCPIPForwardHandler) HandleRequest(logger lager.Logger, request *
 	err := ssh.Unmarshal(request.Payload, &tcpipForwardMessage)
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
-		request.Reply(false, nil)
+		err = request.Reply(false, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 
 	address := net.JoinHostPort(tcpipForwardMessage.Address, strconv.FormatUint(uint64(tcpipForwardMessage.Port), 10))

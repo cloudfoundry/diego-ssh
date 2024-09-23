@@ -44,6 +44,7 @@ func (s *connHandler) Handle(handler ConnectionHandler, conn net.Conn) {
 	// fast exit: don't attempt to acquire the mutex or
 	// handle the conn if shutdown
 	if s.state.Stopped() {
+		// #nosec G104 - ignore errors when closing SSH connections so we don't spam our logs during a DoS
 		conn.Close()
 		return
 	}
@@ -52,6 +53,7 @@ func (s *connHandler) Handle(handler ConnectionHandler, conn net.Conn) {
 	// recheck the state now that we've locked the mutex
 	// as we may have been blocked on call to Shutdown()
 	if s.state.Stopped() {
+		// #nosec G104 - ignore errors when closing SSH connections so we don't spam our logs during a DoS
 		conn.Close()
 		return
 	}
@@ -68,6 +70,7 @@ func (s *connHandler) Shutdown() {
 	if s.state.StopOnce() {
 		s.mu.Lock()
 		for c := range s.store {
+			// #nosec G104 - ignore errors when closing SSH connections so we don't spam our logs during a DoS
 			c.Close()
 		}
 		s.mu.Unlock()

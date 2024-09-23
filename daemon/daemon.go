@@ -47,7 +47,10 @@ func (d *Daemon) HandleConnection(netConn net.Conn) {
 	go d.handleGlobalRequests(logger, serverRequests, serverConn, lnStore)
 	go d.handleNewChannels(logger, serverChannels)
 
-	serverConn.Wait()
+	err = serverConn.Wait()
+	if err != nil {
+		logger.Debug("failed-to-wait-for-server", lager.Data{"error": err})
+	}
 	lnStore.RemoveAll()
 }
 
@@ -69,7 +72,10 @@ func (d *Daemon) handleGlobalRequests(logger lager.Logger, requests <-chan *ssh.
 		}
 
 		if req.WantReply {
-			req.Reply(false, nil)
+			err := req.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 	}
 }
@@ -91,6 +97,9 @@ func (d *Daemon) handleNewChannels(logger lager.Logger, newChannelRequests <-cha
 		}
 
 		logger.Info("rejecting-channel", lager.Data{"reason": "unkonwn-channel-type"})
-		newChannel.Reject(ssh.UnknownChannelType, newChannel.ChannelType())
+		err := newChannel.Reject(ssh.UnknownChannelType, newChannel.ChannelType())
+		if err != nil {
+			logger.Debug("failed-to-reject", lager.Data{"error": err})
+		}
 	}
 }

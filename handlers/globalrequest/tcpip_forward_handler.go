@@ -27,7 +27,10 @@ func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Re
 	err := ssh.Unmarshal(request.Payload, &tcpipForwardMessage)
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
-		request.Reply(false, nil)
+		err = request.Reply(false, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 
 	address := net.JoinHostPort(tcpipForwardMessage.Address, strconv.Itoa(int(tcpipForwardMessage.Port)))
@@ -41,7 +44,10 @@ func (h *TCPIPForwardHandler) HandleRequest(logger lager.Logger, request *ssh.Re
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		logger.Error("failed-to-listen", err)
-		request.Reply(false, nil)
+		err = request.Reply(false, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 		return
 	}
 
@@ -122,10 +128,16 @@ func (h *TCPIPForwardHandler) forwardAcceptLoop(listener net.Listener, logger la
 			wg.Add(2)
 
 			go helpers.CopyAndClose(logger.Session("to-target"), &wg, conn, channel, func() {
-				conn.Close()
+				err := conn.Close()
+				if err != nil {
+					logger.Debug("failed-to-close-connection", lager.Data{"error": err})
+				}
 			})
 			go helpers.CopyAndClose(logger.Session("to-channel"), &wg, channel, conn, func() {
-				channel.CloseWrite()
+				err := channel.CloseWrite()
+				if err != nil {
+					logger.Debug("failed-to-close-channel", lager.Data{"error": err})
+				}
 			})
 
 			wg.Wait()

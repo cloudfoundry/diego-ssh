@@ -84,13 +84,22 @@ func (p *Proxy) HandleConnection(netConn net.Conn) {
 	defer func() {
 		if logMessage != nil {
 			endMessage := fmt.Sprintf("Remote access ended for %s", serverConn.RemoteAddr().String())
-			p.metronClient.SendAppLog(endMessage, "SSH", logMessage.Tags)
+			err = p.metronClient.SendAppLog(endMessage, "SSH", logMessage.Tags)
+			if err != nil {
+				logger.Debug("failed-to-send-appLog", lager.Data{"error": err})
+			}
 		}
-		clientConn.Close()
+		err = clientConn.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-connection", lager.Data{"error": err})
+		}
 	}()
 
 	if logMessage != nil {
-		p.metronClient.SendAppLog(logMessage.Message, "SSH", logMessage.Tags)
+		err = p.metronClient.SendAppLog(logMessage.Message, "SSH", logMessage.Tags)
+		if err != nil {
+			logger.Debug("failed-to-send-appLog", lager.Data{"error": err})
+		}
 	}
 
 	fromClientLogger := logger.Session("from-client")
@@ -164,7 +173,10 @@ func ProxyGlobalRequests(logger lager.Logger, conn ssh.Conn, reqs <-chan *ssh.Re
 		}
 
 		if req.WantReply {
-			req.Reply(success, reply)
+			err = req.Reply(success, reply)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 	}
 }
@@ -175,7 +187,8 @@ func ProxyChannels(logger lager.Logger, conn ssh.Conn, channels <-chan ssh.NewCh
 	logger.Info("started")
 	defer func() {
 		logger.Info("completed")
-		conn.Close()
+		err := conn.Close()
+		logger.Debug("failed-to-close-channel", lager.Data{"error": err})
 	}()
 
 	for newChannel := range channels {
@@ -195,9 +208,15 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 	if err != nil {
 		logger.Error("failed-to-open-channel", err)
 		if openErr, ok := err.(*ssh.OpenChannelError); ok {
-			newChannel.Reject(openErr.Reason, openErr.Message)
+			err = newChannel.Reject(openErr.Reason, openErr.Message)
+			if err != nil {
+				logger.Debug("failed-to-reject-channel-creation", lager.Data{"error": err})
+			}
 		} else {
-			newChannel.Reject(ssh.ConnectionFailed, err.Error())
+			err = newChannel.Reject(ssh.ConnectionFailed, err.Error())
+			if err != nil {
+				logger.Debug("failed-to-reject-channel-creation", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -205,7 +224,10 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 
 	sourceChan, sourceReqs, err := newChannel.Accept()
 	if err != nil {
-		targetChan.Close()
+		err = targetChan.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-target-chan", lager.Data{"error": err})
+		}
 		return
 	}
 	logger.Debug("accepted-channel-from-client")
@@ -221,7 +243,10 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 	go helpers.Copy(toTargetLogger.Session("stderr"), targetWg, targetChan.Stderr(), sourceChan.Stderr())
 	go func() {
 		targetWg.Wait()
-		targetChan.CloseWrite()
+		err := targetChan.CloseWrite()
+		if err != nil {
+			logger.Debug("failed-to-close-write-target-chan", lager.Data{"error": err})
+		}
 	}()
 
 	sourceWg.Add(2)
@@ -229,7 +254,10 @@ func handleNewChannel(logger lager.Logger, conn ssh.Conn, newChannel ssh.NewChan
 	go helpers.Copy(toSourceLogger.Session("stderr"), sourceWg, sourceChan.Stderr(), targetChan.Stderr())
 	go func() {
 		sourceWg.Wait()
-		sourceChan.CloseWrite()
+		err := sourceChan.CloseWrite()
+		if err != nil {
+			logger.Debug("failed-to-close-write-source-chan", lager.Data{"error": err})
+		}
 	}()
 
 	go ProxyRequests(toTargetLogger, newChannel.ChannelType(), sourceReqs, targetChan, targetWg)
@@ -245,7 +273,10 @@ func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Req
 	defer func() {
 		logger.Info("completed")
 		wg.Wait()
-		channel.Close()
+		err := channel.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-channel", lager.Data{"error": err})
+		}
 	}()
 
 	for req := range reqs {
@@ -261,7 +292,10 @@ func ProxyRequests(logger lager.Logger, channelType string, reqs <-chan *ssh.Req
 		}
 
 		if req.WantReply {
-			req.Reply(success, nil)
+			err = req.Reply(success, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 
 		if req.Type == "exit-status" {
@@ -275,7 +309,10 @@ func Wait(logger lager.Logger, waiters ...Waiter) {
 	for _, waiter := range waiters {
 		wg.Add(1)
 		go func(waiter Waiter) {
-			waiter.Wait()
+			err := waiter.Wait()
+			if err != nil {
+				logger.Debug("failed-to-wait", lager.Data{"error": err})
+			}
 			wg.Done()
 		}(waiter)
 	}

@@ -106,8 +106,17 @@ func runServer() error {
 	}
 
 	if exec && runtime.GOOS != "windows" {
-		os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
-		os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
+		err := os.Setenv("SSHD_HOSTKEY", hostKeyPEM)
+		if err != nil {
+			logger.Error("failed-to-set-environment-variable", err, lager.Data{"environment-variable": "SSHD_HOSTKEY"})
+			return err
+		}
+
+		err = os.Setenv("SSHD_AUTHKEY", authorizedKeyValue)
+		if err != nil {
+			logger.Error("failed-to-set-environment-variable", err, lager.Data{"environment-variable": "SSHD_AUTHKEY"})
+			return err
+		}
 
 		logLevel := "info"
 		flag.CommandLine.Lookup("logLevel")
@@ -117,7 +126,7 @@ func runServer() error {
 		}
 
 		runtime.GOMAXPROCS(1)
-		err := syscall.Exec(os.Args[0], []string{
+		err = syscall.Exec(os.Args[0], []string{
 			os.Args[0],
 			fmt.Sprintf("--allowedKeyExchanges=%s", *allowedKeyExchanges),
 			fmt.Sprintf("--address=%s", *address),

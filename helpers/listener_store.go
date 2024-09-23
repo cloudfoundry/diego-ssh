@@ -47,6 +47,7 @@ func (t *ListenerStore) RemoveAll() {
 	t.lock.Lock()
 	for k, ln := range t.store {
 		delete(t.store, k)
+		// #nosec G104 - no logging here, ignoring close errors
 		ln.Close()
 	}
 	t.lock.Unlock()

@@ -81,10 +81,11 @@ var _ = Describe("Server", func() {
 		})
 
 		Context("when a listener has already been set", func() {
-			It("returns an error", func() {
+			It("logs", func() {
 				listener := &fake_net.FakeListener{}
-				err := srv.SetListener(listener)
-				Expect(err).To(MatchError("Listener has already been set"))
+				srv.SetListener(listener)
+
+				Expect(logger.(*lagertest.TestLogger).Logs()[0].Message).To(ContainSubstring("listener-already-set"))
 			})
 		})
 	})
@@ -225,8 +226,7 @@ var _ = Describe("Server", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				srv = server.NewServer(logger, address, handler, 500*time.Millisecond)
-				err = srv.SetListener(listener)
-				Expect(err).NotTo(HaveOccurred())
+				srv.SetListener(listener)
 			})
 
 			It("returns the address reported by the listener", func() {
