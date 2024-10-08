@@ -18,8 +18,8 @@ func MD5Fingerprint(key ssh.PublicKey) string {
 }
 
 func SHA256Fingerprint(key ssh.PublicKey) string {
-	sha1sum := sha256.Sum256(key.Marshal())
-	return colonize(fmt.Sprintf("% x", sha1sum))
+	sha256sum := sha256.Sum256(key.Marshal())
+	return colonize(fmt.Sprintf("% x", sha256sum))
 }
 
 func colonize(s string) string {
