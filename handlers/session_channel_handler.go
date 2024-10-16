@@ -125,7 +125,10 @@ func (sess *session) serviceRequests(requests <-chan *ssh.Request) {
 			sess.handleSubsystemRequest(req)
 		default:
 			if req.WantReply {
-				req.Reply(false, nil)
+				err := req.Reply(false, nil)
+				if err != nil {
+					logger.Debug("failed-to-reply", lager.Data{"error": err})
+				}
 			}
 		}
 	}
@@ -143,7 +146,10 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 	err := ssh.Unmarshal(request.Payload, &envMessage)
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
-		request.Reply(false, nil)
+		err := request.Reply(false, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 		return
 	}
 
@@ -152,7 +158,10 @@ func (sess *session) handleEnvironmentRequest(request *ssh.Request) {
 	sess.Unlock()
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 }
 
@@ -168,7 +177,10 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err := request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -187,7 +199,10 @@ func (sess *session) handleSignalRequest(request *ssh.Request) {
 	}
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 }
 
@@ -200,7 +215,10 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err := request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -213,7 +231,10 @@ func (sess *session) handlePtyRequest(request *ssh.Request) {
 	sess.env["TERM"] = ptyRequestMessage.Term
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 }
 
@@ -232,7 +253,10 @@ func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err := request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -253,7 +277,10 @@ func (sess *session) handleWindowChangeRequest(request *ssh.Request) {
 	}
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 }
 
@@ -269,7 +296,10 @@ func (sess *session) handleExecRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err := request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -300,7 +330,10 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("unmarshal-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err = request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -308,7 +341,10 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 	if subsystemMessage.Subsystem != "sftp" {
 		logger.Info("unsupported-subsystem", lager.Data{"subsystem": subsystemMessage.Subsystem})
 		if request.WantReply {
-			request.Reply(false, nil)
+			err = request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
@@ -318,13 +354,19 @@ func (sess *session) handleSubsystemRequest(request *ssh.Request) {
 	if err != nil {
 		logger.Error("sftp-new-server-failed", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err = request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err = request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
 	}
 
 	logger.Info("starting-server")
@@ -346,13 +388,20 @@ func (sess *session) executeShell(request *ssh.Request, args ...string) {
 		sess.Unlock()
 		logger.Error("failed-to-create-command", err)
 		if request.WantReply {
-			request.Reply(false, nil)
+			err = request.Reply(false, nil)
+			if err != nil {
+				logger.Debug("failed-to-reply", lager.Data{"error": err})
+			}
 		}
 		return
 	}
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-to-reply", lager.Data{"error": err})
+		}
+
 	}
 
 	if sess.allocPty {
@@ -545,7 +594,12 @@ func (sess *session) run(command *exec.Cmd) error {
 		return err
 	}
 
-	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel, func() { stdin.Close() })
+	go helpers.CopyAndClose(logger.Session("to-stdin"), nil, stdin, sess.channel, func() {
+		err := stdin.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-stdin", lager.Data{"error": err})
+		}
+	})
 
 	return sess.runner.Start(command)
 }
@@ -572,13 +626,19 @@ func (sess *session) runWithPty(command *exec.Cmd) error {
 	}
 
 	setTerminalAttributes(logger, ptyMaster, sess.ptyRequest.Modelist)
-	setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+	err = setWindowSize(logger, ptyMaster, sess.ptyRequest.Columns, sess.ptyRequest.Rows)
+	if err != nil {
+		logger.Debug("failed-to-set-session-window-size", lager.Data{"error": err})
+	}
 
 	sess.wg.Add(1)
 	go helpers.Copy(logger.Session("to-pty"), nil, ptyMaster, sess.channel)
 	go func() {
 		helpers.Copy(logger.Session("from-pty"), &sess.wg, sess.channel, ptyMaster)
-		sess.channel.CloseWrite()
+		err := sess.channel.CloseWrite()
+		if err != nil {
+			logger.Debug("failed-to-close-session-channel-writer", lager.Data{"error": err})
+		}
 	}()
 
 	err = sess.runner.Start(command)
@@ -634,11 +694,17 @@ func (sess *session) destroy() {
 	sess.wg.Wait()
 
 	if sess.channel != nil {
-		sess.channel.Close()
+		err := sess.channel.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-session-channel", lager.Data{"error": err})
+		}
 	}
 
 	if sess.ptyMaster != nil {
-		sess.ptyMaster.Close()
+		err := sess.ptyMaster.Close()
+		if err != nil {
+			logger.Debug("failed-to-close-session-pty-master", lager.Data{"error": err})
+		}
 		sess.ptyMaster = nil
 	}
 
@@ -651,7 +717,11 @@ func (sess *session) executeSCP(command string, request *ssh.Request) {
 	logger := sess.logger.Session("execute-scp")
 
 	if request.WantReply {
-		request.Reply(true, nil)
+		err := request.Reply(true, nil)
+		if err != nil {
+			logger.Debug("failed-replying", lager.Data{"error": err})
+		}
+
 	}
 
 	copier, err := scp.NewFromCommand(command, sess.channel, sess.channel, sess.channel.Stderr(), logger)

@@ -42,7 +42,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var _ = Describe("SSH proxy", func() {
+var _ = Describe("SSH proxy", Serial, func() {
 	var (
 		fakeBBS            *ghttp.Server
 		fakeUAA            *ghttp.Server
