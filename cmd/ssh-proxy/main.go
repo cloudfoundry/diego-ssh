@@ -193,7 +193,7 @@ func configureProxy(logger lager.Logger, sshProxyConfig config.SSHProxyConfig) (
 	if sshProxyConfig.AllowedCiphers != "" {
 		sshConfig.Config.Ciphers = strings.Split(sshProxyConfig.AllowedCiphers, ",")
 	} else {
-		sshConfig.Config.Ciphers = []string{"chacha20-poly1305@openssh.com", "aes128-gcm@openssh.com", "aes256-ctr", "aes192-ctr", "aes128-ctr"}
+		sshConfig.Config.Ciphers = []string{"aes128-gcm@openssh.com", "aes256-ctr", "aes192-ctr", "aes128-ctr"}
 	}
 
 	if sshProxyConfig.AllowedMACs != "" {
