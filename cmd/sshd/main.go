@@ -249,7 +249,7 @@ func configure(logger lager.Logger) (*ssh.ServerConfig, error) {
 	if *allowedCiphers != "" {
 		sshConfig.Config.Ciphers = strings.Split(*allowedCiphers, ",")
 	} else {
-		sshConfig.Config.Ciphers = []string{"chacha20-poly1305@openssh.com", "aes128-gcm@openssh.com", "aes256-ctr", "aes192-ctr", "aes128-ctr"}
+		sshConfig.Config.Ciphers = []string{"aes128-gcm@openssh.com", "aes256-ctr", "aes192-ctr", "aes128-ctr"}
 	}
 
 	if *allowedMACs != "" {
