@@ -107,7 +107,7 @@ var _ = Describe("SSH proxy", Serial, func() {
 
 		privateKey, err := ssh.ParsePrivateKey([]byte(hostKeyPem))
 		Expect(err).NotTo(HaveOccurred())
-		hostKeyFingerprint = helpers.MD5Fingerprint(privateKey.PublicKey())
+		hostKeyFingerprint = helpers.SHA256Fingerprint(privateKey.PublicKey())
 
 		address = fmt.Sprintf("127.0.0.1:%d", sshProxyPort)
 		healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckProxyPort)

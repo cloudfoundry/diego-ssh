@@ -79,7 +79,7 @@ func (k *rsaKeyPair) PublicKey() ssh.PublicKey {
 }
 
 func (k *rsaKeyPair) Fingerprint() string {
-	return helpers.MD5Fingerprint(k.PublicKey())
+	return helpers.SHA256Fingerprint(k.PublicKey())
 }
 
 func (k *rsaKeyPair) AuthorizedKey() string {

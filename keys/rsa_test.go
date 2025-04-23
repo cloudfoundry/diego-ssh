@@ -77,8 +77,8 @@ var _ = Describe("RSA", func() {
 	})
 
 	Describe("Fingerprint", func() {
-		It("equals the MD5 fingerprint of the public key", func() {
-			expectedFingerprint := helpers.MD5Fingerprint(keyPair.PublicKey())
+		It("equals the SHA256 fingerprint of the public key", func() {
+			expectedFingerprint := helpers.SHA256Fingerprint(keyPair.PublicKey())
 
 			Expect(keyPair.Fingerprint()).To(Equal(expectedFingerprint))
 		})
