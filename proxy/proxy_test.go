@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -271,7 +272,7 @@ var _ = Describe("Proxy", func() {
 						BeforeEach(func() {
 							targetConfigJson, err := json.Marshal(proxy.TargetConfig{
 								Address:         sshdListener.Addr().String(),
-								HostFingerprint: helpers.SHA256Fingerprint(TestHostKey.PublicKey()),
+								HostFingerprint: fmt.Sprintf("%s=", helpers.SHA256Fingerprint(TestHostKey.PublicKey())),
 								User:            "some-user",
 								Password:        "fake-some-password",
 							})
