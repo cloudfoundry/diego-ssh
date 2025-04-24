@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -403,9 +404,9 @@ func NewClientConn(logger lager.Logger, permissions *ssh.Permissions, tlsConfig 
 				actualFingerprint = helpers.SHA256Fingerprint(key)
 			}
 
-			if expectedFingerprint != actualFingerprint {
+			if strings.TrimRight(expectedFingerprint, "=") != actualFingerprint {
 				err := errors.New("Host fingerprint mismatch")
-				logger.Error("host-key-fingerprint-mismatch", err)
+				logger.Error("host-key-fingerprint-mismatch", err, lager.Data{"expected": expectedFingerprint, "actual": actualFingerprint})
 				return err
 			}
 
