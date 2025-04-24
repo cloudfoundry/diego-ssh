@@ -11,7 +11,7 @@ import (
 
 const MD5_FINGERPRINT_LENGTH = 47
 const SHA1_FINGERPRINT_LENGTH = 59
-const SHA256_FINGERPRINT_LENGTH = 44 //unpaded base64
+const SHA256_FINGERPRINT_LENGTH = 44 //unpadded base64
 
 func MD5Fingerprint(key ssh.PublicKey) string {
 	md5sum := md5.Sum(key.Marshal())
