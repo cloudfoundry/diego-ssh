@@ -783,7 +783,7 @@ var _ = Describe("SSH proxy", Serial, func() {
 
 			It("errors when the client doesn't provide any of the algorithms: 'aes128-gcm@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'", func() {
 				_, err := ssh.Dial("tcp", address, clientConfig)
-				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
+				Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; we offered: [arcfour128], peer offered: [aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
 				Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 			})
 		})
@@ -886,7 +886,7 @@ var _ = Describe("SSH proxy", Serial, func() {
 
 				It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [hmac-sha1], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
+					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for we to server MAC; we offered: [hmac-sha1], peer offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
