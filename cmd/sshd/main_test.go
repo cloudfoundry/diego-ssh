@@ -407,7 +407,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("errors when the client doesn't provide one of the algorithm: 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; client offered: [arcfour128], server offered: [aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server cipher; we offered: [arcfour128], peer offered: [aes128-gcm@openssh.com aes256-ctr aes192-ctr aes128-ctr]"))
 				Expect(client).To(BeNil())
 			})
 		})
@@ -479,7 +479,7 @@ var _ = Describe("SSH daemon", func() {
 				})
 
 				It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
-					Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; client offered: [hmac-sha1], server offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
+					Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; we offered: [hmac-sha1], peer offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 					Expect(client).To(BeNil())
 				})
 			})
@@ -536,7 +536,7 @@ var _ = Describe("SSH daemon", func() {
 			})
 
 			It("errors when the client doesn't provide the algorithm: 'curve25519-sha256@libssh.org'", func() {
-				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; client offered: [diffie-hellman-group14-sha1 ext-info-c kex-strict-c-v00@openssh.com], server offered: [curve25519-sha256@libssh.org kex-strict-s-v00@openssh.com]"))
+				Expect(dialErr).To(MatchError("ssh: handshake failed: ssh: no common algorithm for key exchange; we offered: [diffie-hellman-group14-sha1 ext-info-c kex-strict-c-v00@openssh.com], peer offered: [curve25519-sha256@libssh.org kex-strict-s-v00@openssh.com]"))
 				Expect(client).To(BeNil())
 			})
 		})
