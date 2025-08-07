@@ -886,7 +886,7 @@ var _ = Describe("SSH proxy", Serial, func() {
 
 				It("errors when the client doesn't provide one of the algorithms: 'hmac-sha2-256-etm@openssh.com', 'hmac-sha2-256'", func() {
 					_, err := ssh.Dial("tcp", address, clientConfig)
-					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for we to server MAC; we offered: [hmac-sha1], peer offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
+					Expect(err).To(MatchError("ssh: handshake failed: ssh: no common algorithm for client to server MAC; we offered: [hmac-sha1], peer offered: [hmac-sha2-256-etm@openssh.com hmac-sha2-256]"))
 					Expect(fakeBBS.ReceivedRequests()).To(HaveLen(0))
 				})
 			})
